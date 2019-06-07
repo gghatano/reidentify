@@ -7,6 +7,7 @@
 # create_dummy_transaction_data(10, "hoge")
 # create_dummy_transaction_data(people = 10, size = "hoge")
 
+library(reidentify)
 
 ROW_NUMBER = 1:people
 RAW_ID = ROW_NUMBER + 10000
@@ -36,6 +37,5 @@ dat_anon = data_frame(ANON_ROW_NUMBER = ROW_NUMBER,
 # create_dummy_transaction_data(-10)
 # create_dummy_transaction_data(10, "hoge")
 # create_dummy_transaction_data(people = 10, size = "hoge")
-create_row_anon_joined_data(dat_raw, dat_anon)
-create_row_anon_joined_data(dat_raw, 1)
-create_row_anon_joined_data(1, 1)
+create_dummy_master_data(people = as.integer(100))
+reate_row_anon_joined_data(dat_raw, dat_anon)

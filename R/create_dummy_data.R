@@ -16,14 +16,14 @@ create_dummy_master_data = function(people = 100){
   #' @export
   #'
   ## エラー処理
-  if(!is.integer(people)){
+  if(!is.numeric(people)){
     stop("整数を入力してください")
   } else if(people < 1){
     stop("人数(自然数)を入力してください")
   }
+
   # people = データに含まれる人数
   # 人数分のデータが生成される
-  # 行番号, ID, 数値, バイナリ, 文字列
   ROW_NUMBER = 1:people
   RAW_ID = ROW_NUMBER + 10000
   ANON_ID = stri_rand_strings(n = people, length = 10)
@@ -61,6 +61,8 @@ create_dummy_transaction_data = function(people = 100, size = 2){
   #' @importFrom magrittr
   #' @importFrom stringi
   #' @importFrom openssl
+  #' @examples
+  #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
   #' @export
 
   if(!is.integer(people)){
@@ -102,7 +104,7 @@ create_dummy_transaction_data = function(people = 100, size = 2){
 
 
 ## 再識別をしやすいように、加工前後のデータにヘッダを付けてクロスジョインする
-create_row_anon_joined_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANON_"){
+join_row_anon_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANON_"){
   #' 再識別アルゴリズム適用に便利な形のデータを作る
   #'
   #' @param raw 匿名加工前データ(data.frame

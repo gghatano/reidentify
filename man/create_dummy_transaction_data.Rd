@@ -14,3 +14,6 @@ create_dummy_transaction_data(people = 100, size = 2)
 \description{
 再識別用のダミーマスターデータ生成
 }
+\examples{
+data_tran = create_dummy_transaction_data(people = 10, size = 4)
+}
