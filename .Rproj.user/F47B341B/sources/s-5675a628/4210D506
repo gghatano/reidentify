@@ -1,0 +1,24 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1559883787401.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "4210D506",
+    "lastKnownWriteTime" : 1559884114,
+    "last_content_update" : 1559884114764,
+    "path" : "~/reidentify/test/test_create_data.R",
+    "project_path" : "test/test_create_data.R",
+    "properties" : {
+        "cursorPosition" : "40,0",
+        "marks" : "<:32,0\n>:37,58",
+        "scrollLine" : "13",
+        "tempName" : "Untitled2"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

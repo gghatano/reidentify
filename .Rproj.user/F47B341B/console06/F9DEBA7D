@@ -1,0 +1,35 @@
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ [Krstudio@a011e76b09da:~/reidentify$ ls
+DESCRIPTION  NAMESPACE	R  man	reidentify.Rproj  test
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git status
+fatal: Not a git repository (or any of the parent directories): .git
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git inint
+git: 'inint' is not a git command. See 'git --help'.
+
+Did you mean this?
+	init
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git init
+Initialized empty Git repository in /home/rstudio/reidentify/.git/
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git rep[K[K[Kremote -v ^M[K[K https://github.com/gghatano/reidentiify.git
+error: Unknown subcommand: https://github.com/gghatano/reidentify.git
+usage: git remote [-v | --verbose]
+   or: git remote add [-t <branch>] [-m <master>] [-f] [--tags | --no-tags] [--mirror=<fetch|push>] <name> <url>
+   or: git remote rename <old> <new>
+   or: git remote remove <name>
+   or: git remote set-head <name> (-a | --auto | -d | --delete | <branch>)
+   or: git remote [-v | --verbose] show [-n] <name>
+   or: git remote prune [-n | --dry-run] <name>
+   or: git remote [-v | --verbose] update [-p | --prune] [(<group> | <remote>)...]
+   or: git remote set-branches [--add] <name> <branch>...
+   or: git remote get-url [--push] [--all] <name>
+   or: git remote set-url [--push] <name> <newurl> [<oldurl>]
+   or: git remote set-url --add <name> <newurl>
+   or: git remote set-url --delete <name> <url>
+
+    -v, --verbose         be verbose; must be placed before a subcommand
+
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git remote -v https://github.com/gghatano/reidentiify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C https://github.com/gghatano/reidentif[1Py.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C https://github.com/gghatano/reidentify[1P.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ca https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cd https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cd https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Co https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cr https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ci https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cg https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ci https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cn https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C https://github.com/gghatano/reidentify.git[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C
+
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git push origin mst[K[K[Kmaster
+error: src refspec master does not match any.
+error: failed to push some refs to 'https://github.com/gghatano/reidentify.git'
+]0;/home/rstudio/reidentifyrstudio@a011e76b09da:~/reidentify$ git add -A

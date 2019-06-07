@@ -1,0 +1,6 @@
+library(reidentify)
+dat_master = create_dummy_master_data(people = 100)
+dat_master
+
+dat_tran = create_dummy_transaction_data(people = 100)
+dat_tran

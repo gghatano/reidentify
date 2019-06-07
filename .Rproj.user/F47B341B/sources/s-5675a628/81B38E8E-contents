@@ -1,0 +1,26 @@
+\name{hello}
+\alias{hello}
+\title{Hello, World!}
+\usage{
+hello()
+}
+\description{
+Prints 'Hello, world!'.
+}
+\examples{
+hello()
+}
+
+\name{create_dummy_master_data}
+\alias{create_dummy_master_data}
+\title{create dummy master data for the test of reid algorithm}
+\usage{
+create_dummy_master_data(people = 100)
+}
+\description{
+ people:
+}
+\examples{
+##
+create_dummy_master_data(people = 100)
+}

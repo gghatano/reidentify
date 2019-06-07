@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1559886996446.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "487901878",
+    "id" : "67112A39",
+    "lastKnownWriteTime" : 1559886986,
+    "last_content_update" : 1559886986,
+    "path" : "~/reidentify/man/create_dummy_transaction_data.Rd",
+    "project_path" : "man/create_dummy_transaction_data.Rd",
+    "properties" : {
+    },
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_doc"
+}

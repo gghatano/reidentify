@@ -1,0 +1,9 @@
+{
+    "path" : "~/reidentify/R",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}
