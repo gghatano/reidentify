@@ -2,17 +2,17 @@
 % Please edit documentation in R/transform_transaction_to_master.R
 \name{transform_transaction_to_master}
 \alias{transform_transaction_to_master}
-\title{トランザクションデータを無理やりマスタの形にする}
+\title{transform transaction -> master}
 \usage{
 transform_transaction_to_master(dat, ID = "ID", collapse = ":")
 }
 \arguments{
-\item{dat}{トランザクションデータ}
+\item{dat}{transaction data frame}
 
-\item{ID}{識別子の列名}
+\item{ID}{identifier name}
 
-\item{collapse}{圧縮時の区切り文字}
+\item{collapse}{separation character (defalt ":")}
 }
 \description{
-トランザクションデータを無理やりマスタの形にする
+transform transaction -> master
 }
