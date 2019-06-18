@@ -5,8 +5,8 @@ transform_transaction_to_master <- function(dat, ID = "ID", collapse = ":"){
   #' @param ID  識別子の列名
   #' @param collapse 圧縮時の区切り文字
   #'
-  #' @importFrom dplyr
-  #' @importFrom magrittr
+  #' @importFrom dplyr %>%
+  #' @importFrom magrittr %>%
   #' @export
   #'
 

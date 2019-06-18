@@ -4,7 +4,8 @@
 \alias{join_row_anon_data}
 \title{再識別アルゴリズム適用に便利な形のデータを作る}
 \usage{
-join_row_anon_data(raw, anon, raw_header = "RAW_", anon_header = "ANON_")
+join_row_anon_data(raw, anon, raw_header = "RAW_",
+  anon_header = "ANON_")
 }
 \arguments{
 \item{raw}{匿名加工前データ(data.frame}
