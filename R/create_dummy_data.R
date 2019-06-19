@@ -6,9 +6,8 @@ create_dummy_master_data = function(people = 100){
   #' @param people 人数
   #'
   #' @importFrom tibble data_frame
-  #' @importFrom tibble as.tibble
   #' @importFrom dplyr %>%
-  #' @importFrom stri_rand_strings
+  #' @importFrom stringi stri_rand_strings
   #' @importFrom openssl md5
   #' @export
   #'
@@ -46,11 +45,10 @@ create_dummy_transaction_data = function(people = 100, size = 2){
   #' @param people 人数
   #' @param size 平均トランザクション数
   #'
-  #' @importFrom dplyr
-  #' @importFrom tibble
-  #' @importFrom magrittr
-  #' @importFrom stringi
-  #' @importFrom openssl
+  #' @importFrom tibble data_frame
+  #' @importFrom dplyr %>%
+  #' @importFrom stringi stri_rand_strings
+  #' @importFrom openssl md5
   #' @examples
   #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
   #' @export
@@ -95,11 +93,11 @@ join_row_anon_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANO
   #' @param raw_header 加工前データの列の先頭に着けるラベル(デフォルトはRAW_)
   #' @param anon_header 加工後データの列の先頭に着けるラベル(デフォルトはAN_)
   #'
-  #' @importFrom dplyr
-  #' @importFrom tibble
-  #' @importFrom magrittr
-  #' @importFrom stringi
-  #' @importFrom openssl
+  #' @importFrom tibble data_frame
+  #' @importFrom tibble as_tibble
+  #' @importFrom dplyr %>%
+  #' @importFrom stringi stri_rand_strings
+  #' @importFrom openssl md5
   #' @export
 
 
