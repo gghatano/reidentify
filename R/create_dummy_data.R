@@ -111,6 +111,6 @@ join_row_anon_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANO
   names(anon) = paste(anon_header, names(anon), sep = "")
 
   ## クロスジョインする
-  merge(raw, anon, all = TRUE) %>% tibble::as.tibble %>% return
+  merge(raw, anon, all = TRUE) %>% return
 }
 
