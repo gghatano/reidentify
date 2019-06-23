@@ -4,7 +4,9 @@
 \alias{transform_transaction_to_master}
 \title{transform transaction -> master}
 \usage{
-transform_transaction_to_master(dat, ID = "ID", collapse = ":")
+transform_transaction_to_master(dat, ROW_NUMBER = "ROW_NUMBER",
+  ID = "ID", collapse = ":", STATIC_NUM = NULL, STATIC_CHAR = NULL,
+  DYNAMIC_NUM = NULL, DYNAMIC_CHAR = NULL)
 }
 \arguments{
 \item{dat}{transaction data frame}

@@ -1,11 +1,10 @@
 Package: reidentify
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Reidentify and check the safety of Anonymized data
 Version: 0.0.0.900
 Author: @gg_hatano
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Maintainer: @gg_hatano <adad0405+reidentify@gmail.com>
+Description: Check the safety of Anonymized data by estimating reid-attack success rate
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
