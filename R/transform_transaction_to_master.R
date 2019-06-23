@@ -11,6 +11,7 @@ transform_transaction_to_master <- function(dat, ROW_NUMBER = "ROW_NUMBER", ID =
   #' @importFrom dplyr summarise
   #' @importFrom dplyr distinct
   #' @importFrom dplyr inner_join
+  #' @importFrom dplyr ungroup
   #' @importFrom magrittr %>%
   #' @export
 
@@ -19,36 +20,45 @@ transform_transaction_to_master <- function(dat, ROW_NUMBER = "ROW_NUMBER", ID =
     dat %>%
     dplyr::select(`ID`, `STATIC_NUM`, `STATIC_CHAR`) %>%
     dplyr::group_by(`ID`) %>%
-    dplyr::distinct()
+    dplyr::distinct() %>%
+    ungroup()
+
   ## max and mean and min and...
   dat_master_statistic =
     dat %>%
     dplyr::select(`ID`, `DYNAMIC_NUM`) %>%
     dplyr::group_by(`ID`) %>%
-    dplyr::summarise_all(list(MAX=max, MEAN=mean, MEDIAN=median, MIN=min))
+    dplyr::summarise_all(list(MAX=max, MEAN=mean, MEDIAN=median, MIN=min)) %>%
+    dplyr::ungroup()
+
   # distribution
   dat_master_dist =
     dat %>%
     dplyr::select(`ID`, `DYNAMIC_NUM`, `DYNAMIC_CHAR`) %>%
     dplyr::group_by(`ID`) %>%
-    dplyr::summarise_all(list(DIST=~paste(sort(.), collapse = collapse)))
+    dplyr::summarise_all(list(DIST=~paste(sort(.), collapse = collapse))) %>%
+    dplyr::ungroup()
 
   # row count
   dat_master_rowcount =
     dat %>%
     dplyr::group_by(`ID`) %>%
-    dplyr::summarise(ROWCOUNT = n())
+    dplyr::summarise(ROWCOUNT = n()) %>%
+    dplyr::ungroup()
 
   dat_master_rownumber =
     dat %>%
     dplyr::select(`ID`, `ROW_NUMBER`) %>%
     dplyr::group_by(`ID`) %>%
-    dplyr::summarise_all(min)
+    dplyr::summarise_all(min) %>%
+    dplyr::ungroup()
 
   dat_master %>%
     dplyr::inner_join(dat_master_statistic, by = `ID`) %>%
     dplyr::inner_join(dat_master_dist, by = `ID`) %>%
     dplyr::inner_join(dat_master_rowcount, by = `ID`) %>%
     dplyr::inner_join(dat_master_rownumber, by = `ID`) %>%
+    dplyr::ungroup() %>%
+    dplyr::distinct() %>%
     return
 }

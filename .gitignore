@@ -3,5 +3,5 @@
 .RData
 .Ruserdata
 /__pycache__/
-/tmp/
-R/tmp/
+/tmp/*
+/R/tmp/*
