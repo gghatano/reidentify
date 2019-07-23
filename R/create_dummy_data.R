@@ -1,25 +1,24 @@
 ## ダミーデータを作る(マスター)
 create_dummy_master_data = function(people = 100){
-  #' 再識別用のダミーマスターデータ生成
+  #' create dummy master data
   #'
-  #' @param people 人数
+  #' @param people number of people
   #'
   #' @importFrom tibble data_frame
   #' @importFrom dplyr %>%
   #' @importFrom stringi stri_rand_strings
   #' @importFrom openssl md5
+  #' @encoding UTF-8
   #' @export
   #'
   #'
-  ## エラー処理
+  ## error handling
   if(!is.numeric(people)){
-    stop("整数を入力してください")
+    stop("people is integer ( > 0)")
   } else if(people < 1){
-    stop("人数(自然数)を入力してください")
+    stop("people is integer ( > 0)")
   }
 
-  # people = データに含まれる人数
-  # 人数分のデータが生成される
   ROW_NUMBER = 1:people
   RAW_ID = ROW_NUMBER + 10000
   RAW_NUM = runif(n = people)
@@ -37,12 +36,11 @@ create_dummy_master_data = function(people = 100){
 }
 
 
-## ダミーデータを作る(トランザクション)
 create_dummy_transaction_data = function(people = 100, size = 2){
-  #' 再識別用のダミーマスターデータ生成
+  #' create dummy transaction data
   #'
-  #' @param people 人数
-  #' @param size 平均トランザクション数
+  #' @param people number of people
+  #' @param size mean record number
   #'
   #' @importFrom tibble data_frame
   #' @importFrom dplyr %>%
@@ -51,16 +49,17 @@ create_dummy_transaction_data = function(people = 100, size = 2){
   #' @examples
   #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
   #' @export
+  #' @encoding UTF-8
 
 
   if(!is.numeric(people)){
-    stop("peopleには数字を指定してください")
+    stop("people is integer ( > 0 )")
   } else if(!is.numeric(size)){
-    stop("sizeには数値を指定してください")
+    stop("size is integer ( > 0 )")
   } else if(people < 1){
-    stop("人数(自然数)を指定してください")
+    stop("people is integer ( > 0 )")
   } else if(size <= 0) {
-    stop("sizeには平均トランザクション数(正の数)を指定してください")
+    stop("size is integer ( > 0 )")
   }
 
   row_num = people * size
@@ -84,14 +83,13 @@ create_dummy_transaction_data = function(people = 100, size = 2){
 }
 
 
-## 再識別をしやすいように、加工前後のマスターデータにヘッダを付けてクロスジョインする
-join_row_anon_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANON_") {
-  #' 再識別アルゴリズム適用に便利な形のデータを作る
+join_raw_anon_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANON_") {
+  #' create reid-format data from raw and anon data frame
   #'
-  #' @param raw 匿名加工前データ(data.frame
-  #' @param anon 匿名加工後データ(data.frame)
-  #' @param raw_header 加工前データの列の先頭に着けるラベル(デフォルトはRAW_)
-  #' @param anon_header 加工後データの列の先頭に着けるラベル(デフォルトはAN_)
+  #' @param raw  raw data frame
+  #' @param anon anonymized data frame
+  #' @param raw_header strings which is added for columns from raw data
+  #' @param anon_header strings which is added for columns from anon data
   #'
   #' @importFrom tibble data_frame
   #' @importFrom tibble as_tibble
@@ -99,18 +97,19 @@ join_row_anon_data = function(raw, anon, raw_header = "RAW_", anon_header = "ANO
   #' @importFrom stringi stri_rand_strings
   #' @importFrom openssl md5
   #' @export
+  #' @encoding UTF-8
 
 
-  ## 引数のエラー処理
+  ## error handling
   if(is.data.frame(raw) + is.data.frame(anon) != 2){
-    stop("data.frameを指定して下さい")
+    stop("raw and anon are data frame")
   }
 
-  ## 列名の処理
+  ## convert column names
   names(raw) = paste(raw_header, names(raw), sep = "")
   names(anon) = paste(anon_header, names(anon), sep = "")
 
-  ## クロスジョインする
+  ## cross join
   merge(raw, anon, all = TRUE) %>% return
 }
 

@@ -13,6 +13,8 @@ reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER",
 \item{target}{target column}
 
 \item{row_number}{row number column name(default: "ROW_NUMBER")}
+
+\item{split}{character for split _DIST value (default: ":")}
 }
 \description{
 reidentify by single list column (list A, B, C is expressed by "A:B:C")

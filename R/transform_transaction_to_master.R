@@ -3,8 +3,13 @@ transform_transaction_to_master <- function(dat, ROW_NUMBER = "ROW_NUMBER", ID =
   #' transform transaction -> master
   #'
   #' @param dat transaction data frame
+  #' @param ROW_NUMBER column name for row number in the create data frame
   #' @param ID  identifier name
   #' @param collapse separation character (defalt ":")
+  #' @param STATIC_NUM list of column name which shows STATIC NUMBER attribute
+  #' @param STATIC_CHAR list of column name which shows STATIC CHARACTER attribute
+  #' @param DYNAMIC_NUM list of column name which shows DYNAMIC NUMBER attribute
+  #' @param DYNAMIC_CHAR list of column name which shows DYNAMIC CHARACTER attribute
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr summarise_all

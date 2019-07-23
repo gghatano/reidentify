@@ -36,8 +36,8 @@ reid_result = function(dat_reid_result,
   #' craete text of reidentify result ( method: ******, success/trial : ***** / ******)
   #'
   #' @param dat_reid_result reid result data frame (RAW_ROW_NUMBER, ANON_ANON_NUMBER, RESULT)
-  #' @param anon_row_number
-  #' @param raw_row_number
+  #' @param anon_row_number column name of row number in ANON data
+  #' @param raw_row_number column name of row number in RAW data
   #' @param result true or false
   #' @param method reid method name
   #'
@@ -102,6 +102,7 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
   #' @param dat_raw_anon dataframe of raw_anon form
   #' @param target target column
   #' @param row_number row number column name(default: "ROW_NUMBER")
+  #' @param split character for split _DIST value (default: ":")
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr ungroup

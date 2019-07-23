@@ -2,7 +2,7 @@
 
 export(create_dummy_master_data)
 export(create_dummy_transaction_data)
-export(join_row_anon_data)
+export(join_raw_anon_data)
 export(reid_by_char)
 export(reid_by_dist)
 export(reid_by_num)

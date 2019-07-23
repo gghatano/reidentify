@@ -4,9 +4,8 @@
 \name{reidentify-package}
 \alias{reidentify}
 \alias{reidentify-package}
-\title{reidentify: What the Package Does (Title Case)}
+\title{reidentify: Reidentify and check the safety of Anonymized data}
 \description{
-More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Check the safety of Anonymized data by estimating reid-attack success rate.
 }
 \keyword{internal}

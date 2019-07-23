@@ -11,6 +11,10 @@ reid_result(dat_reid_result, raw_row_number = "RAW_ROW_NUMBER",
 \arguments{
 \item{dat_reid_result}{reid result data frame (RAW_ROW_NUMBER, ANON_ANON_NUMBER, RESULT)}
 
+\item{raw_row_number}{column name of row number in RAW data}
+
+\item{anon_row_number}{column name of row number in ANON data}
+
 \item{result}{true or false}
 
 \item{method}{reid method name}
