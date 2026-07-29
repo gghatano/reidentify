@@ -137,6 +137,7 @@ reid_result <- function(dat_reid_result,
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
 #' @importFrom magrittr %>%
+#' @importFrom utils adist
 #' @export
 reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   raw_target <- paste("RAW_", target, sep = "")

@@ -18,6 +18,7 @@
 #' @importFrom dplyr n
 #' @importFrom dplyr .data
 #' @importFrom magrittr %>%
+#' @importFrom stats median
 #' @export
 transform_transaction_to_master <- function(dat, ROW_NUMBER = "ROW_NUMBER", ID = "ID", collapse = ":",
                                             STATIC_NUM = NULL, STATIC_CHAR = NULL, DYNAMIC_NUM = NULL, DYNAMIC_CHAR = NULL) {

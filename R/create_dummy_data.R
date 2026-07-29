@@ -6,6 +6,7 @@
 #' @importFrom tibble data_frame
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
+#' @importFrom stats runif
 #' @importFrom openssl md5
 #' @encoding UTF-8
 #' @export
@@ -43,6 +44,7 @@ create_dummy_master_data <- function(people = 100) {
 #' @importFrom tibble data_frame
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
+#' @importFrom stats runif
 #' @importFrom openssl md5
 #' @examples
 #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
