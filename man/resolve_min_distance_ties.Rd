@@ -5,19 +5,32 @@
 \title{pick exactly one RAW record per ANON record from a RAW/ANON candidate
 table that has a DISTANCE column, keeping only the row(s) whose
 DISTANCE is minimal within each ANON_ROW_NUMBER group and then, if more
-than one RAW record is still tied for the minimum, keeping only the
-first RAW_ROW_NUMBER encountered. Shared by reid_by_num(), reid_by_char(),
-reid_by_dist() and reid_by_num_rank() so their tie-breaking logic cannot
-drift out of sync (see phase 3 fix for the reid_by_dist() tie-handling
-defect).}
+than one RAW record is still tied for the minimum, picking one of the
+tied candidates uniformly at random. Shared by reid_by_num(),
+reid_by_char(), reid_by_dist() and reid_by_num_rank() so their
+tie-breaking logic cannot drift out of sync.}
 \usage{
-resolve_min_distance_ties(dat_with_distance)
+resolve_min_distance_ties(dat_with_distance, seed = NULL)
 }
 \arguments{
 \item{dat_with_distance}{data frame with (at least) RAW_ROW_NUMBER,
 ANON_ROW_NUMBER and DISTANCE columns}
+
+\item{seed}{integer seed for the random tie-break, or NULL (default) to
+use the ambient RNG stream}
 }
 \description{
+Tie-breaking used to keep `RAW_ROW_NUMBER[1]`, i.e. whichever tied
+candidate happened to come first in the input. That made the reported
+success rate depend on the row order of a cross join, which is not a
+property of the data: on a 50-person fixture, reshuffling the input rows
+moved the rate over [0.02, 0.14] around a mean of 0.058. It also
+concentrated every success onto the first record of each tie group, which
+systematically distorts per-record risk even when the overall mean is
+unaffected. Random tie-breaking makes the estimator unbiased per record
+and lets the run-to-run spread be measured (see reid_stability()).
+}
+\details{
 Also guards against silently reporting an empty/short result: if DISTANCE
 is NA for every row, or if some ANON_ROW_NUMBER ends up with zero rows
 after tie-breaking (which happens when every candidate DISTANCE for that

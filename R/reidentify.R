@@ -1,11 +1,52 @@
+#' evaluate `code` with the RNG seeded to `seed`, restoring the caller's
+#' RNG state afterwards
+#'
+#' `seed = NULL` runs `code` against the ambient RNG stream unchanged, so a
+#' caller can still get reproducibility with a plain `set.seed()` before the
+#' call. Any other value makes the call self-contained and repeatable without
+#' perturbing the caller's stream.
+#'
+#' @param seed integer seed, or NULL to use the ambient RNG stream
+#' @param code expression to evaluate
+#'
+#' @keywords internal
+with_local_seed <- function(seed, code) {
+  if (is.null(seed)) {
+    return(code)
+  }
+
+  has_old <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  if (has_old) {
+    old_seed <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
+    on.exit(assign(".Random.seed", old_seed, envir = globalenv()), add = TRUE)
+  } else {
+    on.exit(
+      suppressWarnings(rm(".Random.seed", envir = globalenv())),
+      add = TRUE
+    )
+  }
+
+  set.seed(seed)
+  code
+}
+
 #' pick exactly one RAW record per ANON record from a RAW/ANON candidate
 #' table that has a DISTANCE column, keeping only the row(s) whose
 #' DISTANCE is minimal within each ANON_ROW_NUMBER group and then, if more
-#' than one RAW record is still tied for the minimum, keeping only the
-#' first RAW_ROW_NUMBER encountered. Shared by reid_by_num(), reid_by_char(),
-#' reid_by_dist() and reid_by_num_rank() so their tie-breaking logic cannot
-#' drift out of sync (see phase 3 fix for the reid_by_dist() tie-handling
-#' defect).
+#' than one RAW record is still tied for the minimum, picking one of the
+#' tied candidates uniformly at random. Shared by reid_by_num(),
+#' reid_by_char(), reid_by_dist() and reid_by_num_rank() so their
+#' tie-breaking logic cannot drift out of sync.
+#'
+#' Tie-breaking used to keep `RAW_ROW_NUMBER[1]`, i.e. whichever tied
+#' candidate happened to come first in the input. That made the reported
+#' success rate depend on the row order of a cross join, which is not a
+#' property of the data: on a 50-person fixture, reshuffling the input rows
+#' moved the rate over [0.02, 0.14] around a mean of 0.058. It also
+#' concentrated every success onto the first record of each tie group, which
+#' systematically distorts per-record risk even when the overall mean is
+#' unaffected. Random tie-breaking makes the estimator unbiased per record
+#' and lets the run-to-run spread be measured (see reid_stability()).
 #'
 #' Also guards against silently reporting an empty/short result: if DISTANCE
 #' is NA for every row, or if some ANON_ROW_NUMBER ends up with zero rows
@@ -15,6 +56,8 @@
 #'
 #' @param dat_with_distance data frame with (at least) RAW_ROW_NUMBER,
 #'   ANON_ROW_NUMBER and DISTANCE columns
+#' @param seed integer seed for the random tie-break, or NULL (default) to
+#'   use the ambient RNG stream
 #'
 #' @keywords internal
 #'
@@ -22,7 +65,7 @@
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
 #' @importFrom magrittr %>%
-resolve_min_distance_ties <- function(dat_with_distance) {
+resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
   n_anon_before <- length(unique(dat_with_distance$ANON_ROW_NUMBER))
 
   if (nrow(dat_with_distance) == 0 || all(is.na(dat_with_distance$DISTANCE))) {
@@ -35,14 +78,34 @@ resolve_min_distance_ties <- function(dat_with_distance) {
     )
   }
 
-  dat_result <-
+  dat_min <-
     dat_with_distance %>%
     dplyr::group_by(ANON_ROW_NUMBER) %>%
     dplyr::filter(DISTANCE == min(DISTANCE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::group_by(ANON_ROW_NUMBER) %>%
-    dplyr::filter(RAW_ROW_NUMBER == RAW_ROW_NUMBER[1]) %>%
     dplyr::ungroup()
+
+  ## Put the surviving candidates into a canonical order first, so that the
+  ## draw depends only on the data and the seed -- never on the row order of
+  ## the input. Without this, a fixed seed applied to the same data in a
+  ## different row order still yields a different pick, which is exactly the
+  ## input-order sensitivity this change is meant to remove.
+  dat_min <- dat_min[
+    order(dat_min$ANON_ROW_NUMBER, dat_min$RAW_ROW_NUMBER), ,
+    drop = FALSE
+  ]
+
+  ## Break ties uniformly at random: shuffle every surviving candidate, then
+  ## keep the first occurrence of each ANON record. Shuffling the whole table
+  ## and taking first-per-group draws one candidate uniformly from each tie
+  ## group in a single pass.
+  dat_result <- with_local_seed(seed, {
+    shuffled <- dat_min[sample.int(nrow(dat_min)), , drop = FALSE]
+    shuffled[!duplicated(shuffled$ANON_ROW_NUMBER), , drop = FALSE]
+  })
+
+  ## Restore a deterministic output order so that only the *choice* among
+  ## tied candidates is random, never the row order of the result.
+  dat_result <- dat_result[order(dat_result$ANON_ROW_NUMBER), , drop = FALSE]
 
   n_anon_after <- length(unique(dat_result$ANON_ROW_NUMBER))
 
@@ -63,6 +126,8 @@ resolve_min_distance_ties <- function(dat_with_distance) {
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
 #' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param seed integer seed for the random tie-break among equally distant
+#'   candidates, or NULL (default) to use the ambient RNG stream
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
@@ -70,7 +135,7 @@ resolve_min_distance_ties <- function(dat_with_distance) {
 #' @importFrom dplyr mutate
 #' @importFrom magrittr %>%
 #' @export
-reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
+reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL) {
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
@@ -79,7 +144,7 @@ reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   dat_raw_anon %>%
     dplyr::select(RAW_ROW_NUMBER = RAW_ROW_NUMBER, ANON_ROW_NUMBER = ANON_ROW_NUMBER, RAW = dplyr::all_of(raw_target), ANON = dplyr::all_of(anon_target)) %>%
     dplyr::mutate(DISTANCE = abs(RAW - ANON)) %>%
-    resolve_min_distance_ties() %>%
+    resolve_min_distance_ties(seed = seed) %>%
     dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
     return()
 }
@@ -131,6 +196,8 @@ reid_result <- function(dat_reid_result,
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
 #' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param seed integer seed for the random tie-break among equally distant
+#'   candidates, or NULL (default) to use the ambient RNG stream
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
@@ -139,7 +206,7 @@ reid_result <- function(dat_reid_result,
 #' @importFrom magrittr %>%
 #' @importFrom utils adist
 #' @export
-reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
+reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL) {
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
@@ -160,7 +227,7 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   dat_raw_anon %>%
     dplyr::mutate(RAW_ROW_NUMBER = `RAW_ROW_NUMBER`, ANON_ROW_NUMBER = `ANON_ROW_NUMBER`, DISTANCE) %>%
     dplyr::mutate(RESULT = (RAW_ROW_NUMBER == ANON_ROW_NUMBER)) %>%
-    resolve_min_distance_ties() %>%
+    resolve_min_distance_ties(seed = seed) %>%
     return()
 }
 
@@ -170,6 +237,8 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
 #' @param target target column
 #' @param row_number row number column name(default: "ROW_NUMBER")
 #' @param split character for split _DIST value (default: ":")
+#' @param seed integer seed for the random tie-break among equally distant
+#'   candidates, or NULL (default) to use the ambient RNG stream
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
@@ -177,7 +246,7 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
 #' @importFrom dplyr mutate
 #' @importFrom magrittr %>%
 #' @export
-reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":") {
+reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":", seed = NULL) {
   #
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
@@ -195,7 +264,7 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
 
   dat_raw_anon %>%
     dplyr::select(RAW_ROW_NUMBER = RAW_ROW_NUMBER, ANON_ROW_NUMBER = ANON_ROW_NUMBER, DISTANCE) %>%
-    resolve_min_distance_ties() %>%
+    resolve_min_distance_ties(seed = seed) %>%
     dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
     return()
 }
@@ -313,6 +382,8 @@ distribution_distance <- function(x, y, split = ":") {
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
 #' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param seed integer seed for the random tie-break among equally distant
+#'   candidates, or NULL (default) to use the ambient RNG stream
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
@@ -321,35 +392,124 @@ distribution_distance <- function(x, y, split = ":") {
 #' @importFrom magrittr %>%
 #' @importFrom magrittr %<>%
 #' @export
-reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
+reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL) {
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
 
-  ## check the rank
-  dat_anon_rank <-
-    dat_raw_anon %>%
-    dplyr::select(dplyr::all_of(c(anon_row_number, anon_target))) %>%
-    dplyr::distinct()
-  dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "random")
-  dat_anon_rank %<>%
-    dplyr::select(dplyr::all_of(anon_row_number), ANON_RANK)
+  ## This function has a second source of randomness besides the distance
+  ## tie-break: rank(ties.method = "random") breaks rank ties at random too.
+  ## Both must fall under `seed`, otherwise the same seed still gives
+  ## different answers. Seed once for the whole body and let the tie-break
+  ## draw from that same (now deterministic) stream.
+  with_local_seed(seed, {
+    ## check the rank
+    dat_anon_rank <-
+      dat_raw_anon %>%
+      dplyr::select(dplyr::all_of(c(anon_row_number, anon_target))) %>%
+      dplyr::distinct()
+    dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "random")
+    dat_anon_rank %<>%
+      dplyr::select(dplyr::all_of(anon_row_number), ANON_RANK)
 
-  dat_raw_rank <-
-    dat_raw_anon %>%
-    dplyr::select(dplyr::all_of(c(raw_row_number, raw_target))) %>%
-    dplyr::distinct()
-  dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "random")
-  dat_raw_rank %<>%
-    dplyr::select(dplyr::all_of(raw_row_number), RAW_RANK)
+    dat_raw_rank <-
+      dat_raw_anon %>%
+      dplyr::select(dplyr::all_of(c(raw_row_number, raw_target))) %>%
+      dplyr::distinct()
+    dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "random")
+    dat_raw_rank %<>%
+      dplyr::select(dplyr::all_of(raw_row_number), RAW_RANK)
 
-  dat_raw_anon %>%
-    dplyr::inner_join(dat_raw_rank, by = raw_row_number) %>%
-    dplyr::inner_join(dat_anon_rank, by = anon_row_number) %>%
-    dplyr::mutate(DISTANCE = abs(ANON_RANK - RAW_RANK)) %>%
-    resolve_min_distance_ties() %>%
-    dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
-    dplyr::select(ANON_ROW_NUMBER, RAW_ROW_NUMBER, dplyr::all_of(c(anon_target, raw_target)), ANON_RANK, RAW_RANK, DISTANCE, RESULT) %>%
-    return()
+    dat_raw_anon %>%
+      dplyr::inner_join(dat_raw_rank, by = raw_row_number) %>%
+      dplyr::inner_join(dat_anon_rank, by = anon_row_number) %>%
+      dplyr::mutate(DISTANCE = abs(ANON_RANK - RAW_RANK)) %>%
+      resolve_min_distance_ties(seed = NULL) %>%
+      dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
+      dplyr::select(ANON_ROW_NUMBER, RAW_ROW_NUMBER, dplyr::all_of(c(anon_target, raw_target)), ANON_RANK, RAW_RANK, DISTANCE, RESULT)
+  })
+}
+
+#' run a reid_by_*() attack over several tie-break seeds and summarise the
+#' spread of the success rate
+#'
+#' When a target column has ties, a single run reports one draw from a
+#' distribution of possible outcomes, not a fixed property of the data. A
+#' point estimate on its own is therefore not interpretable: on a 50-person
+#' fixture with a low-cardinality column the rate ranges over [0.02, 0.14]
+#' depending only on which tied candidate is picked. This runs the same
+#' attack across `seeds` and reports the mean together with the standard
+#' deviation, so the uncertainty is visible in the result rather than hidden.
+#'
+#' A near-zero `sd` means the target column is effectively collision-free and
+#' the point estimate can be read directly; a large `sd` means the single-run
+#' number should not be quoted without it.
+#'
+#' @param reid_fn a reid_by_*() function (or its name) taking
+#'   `(dat_raw_anon, target, ..., seed)`
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column
+#' @param seeds integer vector of tie-break seeds (default 1:20)
+#' @param ... further arguments passed on to `reid_fn`
+#'
+#' @return an object of class "reid_stability": a list with `per_seed` (a
+#'   data frame of seed / success / trial / rate), and the summary fields
+#'   `mean`, `sd`, `min`, `max`, `trial` and `n_seeds`
+#'
+#' @importFrom stats sd
+#' @export
+reid_stability <- function(reid_fn, dat_raw_anon, target, seeds = 1:20, ...) {
+  reid_fn <- match.fun(reid_fn)
+
+  if (length(seeds) < 2) {
+    stop(
+      "reid_stability(): need at least 2 seeds to report a standard ",
+      "deviation; got ", length(seeds), ".",
+      call. = FALSE
+    )
+  }
+  if (anyDuplicated(seeds) > 0) {
+    stop("reid_stability(): `seeds` must not contain duplicates.", call. = FALSE)
+  }
+
+  rows <- lapply(seeds, function(s) {
+    r <- reid_fn(dat_raw_anon, target = target, seed = s, ...)
+    data.frame(seed = s, success = sum(r$RESULT), trial = nrow(r))
+  })
+  per_seed <- do.call(rbind, rows)
+  per_seed$rate <- per_seed$success / per_seed$trial
+
+  structure(
+    list(
+      per_seed = per_seed,
+      mean = mean(per_seed$rate),
+      sd = stats::sd(per_seed$rate),
+      min = min(per_seed$rate),
+      max = max(per_seed$rate),
+      trial = unique(per_seed$trial),
+      n_seeds = length(seeds)
+    ),
+    class = "reid_stability"
+  )
+}
+
+#' print a reid_stability summary
+#'
+#' @param x a "reid_stability" object
+#' @param ... ignored
+#'
+#' @return `x`, invisibly
+#'
+#' @export
+print.reid_stability <- function(x, ...) {
+  cat(sprintf(
+    "reid stability over %d tie-break seeds (trial = %s)\n",
+    x$n_seeds, paste(x$trial, collapse = "/")
+  ))
+  cat(sprintf(
+    "  success rate: mean %.4f  sd %.4f  range [%.4f, %.4f]\n",
+    x$mean, x$sd, x$min, x$max
+  ))
+  invisible(x)
 }

@@ -4,7 +4,13 @@
 \alias{reid_by_dist}
 \title{reidentify by distribution column (list A, B, C is expressed by "A:B:C")}
 \usage{
-reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":")
+reid_by_dist(
+  dat_raw_anon,
+  target,
+  row_number = "ROW_NUMBER",
+  split = ":",
+  seed = NULL
+)
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
@@ -14,6 +20,9 @@ reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":")
 \item{row_number}{row number column name(default: "ROW_NUMBER")}
 
 \item{split}{character for split _DIST value (default: ":")}
+
+\item{seed}{integer seed for the random tie-break among equally distant
+candidates, or NULL (default) to use the ambient RNG stream}
 }
 \description{
 reidentify by distribution column (list A, B, C is expressed by "A:B:C")
