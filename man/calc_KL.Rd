@@ -13,6 +13,11 @@ calc_KL(x, y, split = ":")
 
 \item{split}{split (default: ":")}
 }
+\value{
+numeric scalar, the KL divergence between the normalized
+  distributions parsed from `x` and `y`.
+}
 \description{
 calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)
 }
+\keyword{internal}

@@ -12,6 +12,11 @@ create_dummy_transaction_data(people = 100, size = 2)
 
 \item{size}{mean record number}
 }
+\value{
+a tibble with columns ROW_NUMBER, ID, NUM_STATIC, NUM_DYNAMIC,
+  BIN, CHAR containing `people * size` rows of randomly generated dummy
+  transaction data.
+}
 \description{
 create dummy transaction data
 }

@@ -13,6 +13,11 @@ distribution_distance(x, y, split = ":")
 
 \item{split}{split (default: ":")}
 }
+\value{
+numeric scalar, the sum of squared differences (L2 norm) between
+  the (length-matched) numeric vectors parsed from `x` and `y`.
+}
 \description{
 calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
 }
+\keyword{internal}

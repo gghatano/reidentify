@@ -11,7 +11,19 @@ reid_by_num(dat_raw_anon, target, row_number = "ROW_NUMBER")
 
 \item{target}{target column}
 
-\item{row_number}{row number column name(default: "ROW_NUMBER")}
+\item{row_number}{name of the row-number column *before* the RAW_/ANON_
+prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+dat_raw_anon is expected to contain columns
+paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+regardless of `row_number`, so it can be passed straight into
+reid_result()'s defaults even when a non-default row_number was used.}
+}
+\value{
+a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW,
+  ANON, DISTANCE and RESULT (logical): exactly one row per ANON record,
+  the RAW record closest in `target` by absolute difference, and whether
+  that guess was correct.
 }
 \description{
 reidentify by single num static column by using L2 norm

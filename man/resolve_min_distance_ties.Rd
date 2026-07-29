@@ -17,6 +17,11 @@ resolve_min_distance_ties(dat_with_distance)
 \item{dat_with_distance}{data frame with (at least) RAW_ROW_NUMBER,
 ANON_ROW_NUMBER and DISTANCE columns}
 }
+\value{
+`dat_with_distance`, filtered down to exactly one row per
+  ANON_ROW_NUMBER (the minimal-DISTANCE RAW candidate, first
+  RAW_ROW_NUMBER on remaining ties).
+}
 \description{
 Also guards against silently reporting an empty/short result: if DISTANCE
 is NA for every row, or if some ANON_ROW_NUMBER ends up with zero rows

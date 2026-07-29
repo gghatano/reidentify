@@ -10,6 +10,10 @@ create_dummy_master_data(people = 100)
 \arguments{
 \item{people}{number of people}
 }
+\value{
+a tibble with columns ROW_NUMBER, ID, NUM, BIN, CHAR containing
+  `people` rows of randomly generated dummy master data.
+}
 \description{
 create dummy master data
 }

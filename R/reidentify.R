@@ -1,3 +1,37 @@
+check_raw_anon_columns_exist <- function(dat_raw_anon, cols, fn_name) {
+  #' stop with a clear, actionable error message if any of `cols` is missing
+  #' from `dat_raw_anon`, instead of letting reid_by_*() fail downstream with
+  #' a confusing low-level error (e.g. base R's "replacement has 0 rows,
+  #' data has NNN" from reid_by_char()/reid_by_dist() indexing a
+  #' non-existent column with `[[`, which gives no hint about which column
+  #' name was actually wrong).
+  #'
+  #' @param dat_raw_anon dataframe of raw_anon form
+  #' @param cols character vector of (already RAW_/ANON_-prefixed) column
+  #'   names that the caller is about to look up in `dat_raw_anon`
+  #' @param fn_name name of the calling reid_by_*() function, used in the
+  #'   error message
+  #'
+  #' @return invisible NULL if all `cols` are present; otherwise stops with
+  #'   an error naming the missing column(s).
+  #'
+  #' @keywords internal
+
+  missing_cols <- setdiff(cols, names(dat_raw_anon))
+  if (length(missing_cols) > 0) {
+    stop(
+      fn_name, "(): column(s) not found in dat_raw_anon: ",
+      paste(missing_cols, collapse = ", "),
+      ". Check the `target`/`row_number` arguments (these are looked up ",
+      "*after* RAW_/ANON_ prefixing) against the columns actually present: ",
+      paste(names(dat_raw_anon), collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  invisible(NULL)
+}
+
 resolve_min_distance_ties <- function(dat_with_distance) {
   #' pick exactly one RAW record per ANON record from a RAW/ANON candidate
   #' table that has a DISTANCE column, keeping only the row(s) whose
@@ -17,11 +51,16 @@ resolve_min_distance_ties <- function(dat_with_distance) {
   #' @param dat_with_distance data frame with (at least) RAW_ROW_NUMBER,
   #'   ANON_ROW_NUMBER and DISTANCE columns
   #'
+  #' @return `dat_with_distance`, filtered down to exactly one row per
+  #'   ANON_ROW_NUMBER (the minimal-DISTANCE RAW candidate, first
+  #'   RAW_ROW_NUMBER on remaining ties).
+  #'
   #' @keywords internal
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr ungroup
   #' @importFrom dplyr filter
+  #' @importFrom dplyr .data
   #' @importFrom magrittr %>%
 
   n_anon_before <- length(unique(dat_with_distance$ANON_ROW_NUMBER))
@@ -38,11 +77,11 @@ resolve_min_distance_ties <- function(dat_with_distance) {
 
   dat_result <-
     dat_with_distance %>%
-    dplyr::group_by(ANON_ROW_NUMBER) %>%
-    dplyr::filter(DISTANCE == min(DISTANCE)) %>%
+    dplyr::group_by(.data$ANON_ROW_NUMBER) %>%
+    dplyr::filter(.data$DISTANCE == min(.data$DISTANCE)) %>%
     dplyr::ungroup() %>%
-    dplyr::group_by(ANON_ROW_NUMBER) %>%
-    dplyr::filter(RAW_ROW_NUMBER == RAW_ROW_NUMBER[1]) %>%
+    dplyr::group_by(.data$ANON_ROW_NUMBER) %>%
+    dplyr::filter(.data$RAW_ROW_NUMBER == .data$RAW_ROW_NUMBER[1]) %>%
     dplyr::ungroup()
 
   n_anon_after <- length(unique(dat_result$ANON_ROW_NUMBER))
@@ -64,12 +103,24 @@ reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   #'
   #' @param dat_raw_anon dataframe of raw_anon form
   #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
+  #' @param row_number name of the row-number column *before* the RAW_/ANON_
+  #'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+  #'   dat_raw_anon is expected to contain columns
+  #'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+  #'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+  #'   regardless of `row_number`, so it can be passed straight into
+  #'   reid_result()'s defaults even when a non-default row_number was used.
+  #'
+  #' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW,
+  #'   ANON, DISTANCE and RESULT (logical): exactly one row per ANON record,
+  #'   the RAW record closest in `target` by absolute difference, and whether
+  #'   that guess was correct.
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr ungroup
   #' @importFrom dplyr filter
   #' @importFrom dplyr mutate
+  #' @importFrom dplyr .data
   #' @importFrom magrittr %>%
   #' @export
 
@@ -77,12 +128,13 @@ reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_num")
 
   dat_raw_anon %>%
-    dplyr::select(RAW_ROW_NUMBER = RAW_ROW_NUMBER, ANON_ROW_NUMBER = ANON_ROW_NUMBER, RAW = dplyr::all_of(raw_target), ANON = dplyr::all_of(anon_target)) %>%
-    dplyr::mutate(DISTANCE = abs(RAW - ANON)) %>%
+    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(anon_row_number), RAW = dplyr::all_of(raw_target), ANON = dplyr::all_of(anon_target)) %>%
+    dplyr::mutate(DISTANCE = abs(.data$RAW - .data$ANON)) %>%
     resolve_min_distance_ties() %>%
-    dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
+    dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
     return()
 }
 
@@ -96,6 +148,12 @@ reid_result <- function(dat_reid_result,
   #' @param raw_row_number column name of row number in RAW data
   #' @param result true or false
   #' @param method reid method name
+  #'
+  #' @return a character scalar of the form
+  #'   `" method: <method> , success / trial :  <success> / <trial> "`,
+  #'   where `trial` is the number of rows in `dat_reid_result` and
+  #'   `success` is the number of TRUE values in its `result` column;
+  #'   `success` is always <= `trial`.
   #'
   #' @importFrom magrittr %>%
   #' @export
@@ -134,19 +192,33 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   #'
   #' @param dat_raw_anon dataframe of raw_anon form
   #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
+  #' @param row_number name of the row-number column *before* the RAW_/ANON_
+  #'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+  #'   dat_raw_anon is expected to contain columns
+  #'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+  #'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+  #'   regardless of `row_number`, so it can be passed straight into
+  #'   reid_result()'s defaults even when a non-default row_number was used.
+  #'
+  #' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
+  #'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
+  #'   RAW record closest in `target` by (Levenshtein) edit distance, and
+  #'   whether that guess was correct.
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr ungroup
   #' @importFrom dplyr filter
   #' @importFrom dplyr mutate
+  #' @importFrom dplyr .data
   #' @importFrom magrittr %>%
+  #' @importFrom utils adist
   #' @export
 
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_char")
 
   raw_target_col <- as.character(dat_raw_anon[[raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[anon_target]])
@@ -161,8 +233,8 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   dat_raw_anon$DISTANCE <- vec_distance
 
   dat_raw_anon %>%
-    dplyr::mutate(RAW_ROW_NUMBER = `RAW_ROW_NUMBER`, ANON_ROW_NUMBER = `ANON_ROW_NUMBER`, DISTANCE) %>%
-    dplyr::mutate(RESULT = (RAW_ROW_NUMBER == ANON_ROW_NUMBER)) %>%
+    dplyr::mutate(RAW_ROW_NUMBER = .data[[raw_row_number]], ANON_ROW_NUMBER = .data[[anon_row_number]], DISTANCE = .data$DISTANCE) %>%
+    dplyr::mutate(RESULT = (.data$RAW_ROW_NUMBER == .data$ANON_ROW_NUMBER)) %>%
     resolve_min_distance_ties() %>%
     return()
 }
@@ -172,13 +244,25 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
   #'
   #' @param dat_raw_anon dataframe of raw_anon form
   #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
+  #' @param row_number name of the row-number column *before* the RAW_/ANON_
+  #'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+  #'   dat_raw_anon is expected to contain columns
+  #'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+  #'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+  #'   regardless of `row_number`, so it can be passed straight into
+  #'   reid_result()'s defaults even when a non-default row_number was used.
   #' @param split character for split _DIST value (default: ":")
+  #'
+  #' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
+  #'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
+  #'   RAW record closest in `target` by distribution distance, and whether
+  #'   that guess was correct.
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr ungroup
   #' @importFrom dplyr filter
   #' @importFrom dplyr mutate
+  #' @importFrom dplyr .data
   #' @importFrom magrittr %>%
   #' @export
   #
@@ -186,6 +270,7 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_dist")
 
   raw_target_col <- as.character(dat_raw_anon[[raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[anon_target]])
@@ -197,9 +282,9 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
   dat_raw_anon$DISTANCE <- distance
 
   dat_raw_anon %>%
-    dplyr::select(RAW_ROW_NUMBER = RAW_ROW_NUMBER, ANON_ROW_NUMBER = ANON_ROW_NUMBER, DISTANCE) %>%
+    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(anon_row_number), "DISTANCE") %>%
     resolve_min_distance_ties() %>%
-    dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
+    dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
     return()
 }
 
@@ -219,6 +304,9 @@ parse_dist_values <- function(str, split, side) {
   #' @param str character scalar, e.g. "1:2:3"
   #' @param split split character (default ":")
   #' @param side label used in the error message ("x" or "y")
+  #'
+  #' @return numeric vector parsed from `str`; stops with an error instead of
+  #'   returning NA-containing output.
   #'
   #' @keywords internal
 
@@ -267,6 +355,11 @@ calc_KL <- function(x, y, split = ":") {
   #' @param y vector
   #' @param split split (default: ":")
   #'
+  #' @return numeric scalar, the KL divergence between the normalized
+  #'   distributions parsed from `x` and `y`.
+  #'
+  #' @keywords internal
+  #'
   #' @importFrom philentropy KL
   #' @importFrom magrittr %>%
   #'
@@ -286,6 +379,11 @@ distribution_distance <- function(x, y, split = ":") {
   #' @param x vector
   #' @param y vector
   #' @param split split (default: ":")
+  #'
+  #' @return numeric scalar, the sum of squared differences (L2 norm) between
+  #'   the (length-matched) numeric vectors parsed from `x` and `y`.
+  #'
+  #' @keywords internal
   #'
   #' @importFrom magrittr %>%
 
@@ -308,23 +406,43 @@ distribution_distance <- function(x, y, split = ":") {
   }
 
   ## calc distance
-  distance <- (x_list - y_list) %>%
-    .**2 %>%
-    sum()
+  ## (written without the magrittr `.` placeholder: `. ** 2` triggers an
+  ## R CMD check "no visible binding for global variable '.'" NOTE)
+  distance <- sum((x_list - y_list)^2)
   distance %>% return()
 }
 
 reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   #' reidentify by single num static by using rank
   #'
+  #' Rank ties are resolved deterministically (see `rank(..., ties.method =
+  #' "min")` below): tied values receive the *same* rank rather than an
+  #' arbitrary distinct one, so the same input always yields the same
+  #' output. Any residual ambiguity this creates (several RAW candidates at
+  #' DISTANCE == 0 for one ANON record) is resolved, as for every other
+  #' reid_by_*() function, by resolve_min_distance_ties()'s "first
+  #' RAW_ROW_NUMBER encountered" rule.
+  #'
   #' @param dat_raw_anon dataframe of raw_anon form
   #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
+  #' @param row_number name of the row-number column *before* the RAW_/ANON_
+  #'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+  #'   dat_raw_anon is expected to contain columns
+  #'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+  #'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+  #'   regardless of `row_number`, so it can be passed straight into
+  #'   reid_result()'s defaults even when a non-default row_number was used.
+  #'
+  #' @return a data frame with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER, the
+  #'   raw `target` columns, ANON_RANK, RAW_RANK, DISTANCE and RESULT
+  #'   (logical): exactly one row per ANON record, the RAW record closest in
+  #'   rank of `target`, and whether that guess was correct.
   #'
   #' @importFrom dplyr group_by
   #' @importFrom dplyr ungroup
   #' @importFrom dplyr filter
   #' @importFrom dplyr mutate
+  #' @importFrom dplyr .data
   #' @importFrom magrittr %>%
   #' @importFrom magrittr %<>%
   #' @export
@@ -333,30 +451,54 @@ reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_num_rank")
+
+  ## rank(..., na.last = TRUE) (the default) does NOT propagate NA: it
+  ## silently assigns missing values a real, high rank instead of erroring
+  ## or returning NA, which would let an ANON/RAW record with a genuinely
+  ## missing target value be reported as a confident (even DISTANCE == 0)
+  ## reidentification match. Stop instead of letting that happen silently.
+  if (anyNA(dat_raw_anon[[anon_target]]) || anyNA(dat_raw_anon[[raw_target]])) {
+    stop(
+      "reid_by_num_rank(): target column \"", target, "\" contains NA/missing ",
+      "values in RAW and/or ANON. rank(..., na.last = TRUE) would silently ",
+      "assign missing values a real rank instead of erroring, which could ",
+      "report a false reidentification match. Remove or explicitly handle ",
+      "missing values before calling reid_by_num_rank().",
+      call. = FALSE
+    )
+  }
 
   ## check the rank
+  ## ties.method = "min": deterministic (fixes the reid_by_num_rank()
+  ## non-determinism defect -- "random" gave a different result every run
+  ## for tie-heavy columns) and, more importantly, semantically correct for
+  ## a reidentification-risk tool: genuinely tied values are indistinguishable
+  ## in the data, so they should collapse to the same rank instead of being
+  ## arbitrarily split into a fake total order by incidental row position.
   dat_anon_rank <-
     dat_raw_anon %>%
     dplyr::select(dplyr::all_of(c(anon_row_number, anon_target))) %>%
     dplyr::distinct()
-  dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "random")
+  dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "min")
   dat_anon_rank %<>%
-    dplyr::select(dplyr::all_of(anon_row_number), ANON_RANK)
+    dplyr::select(dplyr::all_of(anon_row_number), "ANON_RANK")
 
   dat_raw_rank <-
     dat_raw_anon %>%
     dplyr::select(dplyr::all_of(c(raw_row_number, raw_target))) %>%
     dplyr::distinct()
-  dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "random")
+  dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "min")
   dat_raw_rank %<>%
-    dplyr::select(dplyr::all_of(raw_row_number), RAW_RANK)
+    dplyr::select(dplyr::all_of(raw_row_number), "RAW_RANK")
 
   dat_raw_anon %>%
     dplyr::inner_join(dat_raw_rank, by = raw_row_number) %>%
     dplyr::inner_join(dat_anon_rank, by = anon_row_number) %>%
-    dplyr::mutate(DISTANCE = abs(ANON_RANK - RAW_RANK)) %>%
+    dplyr::mutate(RAW_ROW_NUMBER = .data[[raw_row_number]], ANON_ROW_NUMBER = .data[[anon_row_number]]) %>%
+    dplyr::mutate(DISTANCE = abs(.data$ANON_RANK - .data$RAW_RANK)) %>%
     resolve_min_distance_ties() %>%
-    dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
-    dplyr::select(ANON_ROW_NUMBER, RAW_ROW_NUMBER, dplyr::all_of(c(anon_target, raw_target)), ANON_RANK, RAW_RANK, DISTANCE, RESULT) %>%
+    dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
+    dplyr::select("ANON_ROW_NUMBER", "RAW_ROW_NUMBER", dplyr::all_of(c(anon_target, raw_target)), "ANON_RANK", "RAW_RANK", "DISTANCE", "RESULT") %>%
     return()
 }
