@@ -1,17 +1,15 @@
 ## ダミーデータを作る(マスター)
+#' create dummy master data
+#'
+#' @param people number of people
+#'
+#' @importFrom tibble data_frame
+#' @importFrom dplyr %>%
+#' @importFrom stringi stri_rand_strings
+#' @importFrom openssl md5
+#' @encoding UTF-8
+#' @export
 create_dummy_master_data <- function(people = 100) {
-  #' create dummy master data
-  #'
-  #' @param people number of people
-  #'
-  #' @importFrom tibble data_frame
-  #' @importFrom dplyr %>%
-  #' @importFrom stringi stri_rand_strings
-  #' @importFrom openssl md5
-  #' @encoding UTF-8
-  #' @export
-  #'
-  #'
   ## error handling
   if (!is.numeric(people)) {
     stop("people is integer ( > 0)")
@@ -37,21 +35,20 @@ create_dummy_master_data <- function(people = 100) {
 }
 
 
+#' create dummy transaction data
+#'
+#' @param people number of people
+#' @param size mean record number
+#'
+#' @importFrom tibble data_frame
+#' @importFrom dplyr %>%
+#' @importFrom stringi stri_rand_strings
+#' @importFrom openssl md5
+#' @examples
+#' data_tran = create_dummy_transaction_data(people = 10, size = 4)
+#' @export
+#' @encoding UTF-8
 create_dummy_transaction_data <- function(people = 100, size = 2) {
-  #' create dummy transaction data
-  #'
-  #' @param people number of people
-  #' @param size mean record number
-  #'
-  #' @importFrom tibble data_frame
-  #' @importFrom dplyr %>%
-  #' @importFrom stringi stri_rand_strings
-  #' @importFrom openssl md5
-  #' @examples
-  #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
-  #' @export
-  #' @encoding UTF-8
-
 
   if (!is.numeric(people)) {
     stop("people is integer ( > 0 )")
@@ -85,22 +82,21 @@ create_dummy_transaction_data <- function(people = 100, size = 2) {
 }
 
 
+#' create reid-format data from raw and anon data frame
+#'
+#' @param raw  raw data frame
+#' @param anon anonymized data frame
+#' @param raw_header strings which is added for columns from raw data
+#' @param anon_header strings which is added for columns from anon data
+#'
+#' @importFrom tibble data_frame
+#' @importFrom tibble as_tibble
+#' @importFrom dplyr %>%
+#' @importFrom stringi stri_rand_strings
+#' @importFrom openssl md5
+#' @export
+#' @encoding UTF-8
 join_raw_anon_data <- function(raw, anon, raw_header = "RAW_", anon_header = "ANON_") {
-  #' create reid-format data from raw and anon data frame
-  #'
-  #' @param raw  raw data frame
-  #' @param anon anonymized data frame
-  #' @param raw_header strings which is added for columns from raw data
-  #' @param anon_header strings which is added for columns from anon data
-  #'
-  #' @importFrom tibble data_frame
-  #' @importFrom tibble as_tibble
-  #' @importFrom dplyr %>%
-  #' @importFrom stringi stri_rand_strings
-  #' @importFrom openssl md5
-  #' @export
-  #' @encoding UTF-8
-
 
   ## error handling
   if (is.data.frame(raw) + is.data.frame(anon) != 2) {

@@ -1,29 +1,28 @@
+#' pick exactly one RAW record per ANON record from a RAW/ANON candidate
+#' table that has a DISTANCE column, keeping only the row(s) whose
+#' DISTANCE is minimal within each ANON_ROW_NUMBER group and then, if more
+#' than one RAW record is still tied for the minimum, keeping only the
+#' first RAW_ROW_NUMBER encountered. Shared by reid_by_num(), reid_by_char(),
+#' reid_by_dist() and reid_by_num_rank() so their tie-breaking logic cannot
+#' drift out of sync (see phase 3 fix for the reid_by_dist() tie-handling
+#' defect).
+#'
+#' Also guards against silently reporting an empty/short result: if DISTANCE
+#' is NA for every row, or if some ANON_ROW_NUMBER ends up with zero rows
+#' after tie-breaking (which happens when every candidate DISTANCE for that
+#' ANON record is NA), this stops with an error instead of quietly
+#' shrinking the result (and thus the reid_result() trial count).
+#'
+#' @param dat_with_distance data frame with (at least) RAW_ROW_NUMBER,
+#'   ANON_ROW_NUMBER and DISTANCE columns
+#'
+#' @keywords internal
+#'
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr filter
+#' @importFrom magrittr %>%
 resolve_min_distance_ties <- function(dat_with_distance) {
-  #' pick exactly one RAW record per ANON record from a RAW/ANON candidate
-  #' table that has a DISTANCE column, keeping only the row(s) whose
-  #' DISTANCE is minimal within each ANON_ROW_NUMBER group and then, if more
-  #' than one RAW record is still tied for the minimum, keeping only the
-  #' first RAW_ROW_NUMBER encountered. Shared by reid_by_num(), reid_by_char(),
-  #' reid_by_dist() and reid_by_num_rank() so their tie-breaking logic cannot
-  #' drift out of sync (see phase 3 fix for the reid_by_dist() tie-handling
-  #' defect).
-  #'
-  #' Also guards against silently reporting an empty/short result: if DISTANCE
-  #' is NA for every row, or if some ANON_ROW_NUMBER ends up with zero rows
-  #' after tie-breaking (which happens when every candidate DISTANCE for that
-  #' ANON record is NA), this stops with an error instead of quietly
-  #' shrinking the result (and thus the reid_result() trial count).
-  #'
-  #' @param dat_with_distance data frame with (at least) RAW_ROW_NUMBER,
-  #'   ANON_ROW_NUMBER and DISTANCE columns
-  #'
-  #' @keywords internal
-  #'
-  #' @importFrom dplyr group_by
-  #' @importFrom dplyr ungroup
-  #' @importFrom dplyr filter
-  #' @importFrom magrittr %>%
-
   n_anon_before <- length(unique(dat_with_distance$ANON_ROW_NUMBER))
 
   if (nrow(dat_with_distance) == 0 || all(is.na(dat_with_distance$DISTANCE))) {
@@ -59,20 +58,19 @@ resolve_min_distance_ties <- function(dat_with_distance) {
   dat_result %>% return()
 }
 
+#' reidentify by single num static column by using L2 norm
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column
+#' @param row_number row number column name(default: "ROW_NUMBER")
+#'
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr filter
+#' @importFrom dplyr mutate
+#' @importFrom magrittr %>%
+#' @export
 reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
-  #' reidentify by single num static column by using L2 norm
-  #'
-  #' @param dat_raw_anon dataframe of raw_anon form
-  #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
-  #'
-  #' @importFrom dplyr group_by
-  #' @importFrom dplyr ungroup
-  #' @importFrom dplyr filter
-  #' @importFrom dplyr mutate
-  #' @importFrom magrittr %>%
-  #' @export
-
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
@@ -86,20 +84,19 @@ reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
     return()
 }
 
+#' craete text of reidentify result ( method: ******, success/trial : ***** / ******)
+#'
+#' @param dat_reid_result reid result data frame (RAW_ROW_NUMBER, ANON_ANON_NUMBER, RESULT)
+#' @param anon_row_number column name of row number in ANON data
+#' @param raw_row_number column name of row number in RAW data
+#' @param result true or false
+#' @param method reid method name
+#'
+#' @importFrom magrittr %>%
+#' @export
 reid_result <- function(dat_reid_result,
                         raw_row_number = "RAW_ROW_NUMBER", anon_row_number = "ANON_ROW_NUMBER", result = "RESULT",
                         method = NULL) {
-  #' craete text of reidentify result ( method: ******, success/trial : ***** / ******)
-  #'
-  #' @param dat_reid_result reid result data frame (RAW_ROW_NUMBER, ANON_ANON_NUMBER, RESULT)
-  #' @param anon_row_number column name of row number in ANON data
-  #' @param raw_row_number column name of row number in RAW data
-  #' @param result true or false
-  #' @param method reid method name
-  #'
-  #' @importFrom magrittr %>%
-  #' @export
-
   ## defensive check (phase 3): reid_by_dist() previously had no tie-handling
   ## step, so a single ANON record could show up as several rows and
   ## silently inflate `trial` while under-reporting the reidentification
@@ -129,20 +126,19 @@ reid_result <- function(dat_reid_result,
 
 
 
+#' reidentify by character static column
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column
+#' @param row_number row number column name(default: "ROW_NUMBER")
+#'
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr filter
+#' @importFrom dplyr mutate
+#' @importFrom magrittr %>%
+#' @export
 reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
-  #' reidentify by character static column
-  #'
-  #' @param dat_raw_anon dataframe of raw_anon form
-  #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
-  #'
-  #' @importFrom dplyr group_by
-  #' @importFrom dplyr ungroup
-  #' @importFrom dplyr filter
-  #' @importFrom dplyr mutate
-  #' @importFrom magrittr %>%
-  #' @export
-
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
@@ -167,20 +163,20 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
     return()
 }
 
+#' reidentify by distribution column (list A, B, C is expressed by "A:B:C")
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column
+#' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param split character for split _DIST value (default: ":")
+#'
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr filter
+#' @importFrom dplyr mutate
+#' @importFrom magrittr %>%
+#' @export
 reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":") {
-  #' reidentify by distribution column (list A, B, C is expressed by "A:B:C")
-  #'
-  #' @param dat_raw_anon dataframe of raw_anon form
-  #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
-  #' @param split character for split _DIST value (default: ":")
-  #'
-  #' @importFrom dplyr group_by
-  #' @importFrom dplyr ungroup
-  #' @importFrom dplyr filter
-  #' @importFrom dplyr mutate
-  #' @importFrom magrittr %>%
-  #' @export
   #
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
@@ -203,25 +199,24 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
     return()
 }
 
+#' parse a "A:B:C" style distribution string into a numeric vector,
+#' stopping with a clear error instead of silently returning NA when an
+#' element cannot be interpreted as a number (phase 3 fix for the
+#' distribution_distance()/calc_KL() defect where a non-numeric target
+#' column produced all-NA distances and reid_result() quietly reported
+#' "0 / 0", which reads as "could not be reidentified = safe").
+#'
+#' Distinguishes, where possible, a genuinely non-numeric element (R's
+#' `as.numeric()` raises "NAs introduced by coercion") from an explicit
+#' missing value already encoded in the data (e.g. an "NA" token, which
+#' `as.numeric()` parses cleanly to NA with no warning).
+#'
+#' @param str character scalar, e.g. "1:2:3"
+#' @param split split character (default ":")
+#' @param side label used in the error message ("x" or "y")
+#'
+#' @keywords internal
 parse_dist_values <- function(str, split, side) {
-  #' parse a "A:B:C" style distribution string into a numeric vector,
-  #' stopping with a clear error instead of silently returning NA when an
-  #' element cannot be interpreted as a number (phase 3 fix for the
-  #' distribution_distance()/calc_KL() defect where a non-numeric target
-  #' column produced all-NA distances and reid_result() quietly reported
-  #' "0 / 0", which reads as "could not be reidentified = safe").
-  #'
-  #' Distinguishes, where possible, a genuinely non-numeric element (R's
-  #' `as.numeric()` raises "NAs introduced by coercion") from an explicit
-  #' missing value already encoded in the data (e.g. an "NA" token, which
-  #' `as.numeric()` parses cleanly to NA with no warning).
-  #'
-  #' @param str character scalar, e.g. "1:2:3"
-  #' @param split split character (default ":")
-  #' @param side label used in the error message ("x" or "y")
-  #'
-  #' @keywords internal
-
   parts <- strsplit(str, split = split)[[1]]
 
   had_coercion_warning <- FALSE
@@ -260,16 +255,15 @@ parse_dist_values <- function(str, split, side) {
   values
 }
 
+#' calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)
+#'
+#' @param x vector
+#' @param y vector
+#' @param split split (default: ":")
+#'
+#' @importFrom philentropy KL
+#' @importFrom magrittr %>%
 calc_KL <- function(x, y, split = ":") {
-  #' calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)
-  #'
-  #' @param x vector
-  #' @param y vector
-  #' @param split split (default: ":")
-  #'
-  #' @importFrom philentropy KL
-  #' @importFrom magrittr %>%
-  #'
   ## normalize vector
   x_list <- parse_dist_values(x, split, "x")
   x_list <- x_list / max(x_list)
@@ -280,15 +274,14 @@ calc_KL <- function(x, y, split = ":") {
   philentropy::KL(dat) %>% return()
 }
 
+#' calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
+#'
+#' @param x vector
+#' @param y vector
+#' @param split split (default: ":")
+#'
+#' @importFrom magrittr %>%
 distribution_distance <- function(x, y, split = ":") {
-  #' calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
-  #'
-  #' @param x vector
-  #' @param y vector
-  #' @param split split (default: ":")
-  #'
-  #' @importFrom magrittr %>%
-
 
   x_list <- parse_dist_values(x, split, "x")
   y_list <- parse_dist_values(y, split, "y")
@@ -314,21 +307,20 @@ distribution_distance <- function(x, y, split = ":") {
   distance %>% return()
 }
 
+#' reidentify by single num static by using rank
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column
+#' @param row_number row number column name(default: "ROW_NUMBER")
+#'
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr filter
+#' @importFrom dplyr mutate
+#' @importFrom magrittr %>%
+#' @importFrom magrittr %<>%
+#' @export
 reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER") {
-  #' reidentify by single num static by using rank
-  #'
-  #' @param dat_raw_anon dataframe of raw_anon form
-  #' @param target target column
-  #' @param row_number row number column name(default: "ROW_NUMBER")
-  #'
-  #' @importFrom dplyr group_by
-  #' @importFrom dplyr ungroup
-  #' @importFrom dplyr filter
-  #' @importFrom dplyr mutate
-  #' @importFrom magrittr %>%
-  #' @importFrom magrittr %<>%
-  #' @export
-
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
