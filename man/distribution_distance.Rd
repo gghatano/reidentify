@@ -2,9 +2,10 @@
 % Please edit documentation in R/reidentify.R
 \name{distribution_distance}
 \alias{distribution_distance}
-\title{calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)}
+\title{calculate distribution distance from 2 character vectors which hold a
+distribution expression (A:B:C:...)}
 \usage{
-distribution_distance(x, y, split = ":")
+distribution_distance(x, y, split = ":", n_quantiles = 10)
 }
 \arguments{
 \item{x}{vector}
@@ -12,7 +13,36 @@ distribution_distance(x, y, split = ":")
 \item{y}{vector}
 
 \item{split}{split (default: ":")}
+
+\item{n_quantiles}{number of evenly spaced quantiles used to represent
+each distribution (default 10). The returned distance is a sum over
+these points, so it scales with `n_quantiles`; compare only distances
+computed with the same value.}
+}
+\value{
+squared L2 distance between the two quantile vectors
 }
 \description{
-calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
+Both distributions are reduced to a fixed-length vector of evenly spaced
+quantiles, and the distance is the squared L2 distance between those two
+vectors. The result therefore depends only on the *shape* of each
+distribution, not on how many observations it contains.
+}
+\details{
+This replaces an earlier approach that padded the shorter side with its
+own mean and subtracted element-wise, which had two defects:
+
+1. the number of padded elements -- i.e. the difference in record counts
+   -- leaked directly into the distance. Across samples drawn from a
+   single population (identical shape, differing n) the old distance
+   correlated with the count difference at r = 0.99. Record count is a
+   separate signal and belongs in its own score (see #22), not smuggled
+   into a distribution distance.
+2. only the padded side was sorted, so two equal-length inputs were
+   compared in whatever order they happened to arrive:
+   `distribution_distance("3:1:2", "1:2:3")` returned 6 for what are two
+   identical multisets.
+
+`quantile()` sorts internally and always yields `n_quantiles` values, so
+both defects are removed by construction.
 }

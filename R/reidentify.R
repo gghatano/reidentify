@@ -344,36 +344,59 @@ calc_KL <- function(x, y, split = ":") {
   philentropy::KL(dat) %>% return()
 }
 
-#' calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
+#' calculate distribution distance from 2 character vectors which hold a
+#' distribution expression (A:B:C:...)
+#'
+#' Both distributions are reduced to a fixed-length vector of evenly spaced
+#' quantiles, and the distance is the squared L2 distance between those two
+#' vectors. The result therefore depends only on the *shape* of each
+#' distribution, not on how many observations it contains.
+#'
+#' This replaces an earlier approach that padded the shorter side with its
+#' own mean and subtracted element-wise, which had two defects:
+#'
+#' 1. the number of padded elements -- i.e. the difference in record counts
+#'    -- leaked directly into the distance. Across samples drawn from a
+#'    single population (identical shape, differing n) the old distance
+#'    correlated with the count difference at r = 0.99. Record count is a
+#'    separate signal and belongs in its own score (see #22), not smuggled
+#'    into a distribution distance.
+#' 2. only the padded side was sorted, so two equal-length inputs were
+#'    compared in whatever order they happened to arrive:
+#'    `distribution_distance("3:1:2", "1:2:3")` returned 6 for what are two
+#'    identical multisets.
+#'
+#' `quantile()` sorts internally and always yields `n_quantiles` values, so
+#' both defects are removed by construction.
 #'
 #' @param x vector
 #' @param y vector
 #' @param split split (default: ":")
+#' @param n_quantiles number of evenly spaced quantiles used to represent
+#'   each distribution (default 10). The returned distance is a sum over
+#'   these points, so it scales with `n_quantiles`; compare only distances
+#'   computed with the same value.
+#'
+#' @return squared L2 distance between the two quantile vectors
 #'
 #' @importFrom magrittr %>%
-distribution_distance <- function(x, y, split = ":") {
-
+#' @importFrom stats quantile
+distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
   x_list <- parse_dist_values(x, split, "x")
   y_list <- parse_dist_values(y, split, "y")
 
-  ## match the length of 2 vector
-  x_length <- length(x_list)
-  y_length <- length(y_list)
-  diff_x_y <- x_length - y_length
-
-  ## fill by mean value
-  if (diff_x_y == 0) {
-
-  } else if (diff_x_y > 0) {
-    y_list <- c(y_list, rep(mean(y_list), diff_x_y)) %>% sort()
-  } else {
-    x_list <- c(x_list, rep(mean(x_list), -1 * diff_x_y)) %>% sort()
+  if (length(n_quantiles) != 1 || is.na(n_quantiles) || n_quantiles < 2) {
+    stop(
+      "distribution_distance(): `n_quantiles` must be a single number >= 2.",
+      call. = FALSE
+    )
   }
 
-  ## calc distance
-  distance <- (x_list - y_list) %>%
-    .**2 %>%
-    sum()
+  probs <- seq(0, 1, length.out = n_quantiles)
+  q_x <- stats::quantile(x_list, probs = probs, names = FALSE, type = 7)
+  q_y <- stats::quantile(y_list, probs = probs, names = FALSE, type = 7)
+
+  distance <- sum((q_x - q_y)^2)
   distance %>% return()
 }
 

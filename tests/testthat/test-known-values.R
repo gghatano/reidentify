@@ -54,9 +54,12 @@ test_that("reid_by_char uses Levenshtein (adist) distance", {
   expect_equal(as.integer(adist("aa", "ab")[[1]]), 1L)
 })
 
-test_that("distribution_distance returns the squared L2 distance for equal-length inputs", {
-  ## (1-3)^2 + (2-4)^2 = 4 + 4 = 8
-  expect_equal(distribution_distance("1:2", "3:4"), 8)
+test_that("distribution_distance returns the squared L2 distance between quantile vectors", {
+  ## Updated by Issue #5: both sides are reduced to n_quantiles evenly spaced
+  ## quantiles first. "1:2" vs "3:4" is a constant shift of 2, so every one of
+  ## the 10 quantiles differs by 2 => 10 * 2^2 = 40.
+  ## (Before #5 this was an element-wise subtraction giving 4 + 4 = 8.)
+  expect_equal(distribution_distance("1:2", "3:4"), 40)
   ## identical inputs => 0
   expect_equal(distribution_distance("1:2:3", "1:2:3"), 0)
   ## symmetric
@@ -67,7 +70,7 @@ test_that("distribution_distance returns the squared L2 distance for equal-lengt
 })
 
 test_that("distribution_distance honours a custom split character", {
-  expect_equal(distribution_distance("1,2", "3,4", split = ","), 8)
+  expect_equal(distribution_distance("1,2", "3,4", split = ","), 40)
 })
 
 test_that("calc_KL returns 0 for identical distributions", {
