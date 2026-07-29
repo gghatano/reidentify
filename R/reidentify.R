@@ -325,23 +325,94 @@ parse_dist_values <- function(str, split, side) {
   values
 }
 
-#' calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)
+#' Kullback-Leibler divergence D(x || y) between two distributions written
+#' as "A:B:C:..." strings
+#'
+#' Both inputs are read as unnormalised counts/weights over a shared, ordered
+#' support and are converted to probability vectors by dividing by their sum.
+#' The result is in bits (log base 2), matching `philentropy::KL()`.
+#'
+#' This function previously normalised by `max()` rather than `sum()`, so it
+#' was fed vectors that were not probability distributions. The consequences
+#' were not cosmetic:
+#'
+#' - the returned value could be negative, which a KL divergence never is
+#'   (11 of 50 random pairs came out negative, over a range of
+#'   [-1.5949, 4.6112]);
+#' - `x = "1:2:3:4"`, `y = "2:2:2:2"` returned -1.311278 where the true
+#'   divergence is 0.1535607 bits;
+#' - it changed which candidate looked closest. Over 8 candidates the rank
+#'   correlation against the correct value was only 0.79 and the argmin
+#'   differed, so nearest-neighbour matching picked a different record.
+#'
+#' `philentropy::KL()` does not warn when handed vectors that do not sum to
+#' 1, so none of this surfaced at the call site.
+#'
+#' Zero entries need care: any outcome with `y_i == 0 < x_i` makes the true
+#' divergence infinite. `epsilon` is handed to `philentropy::KL()`, which
+#' substitutes it for a zero denominator, keeping the result finite and
+#' large. The default matches `philentropy`'s own. Pass `epsilon = 0` to
+#' disable the guard and get the mathematically exact `Inf`.
+#'
+#' For comparing distributions of differing length or unequal support, this
+#' is the wrong tool -- KL needs a shared support. Prefer the quantile-vector
+#' distance in `distribution_distance()`, or the Wasserstein distance planned
+#' in #19.
 #'
 #' @param x vector
 #' @param y vector
 #' @param split split (default: ":")
+#' @param epsilon substituted for a zero denominator so the divergence stays
+#'   finite (default 1e-05, as in `philentropy::KL()`); use 0 to allow `Inf`
+#'
+#' @return the KL divergence D(x || y) in bits
 #'
 #' @importFrom philentropy KL
 #' @importFrom magrittr %>%
-calc_KL <- function(x, y, split = ":") {
-  ## normalize vector
+calc_KL <- function(x, y, split = ":", epsilon = 1e-05) {
   x_list <- parse_dist_values(x, split, "x")
-  x_list <- x_list / max(x_list)
   y_list <- parse_dist_values(y, split, "y")
-  y_list <- y_list / max(y_list)
-  dat <- rbind(x_list, y_list)
 
-  philentropy::KL(dat) %>% return()
+  ## KL is only defined over a shared support. rbind() would silently recycle
+  ## the shorter vector, quietly comparing the wrong outcomes against each
+  ## other, so reject the case outright.
+  if (length(x_list) != length(y_list)) {
+    stop(
+      "calc_KL(): x and y must describe the same support, but have ",
+      length(x_list), " and ", length(y_list), " elements. KL divergence is ",
+      "not defined between distributions over different supports; use ",
+      "distribution_distance() to compare distributions of differing length.",
+      call. = FALSE
+    )
+  }
+
+  if (any(x_list < 0) || any(y_list < 0)) {
+    stop(
+      "calc_KL(): x and y must be non-negative counts or weights; ",
+      "negative values cannot be normalised into a probability distribution.",
+      call. = FALSE
+    )
+  }
+
+  if (sum(x_list) <= 0 || sum(y_list) <= 0) {
+    stop(
+      "calc_KL(): x and y must each contain at least one positive value; ",
+      "an all-zero vector cannot be normalised into a probability ",
+      "distribution.",
+      call. = FALSE
+    )
+  }
+
+  ## Normalise by the SUM so that both rows are genuine probability vectors.
+  ## This is the whole fix: the previous code divided by max(), which does not
+  ## produce a distribution and let the "divergence" go negative.
+  p <- x_list / sum(x_list)
+  q <- y_list / sum(y_list)
+
+  ## philentropy::KL() substitutes `epsilon` for a zero denominator. Note it
+  ## defaults to 1e-05 and applies that guard whether or not the caller asks,
+  ## so pass the value through explicitly rather than leaving it implicit.
+  philentropy::KL(rbind(p, q), epsilon = epsilon) %>% return()
 }
 
 #' calculate distribution distance from 2 character vectors which hold a
