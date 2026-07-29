@@ -349,39 +349,125 @@ parse_dist_values <- function(str, split, side) {
 }
 
 calc_KL <- function(x, y, split = ":") {
-  #' calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)
+  #' calc KL divergence from 2 character vectors which have distribution expression (A:B:C:...)
+  #'
+  #' Both `x` and `y` are parsed to numeric vectors and normalized to sum to
+  #' 1 (a true probability distribution) before being handed to
+  #' `philentropy::KL()`. Earlier this normalized by dividing by the
+  #' *maximum* element instead of the *sum*, which does not produce a
+  #' distribution that sums to 1 -- the KL divergence formula is only
+  #' guaranteed non-negative, and only 0 for identical inputs, when both
+  #' inputs are genuine probability distributions. With the max-based
+  #' normalization it could (and did) return negative values, e.g.
+  #' `calc_KL("1:1:10", "1:1:1")` used to return approximately -0.664 (see
+  #' phase 6 investigation); with sum-based normalization the KL divergence
+  #' is always >= 0, and is exactly 0 when `x` and `y` describe the same
+  #' distribution.
+  #'
+  #' Zero elements: if some but not all elements of a (sum-normalized)
+  #' distribution are exactly 0, a literal KL divergence formula would
+  #' involve `log(0)`. `philentropy::KL()` avoids this itself: by default it
+  #' substitutes a small `epsilon` (1e-05) for zero entries before taking
+  #' logs, so a distribution with some zero elements still yields a finite
+  #' (rather than `NaN`/`Inf`) result; this function relies on that built-in
+  #' behavior rather than re-implementing its own epsilon handling. The
+  #' degenerate case where *every* element of `x` or `y` is 0 (sum is 0, so
+  #' the `/ sum(...)` normalization itself is 0/0) is rejected with an
+  #' explicit error instead of silently producing `NaN`, consistent with how
+  #' `parse_dist_values()` already refuses other degenerate inputs elsewhere
+  #' in this file.
+  #'
+  #' `philentropy::KL()` also prints an informational message
+  #' ("Metric: 'kullback-leibler' with unit: 'log2'; ...") to the console on
+  #' every call. Since this is an internal helper (not part of the public
+  #' API), that message is suppressed here so it cannot leak into a caller's
+  #' console output.
   #'
   #' @param x vector
   #' @param y vector
   #' @param split split (default: ":")
   #'
-  #' @return numeric scalar, the KL divergence between the normalized
-  #'   distributions parsed from `x` and `y`.
+  #' @return numeric scalar >= 0, the KL divergence between the
+  #'   sum-normalized distributions parsed from `x` and `y`; 0 when `x` and
+  #'   `y` describe the same distribution.
   #'
   #' @keywords internal
   #'
   #' @importFrom philentropy KL
   #' @importFrom magrittr %>%
   #'
-  ## normalize vector
+  ## normalize vector to a true probability distribution (sums to 1)
   x_list <- parse_dist_values(x, split, "x")
-  x_list <- x_list / max(x_list)
   y_list <- parse_dist_values(y, split, "y")
-  y_list <- y_list / max(y_list)
+
+  x_sum <- sum(x_list)
+  y_sum <- sum(y_list)
+  if (x_sum == 0 || y_sum == 0) {
+    stop(
+      "calc_KL(): cannot normalize a distribution whose elements are all ",
+      "zero (x sum = ", x_sum, ", y sum = ", y_sum, "); a KL divergence is ",
+      "undefined for a distribution with no probability mass.",
+      call. = FALSE
+    )
+  }
+  x_list <- x_list / x_sum
+  y_list <- y_list / y_sum
   dat <- rbind(x_list, y_list)
 
-  philentropy::KL(dat) %>% return()
+  ## unname(): philentropy::KL() returns a length-1 numeric vector named
+  ## "kullback-leibler", which is a surprising thing for an internal helper
+  ## to hand back as "the KL divergence, a numeric scalar"
+  suppressMessages(philentropy::KL(dat)) %>%
+    unname() %>%
+    return()
 }
 
 distribution_distance <- function(x, y, split = ":") {
-  #' calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
+  #' calculate distribution distance from 2 character vectors which have distribution expression (A:B:C:...)
+  #'
+  #' Measures how different the two *shapes* of the underlying per-record
+  #' values are, independent of how many records each side has. `x` and `y`
+  #' are parsed to numeric vectors. If they have a different
+  #' number of elements, the shorter one is padded up to the longer one's
+  #' length by repeating its own mean (this mean-fill interpolation
+  #' strategy is unchanged from the original implementation), both vectors
+  #' are sorted, and the distance is the *mean* squared difference (mean
+  #' squared error, MSE) between the aligned vectors.
+  #'
+  #' Previously this returned the raw *sum* of squared differences, which
+  #' necessarily grows with the number of (padded) elements being compared:
+  #' two people with the same distribution shape but different record
+  #' counts ended up systematically farther apart than two same-record-count
+  #' people, purely because their DIST strings had different lengths, not
+  #' because their distributions actually differed. That made distances
+  #' incomparable across people with different transaction counts (measured
+  #' correlation between distance and |record count difference| ~= 0.63,
+  #' with a ~3.9x gap between same-record-count and very-different-record-
+  #' count pairs; see phase 6 investigation). Dividing by the (post-padding,
+  #' common) length -- i.e. using the mean instead of the sum -- removes
+  #' most of that scaling: the same measurement now gives a correlation of
+  #' ~0.34 and a ~2.6x gap. A quantile-interpolation alternative (aligning
+  #' `x`/`y` on a common grid of quantiles instead of mean-filling) was
+  #' evaluated and reduces the artifact further (correlation ~0.11, gap
+  #' ~1.6x), but noticeably reduced reid_by_dist()'s reidentification rate
+  #' on realistic noisy data compared to this smaller change (see phase 6
+  #' report), so the existing mean-fill strategy was kept and only the
+  #' final aggregation step was changed from sum to mean.
+  #'
+  #' Symmetry (`d(x, y) == d(y, x)`) and the zero-distance-for-identical-
+  #' input property (`d(x, x) == 0`) are unaffected by this change: both
+  #' held under the raw sum and continue to hold under the mean, since
+  #' dividing a symmetric, non-negative quantity by a (also order-
+  #' independent) common length preserves both properties.
   #'
   #' @param x vector
   #' @param y vector
   #' @param split split (default: ":")
   #'
-  #' @return numeric scalar, the sum of squared differences (L2 norm) between
-  #'   the (length-matched) numeric vectors parsed from `x` and `y`.
+  #' @return numeric scalar >= 0, the mean squared difference between the
+  #'   length-matched, sorted numeric vectors parsed from `x` and `y`.
+  #'   Symmetric, and 0 exactly when the (padded, sorted) vectors are
+  #'   identical -- in particular whenever `x` and `y` are the same string.
   #'
   #' @keywords internal
   #'
@@ -405,10 +491,12 @@ distribution_distance <- function(x, y, split = ":") {
     x_list <- c(x_list, rep(mean(x_list), -1 * diff_x_y)) %>% sort()
   }
 
-  ## calc distance
+  ## calc distance: mean (not sum) squared difference, so the result is
+  ## normalized by the (post-padding, common) length of the two vectors
+  ## instead of scaling up with it (phase 6 fix)
   ## (written without the magrittr `.` placeholder: `. ** 2` triggers an
   ## R CMD check "no visible binding for global variable '.'" NOTE)
-  distance <- sum((x_list - y_list)^2)
+  distance <- mean((x_list - y_list)^2)
   distance %>% return()
 }
 

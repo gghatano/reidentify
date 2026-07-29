@@ -2,7 +2,7 @@
 % Please edit documentation in R/reidentify.R
 \name{calc_KL}
 \alias{calc_KL}
-\title{calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)}
+\title{calc KL divergence from 2 character vectors which have distribution expression (A:B:C:...)}
 \usage{
 calc_KL(x, y, split = ":")
 }
@@ -14,10 +14,42 @@ calc_KL(x, y, split = ":")
 \item{split}{split (default: ":")}
 }
 \value{
-numeric scalar, the KL divergence between the normalized
-  distributions parsed from `x` and `y`.
+numeric scalar >= 0, the KL divergence between the
+  sum-normalized distributions parsed from `x` and `y`; 0 when `x` and
+  `y` describe the same distribution.
 }
 \description{
-calc KL divergence from 2 character vector which has distribution expression (A:B:C:...)
+Both `x` and `y` are parsed to numeric vectors and normalized to sum to
+1 (a true probability distribution) before being handed to
+`philentropy::KL()`. Earlier this normalized by dividing by the
+*maximum* element instead of the *sum*, which does not produce a
+distribution that sums to 1 -- the KL divergence formula is only
+guaranteed non-negative, and only 0 for identical inputs, when both
+inputs are genuine probability distributions. With the max-based
+normalization it could (and did) return negative values, e.g.
+`calc_KL("1:1:10", "1:1:1")` used to return approximately -0.664 (see
+phase 6 investigation); with sum-based normalization the KL divergence
+is always >= 0, and is exactly 0 when `x` and `y` describe the same
+distribution.
+}
+\details{
+Zero elements: if some but not all elements of a (sum-normalized)
+distribution are exactly 0, a literal KL divergence formula would
+involve `log(0)`. `philentropy::KL()` avoids this itself: by default it
+substitutes a small `epsilon` (1e-05) for zero entries before taking
+logs, so a distribution with some zero elements still yields a finite
+(rather than `NaN`/`Inf`) result; this function relies on that built-in
+behavior rather than re-implementing its own epsilon handling. The
+degenerate case where *every* element of `x` or `y` is 0 (sum is 0, so
+the `/ sum(...)` normalization itself is 0/0) is rejected with an
+explicit error instead of silently producing `NaN`, consistent with how
+`parse_dist_values()` already refuses other degenerate inputs elsewhere
+in this file.
+
+`philentropy::KL()` also prints an informational message
+("Metric: 'kullback-leibler' with unit: 'log2'; ...") to the console on
+every call. Since this is an internal helper (not part of the public
+API), that message is suppressed here so it cannot leak into a caller's
+console output.
 }
 \keyword{internal}
