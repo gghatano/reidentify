@@ -4,9 +4,13 @@
 \alias{reid_result}
 \title{craete text of reidentify result ( method: ******, success/trial : ***** / ******)}
 \usage{
-reid_result(dat_reid_result, raw_row_number = "RAW_ROW_NUMBER",
-  anon_row_number = "ANON_ROW_NUMBER", result = "RESULT",
-  method = NULL)
+reid_result(
+  dat_reid_result,
+  raw_row_number = "RAW_ROW_NUMBER",
+  anon_row_number = "ANON_ROW_NUMBER",
+  result = "RESULT",
+  method = NULL
+)
 }
 \arguments{
 \item{dat_reid_result}{reid result data frame (RAW_ROW_NUMBER, ANON_ANON_NUMBER, RESULT)}

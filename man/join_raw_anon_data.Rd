@@ -5,8 +5,7 @@
 \alias{join_raw_anon_data}
 \title{create reid-format data from raw and anon data frame}
 \usage{
-join_raw_anon_data(raw, anon, raw_header = "RAW_",
-  anon_header = "ANON_")
+join_raw_anon_data(raw, anon, raw_header = "RAW_", anon_header = "ANON_")
 }
 \arguments{
 \item{raw}{raw data frame}

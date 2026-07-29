@@ -2,10 +2,9 @@
 % Please edit documentation in R/reidentify.R
 \name{reid_by_dist}
 \alias{reid_by_dist}
-\title{reidentify by single list column (list A, B, C is expressed by "A:B:C")}
+\title{reidentify by distribution column (list A, B, C is expressed by "A:B:C")}
 \usage{
-reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER",
-  split = ":")
+reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":")
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
@@ -17,5 +16,5 @@ reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER",
 \item{split}{character for split _DIST value (default: ":")}
 }
 \description{
-reidentify by single list column (list A, B, C is expressed by "A:B:C")
+reidentify by distribution column (list A, B, C is expressed by "A:B:C")
 }

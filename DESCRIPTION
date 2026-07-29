@@ -15,4 +15,4 @@ Imports:
   tibble,
   philentropy
 LazyData: true
-RoxygenNote: 6.1.1
+Config/roxygen2/version: 8.0.0

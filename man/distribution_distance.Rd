@@ -2,7 +2,7 @@
 % Please edit documentation in R/reidentify.R
 \name{distribution_distance}
 \alias{distribution_distance}
-\title{calculation distributin distance(L2) from 2 character vector which has distribution expression (A:B:C:...)}
+\title{calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)}
 \usage{
 distribution_distance(x, y, split = ":")
 }
@@ -14,5 +14,5 @@ distribution_distance(x, y, split = ":")
 \item{split}{split (default: ":")}
 }
 \description{
-calculation distributin distance(L2) from 2 character vector which has distribution expression (A:B:C:...)
+calculate distribution distance (by using L2 norm) from 2 character vector which has distribution expression (A:B:C:...)
 }
