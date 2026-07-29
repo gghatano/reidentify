@@ -3,7 +3,7 @@
 #'
 #' @param people number of people
 #'
-#' @importFrom tibble data_frame
+#' @importFrom tibble tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
 #' @importFrom stats runif
@@ -24,7 +24,7 @@ create_dummy_master_data <- function(people = 100) {
   RAW_BIN <- sample(x = c(0, 1, 100), prob = c(20, 20, 1), size = people, replace = TRUE)
   RAW_CHAR <- stringi::stri_rand_strings(n = people, length = 2)
 
-  dat_raw <- tibble::data_frame(
+  dat_raw <- tibble::tibble(
     ROW_NUMBER = ROW_NUMBER,
     ID = RAW_ID,
     NUM = RAW_NUM,
@@ -41,7 +41,7 @@ create_dummy_master_data <- function(people = 100) {
 #' @param people number of people
 #' @param size mean record number
 #'
-#' @importFrom tibble data_frame
+#' @importFrom tibble tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
 #' @importFrom stats runif
@@ -71,7 +71,7 @@ create_dummy_transaction_data <- function(people = 100, size = 2) {
   RAW_BIN <- sample(x = c(0, 1, 100), prob = c(20, 20, 1), size = row_num, replace = TRUE)
   RAW_CHAR <- stringi::stri_rand_strings(n = row_num, length = 2)
 
-  dat_raw <- tibble::data_frame(
+  dat_raw <- tibble::tibble(
     ROW_NUMBER = ROW_NUMBER,
     ID = RAW_ID,
     NUM_STATIC = RAW_NUM_STATIC,
@@ -91,7 +91,7 @@ create_dummy_transaction_data <- function(people = 100, size = 2) {
 #' @param raw_header strings which is added for columns from raw data
 #' @param anon_header strings which is added for columns from anon data
 #'
-#' @importFrom tibble data_frame
+#' @importFrom tibble tibble
 #' @importFrom tibble as_tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
