@@ -2,8 +2,7 @@
 % Please edit documentation in R/reidentify.R
 \name{distribution_distance}
 \alias{distribution_distance}
-\title{calculate distribution distance from 2 character vectors which hold a
-distribution expression (A:B:C:...)}
+\title{calculate distribution distance from 2 character vectors which have distribution expression (A:B:C:...)}
 \usage{
 distribution_distance(x, y, split = ":", n_quantiles = 10)
 }
@@ -20,29 +19,50 @@ these points, so it scales with `n_quantiles`; compare only distances
 computed with the same value.}
 }
 \value{
-squared L2 distance between the two quantile vectors
+numeric scalar >= 0, the squared L2 distance between the two
+  quantile vectors. Symmetric, and 0 exactly when the two distributions
+  have the same shape -- including when they hold different numbers of
+  observations, or list the same values in a different order.
 }
 \description{
-Both distributions are reduced to a fixed-length vector of evenly spaced
-quantiles, and the distance is the squared L2 distance between those two
-vectors. The result therefore depends only on the *shape* of each
-distribution, not on how many observations it contains.
+Measures how different the two *shapes* of the underlying per-record
+values are, independent of how many records each side has. Both sides are
+reduced to the same fixed-length vector of evenly spaced quantiles, and
+the distance is the squared L2 distance between those vectors.
 }
 \details{
 This replaces an earlier approach that padded the shorter side with its
 own mean and subtracted element-wise, which had two defects:
 
 1. the number of padded elements -- i.e. the difference in record counts
-   -- leaked directly into the distance. Across samples drawn from a
-   single population (identical shape, differing n) the old distance
-   correlated with the count difference at r = 0.99. Record count is a
-   separate signal and belongs in its own score (see #22), not smuggled
-   into a distribution distance.
+   -- leaked directly into the distance. Record count is a separate signal
+   and belongs in its own score (see #22), not smuggled into a
+   distribution distance.
 2. only the padded side was sorted, so two equal-length inputs were
    compared in whatever order they happened to arrive:
-   `distribution_distance("3:1:2", "1:2:3")` returned 6 for what are two
-   identical multisets.
+   `distribution_distance("3:1:2", "1:2:3")` returned a non-zero distance
+   for what are two identical multisets.
 
 `quantile()` sorts internally and always yields `n_quantiles` values, so
 both defects are removed by construction.
+
+Two candidate fixes were developed in parallel and compared head to head
+before this one was adopted (see the merge notes on Issue #5):
+
+- mean-fill padding with the aggregation changed from sum to mean, which
+  normalises away the length scaling but leaves the ordering defect and
+  only reduces the count correlation from 0.61 to 0.37;
+- this quantile vector, which drives the count correlation to 0.16 and
+  makes the distance exactly order-invariant.
+
+The mean-fill variant initially looked better because it scored a slightly
+higher reidentification rate under noise. That measurement used a fixture
+in which every person had the *same* record count in RAW and ANON, so
+record count was itself a perfect identity signal and any count
+sensitivity inflated the apparent success. Re-run with record counts that
+differ between RAW and ANON -- the situation this function exists to
+handle -- the quantile form reidentifies 16-46% *more* records across
+noise levels. A stronger attack is the desired direction for a tool whose
+job is to upper-bound reidentification risk.
 }
+\keyword{internal}

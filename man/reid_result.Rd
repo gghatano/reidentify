@@ -23,6 +23,13 @@ reid_result(
 
 \item{method}{reid method name}
 }
+\value{
+a character scalar of the form
+  `" method: <method> , success / trial :  <success> / <trial> "`,
+  where `trial` is the number of rows in `dat_reid_result` and
+  `success` is the number of TRUE values in its `result` column;
+  `success` is always <= `trial`.
+}
 \description{
 craete text of reidentify result ( method: ******, success/trial : ***** / ******)
 }

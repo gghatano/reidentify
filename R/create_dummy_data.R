@@ -3,11 +3,13 @@
 #'
 #' @param people number of people
 #'
+#' @return a tibble with columns ROW_NUMBER, ID, NUM, BIN, CHAR containing
+#'   `people` rows of randomly generated dummy master data.
+#'
 #' @importFrom tibble tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
 #' @importFrom stats runif
-#' @importFrom openssl md5
 #' @encoding UTF-8
 #' @export
 create_dummy_master_data <- function(people = 100) {
@@ -41,11 +43,14 @@ create_dummy_master_data <- function(people = 100) {
 #' @param people number of people
 #' @param size mean record number
 #'
+#' @return a tibble with columns ROW_NUMBER, ID, NUM_STATIC, NUM_DYNAMIC,
+#'   BIN, CHAR containing `people * size` rows of randomly generated dummy
+#'   transaction data.
+#'
 #' @importFrom tibble tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
 #' @importFrom stats runif
-#' @importFrom openssl md5
 #' @examples
 #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
 #' @export
@@ -91,11 +96,11 @@ create_dummy_transaction_data <- function(people = 100, size = 2) {
 #' @param raw_header strings which is added for columns from raw data
 #' @param anon_header strings which is added for columns from anon data
 #'
-#' @importFrom tibble tibble
-#' @importFrom tibble as_tibble
+#' @return a data frame: the cross join (every RAW row paired with every
+#'   ANON row) of `raw` and `anon`, with their column names prefixed by
+#'   `raw_header`/`anon_header` respectively.
+#'
 #' @importFrom dplyr %>%
-#' @importFrom stringi stri_rand_strings
-#' @importFrom openssl md5
 #' @export
 #' @encoding UTF-8
 join_raw_anon_data <- function(raw, anon, raw_header = "RAW_", anon_header = "ANON_") {

@@ -19,6 +19,11 @@ ANON_ROW_NUMBER and DISTANCE columns}
 \item{seed}{integer seed for the random tie-break, or NULL (default) to
 use the ambient RNG stream}
 }
+\value{
+`dat_with_distance`, filtered down to exactly one row per
+  ANON_ROW_NUMBER (a uniformly chosen minimal-DISTANCE RAW candidate),
+  ordered by ANON_ROW_NUMBER.
+}
 \description{
 Tie-breaking used to keep `RAW_ROW_NUMBER[1]`, i.e. whichever tied
 candidate happened to come first in the input. That made the reported

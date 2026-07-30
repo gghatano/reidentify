@@ -1,3 +1,36 @@
+#' stop with a clear, actionable error message if any of `cols` is missing
+#' from `dat_raw_anon`, instead of letting reid_by_*() fail downstream with
+#' a confusing low-level error (e.g. base R's "replacement has 0 rows,
+#' data has NNN" from reid_by_char()/reid_by_dist() indexing a
+#' non-existent column with `[[`, which gives no hint about which column
+#' name was actually wrong).
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param cols character vector of (already RAW_/ANON_-prefixed) column
+#'   names that the caller is about to look up in `dat_raw_anon`
+#' @param fn_name name of the calling reid_by_*() function, used in the
+#'   error message
+#'
+#' @return invisible NULL if all `cols` are present; otherwise stops with
+#'   an error naming the missing column(s).
+#'
+#' @keywords internal
+check_raw_anon_columns_exist <- function(dat_raw_anon, cols, fn_name) {
+  missing_cols <- setdiff(cols, names(dat_raw_anon))
+  if (length(missing_cols) > 0) {
+    stop(
+      fn_name, "(): column(s) not found in dat_raw_anon: ",
+      paste(missing_cols, collapse = ", "),
+      ". Check the `target`/`row_number` arguments (these are looked up ",
+      "*after* RAW_/ANON_ prefixing) against the columns actually present: ",
+      paste(names(dat_raw_anon), collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  invisible(NULL)
+}
+
 #' evaluate `code` with the RNG seeded to `seed`, restoring the caller's
 #' RNG state afterwards
 #'
@@ -8,6 +41,8 @@
 #'
 #' @param seed integer seed, or NULL to use the ambient RNG stream
 #' @param code expression to evaluate
+#'
+#' @return the value of `code`
 #'
 #' @keywords internal
 with_local_seed <- function(seed, code) {
@@ -59,11 +94,16 @@ with_local_seed <- function(seed, code) {
 #' @param seed integer seed for the random tie-break, or NULL (default) to
 #'   use the ambient RNG stream
 #'
+#' @return `dat_with_distance`, filtered down to exactly one row per
+#'   ANON_ROW_NUMBER (a uniformly chosen minimal-DISTANCE RAW candidate),
+#'   ordered by ANON_ROW_NUMBER.
+#'
 #' @keywords internal
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
+#' @importFrom dplyr .data
 #' @importFrom magrittr %>%
 resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
   n_anon_before <- length(unique(dat_with_distance$ANON_ROW_NUMBER))
@@ -80,8 +120,8 @@ resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
 
   dat_min <-
     dat_with_distance %>%
-    dplyr::group_by(ANON_ROW_NUMBER) %>%
-    dplyr::filter(DISTANCE == min(DISTANCE)) %>%
+    dplyr::group_by(.data$ANON_ROW_NUMBER) %>%
+    dplyr::filter(.data$DISTANCE == min(.data$DISTANCE)) %>%
     dplyr::ungroup()
 
   ## Put the surviving candidates into a canonical order first, so that the
@@ -95,9 +135,7 @@ resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
   ]
 
   ## Break ties uniformly at random: shuffle every surviving candidate, then
-  ## keep the first occurrence of each ANON record. Shuffling the whole table
-  ## and taking first-per-group draws one candidate uniformly from each tie
-  ## group in a single pass.
+  ## keep the first occurrence of each ANON record.
   dat_result <- with_local_seed(seed, {
     shuffled <- dat_min[sample.int(nrow(dat_min)), , drop = FALSE]
     shuffled[!duplicated(shuffled$ANON_ROW_NUMBER), , drop = FALSE]
@@ -125,27 +163,42 @@ resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
 #'
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
-#' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param row_number name of the row-number column *before* the RAW_/ANON_
+#'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+#'   dat_raw_anon is expected to contain columns
+#'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+#'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+#'   regardless of `row_number`, so it can be passed straight into
+#'   reid_result()'s defaults even when a non-default row_number was used.
 #' @param seed integer seed for the random tie-break among equally distant
-#'   candidates, or NULL (default) to use the ambient RNG stream
+#'   candidates (default 0L, so a plain call is reproducible). Pass a
+#'   different value, or use reid_stability(), to see the run-to-run
+#'   spread. NULL uses the ambient RNG stream instead.
+#'
+#' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW,
+#'   ANON, DISTANCE and RESULT (logical): exactly one row per ANON record,
+#'   the RAW record closest in `target` by absolute difference, and whether
+#'   that guess was correct.
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
+#' @importFrom dplyr .data
 #' @importFrom magrittr %>%
 #' @export
-reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL) {
+reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_num")
 
   dat_raw_anon %>%
-    dplyr::select(RAW_ROW_NUMBER = RAW_ROW_NUMBER, ANON_ROW_NUMBER = ANON_ROW_NUMBER, RAW = dplyr::all_of(raw_target), ANON = dplyr::all_of(anon_target)) %>%
-    dplyr::mutate(DISTANCE = abs(RAW - ANON)) %>%
+    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(anon_row_number), RAW = dplyr::all_of(raw_target), ANON = dplyr::all_of(anon_target)) %>%
+    dplyr::mutate(DISTANCE = abs(.data$RAW - .data$ANON)) %>%
     resolve_min_distance_ties(seed = seed) %>%
-    dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
+    dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
     return()
 }
 
@@ -156,6 +209,12 @@ reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 
 #' @param raw_row_number column name of row number in RAW data
 #' @param result true or false
 #' @param method reid method name
+#'
+#' @return a character scalar of the form
+#'   `" method: <method> , success / trial :  <success> / <trial> "`,
+#'   where `trial` is the number of rows in `dat_reid_result` and
+#'   `success` is the number of TRUE values in its `result` column;
+#'   `success` is always <= `trial`.
 #'
 #' @importFrom magrittr %>%
 #' @export
@@ -195,22 +254,37 @@ reid_result <- function(dat_reid_result,
 #'
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
-#' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param row_number name of the row-number column *before* the RAW_/ANON_
+#'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+#'   dat_raw_anon is expected to contain columns
+#'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+#'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+#'   regardless of `row_number`, so it can be passed straight into
+#'   reid_result()'s defaults even when a non-default row_number was used.
 #' @param seed integer seed for the random tie-break among equally distant
-#'   candidates, or NULL (default) to use the ambient RNG stream
+#'   candidates (default 0L, so a plain call is reproducible). Pass a
+#'   different value, or use reid_stability(), to see the run-to-run
+#'   spread. NULL uses the ambient RNG stream instead.
+#'
+#' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
+#'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
+#'   RAW record closest in `target` by (Levenshtein) edit distance, and
+#'   whether that guess was correct.
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
+#' @importFrom dplyr .data
 #' @importFrom magrittr %>%
 #' @importFrom utils adist
 #' @export
-reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL) {
+reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_char")
 
   raw_target_col <- as.character(dat_raw_anon[[raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[anon_target]])
@@ -225,8 +299,8 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
   dat_raw_anon$DISTANCE <- vec_distance
 
   dat_raw_anon %>%
-    dplyr::mutate(RAW_ROW_NUMBER = `RAW_ROW_NUMBER`, ANON_ROW_NUMBER = `ANON_ROW_NUMBER`, DISTANCE) %>%
-    dplyr::mutate(RESULT = (RAW_ROW_NUMBER == ANON_ROW_NUMBER)) %>%
+    dplyr::mutate(RAW_ROW_NUMBER = .data[[raw_row_number]], ANON_ROW_NUMBER = .data[[anon_row_number]], DISTANCE = .data$DISTANCE) %>%
+    dplyr::mutate(RESULT = (.data$RAW_ROW_NUMBER == .data$ANON_ROW_NUMBER)) %>%
     resolve_min_distance_ties(seed = seed) %>%
     return()
 }
@@ -235,23 +309,38 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #'
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
-#' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param row_number name of the row-number column *before* the RAW_/ANON_
+#'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+#'   dat_raw_anon is expected to contain columns
+#'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+#'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+#'   regardless of `row_number`, so it can be passed straight into
+#'   reid_result()'s defaults even when a non-default row_number was used.
 #' @param split character for split _DIST value (default: ":")
 #' @param seed integer seed for the random tie-break among equally distant
-#'   candidates, or NULL (default) to use the ambient RNG stream
+#'   candidates (default 0L, so a plain call is reproducible). Pass a
+#'   different value, or use reid_stability(), to see the run-to-run
+#'   spread. NULL uses the ambient RNG stream instead.
+#'
+#' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
+#'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
+#'   RAW record closest in `target` by distribution distance, and whether
+#'   that guess was correct.
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
+#' @importFrom dplyr .data
 #' @importFrom magrittr %>%
 #' @export
-reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":", seed = NULL) {
+reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":", seed = 0L) {
   #
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_dist")
 
   raw_target_col <- as.character(dat_raw_anon[[raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[anon_target]])
@@ -263,9 +352,9 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
   dat_raw_anon$DISTANCE <- distance
 
   dat_raw_anon %>%
-    dplyr::select(RAW_ROW_NUMBER = RAW_ROW_NUMBER, ANON_ROW_NUMBER = ANON_ROW_NUMBER, DISTANCE) %>%
+    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(anon_row_number), "DISTANCE") %>%
     resolve_min_distance_ties(seed = seed) %>%
-    dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
+    dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
     return()
 }
 
@@ -284,6 +373,9 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
 #' @param str character scalar, e.g. "1:2:3"
 #' @param split split character (default ":")
 #' @param side label used in the error message ("x" or "y")
+#'
+#' @return numeric vector parsed from `str`; stops with an error instead of
+#'   returning NA-containing output.
 #'
 #' @keywords internal
 parse_dist_values <- function(str, split, side) {
@@ -325,51 +417,66 @@ parse_dist_values <- function(str, split, side) {
   values
 }
 
-#' Kullback-Leibler divergence D(x || y) between two distributions written
-#' as "A:B:C:..." strings
+#' calc KL divergence from 2 character vectors which have distribution expression (A:B:C:...)
 #'
-#' Both inputs are read as unnormalised counts/weights over a shared, ordered
-#' support and are converted to probability vectors by dividing by their sum.
-#' The result is in bits (log base 2), matching `philentropy::KL()`.
+#' Both `x` and `y` are parsed to numeric vectors and normalized to sum to
+#' 1 (a true probability distribution) before being handed to
+#' `philentropy::KL()`. Earlier this normalized by dividing by the
+#' *maximum* element instead of the *sum*, which does not produce a
+#' distribution that sums to 1 -- the KL divergence formula is only
+#' guaranteed non-negative, and only 0 for identical inputs, when both
+#' inputs are genuine probability distributions. With the max-based
+#' normalization it could (and did) return negative values, e.g.
+#' `calc_KL("1:1:10", "1:1:1")` used to return approximately -0.664 (see
+#' phase 6 investigation); with sum-based normalization the KL divergence
+#' is always >= 0, and is exactly 0 when `x` and `y` describe the same
+#' distribution.
 #'
-#' This function previously normalised by `max()` rather than `sum()`, so it
-#' was fed vectors that were not probability distributions. The consequences
-#' were not cosmetic:
+#' Zero elements: if some but not all elements of a (sum-normalized)
+#' distribution are exactly 0, a literal KL divergence formula would
+#' involve `log(0)`. `philentropy::KL()` avoids this itself: by default it
+#' substitutes a small `epsilon` (1e-05) for zero entries before taking
+#' logs, so a distribution with some zero elements still yields a finite
+#' (rather than `NaN`/`Inf`) result; this function relies on that built-in
+#' behavior rather than re-implementing its own epsilon handling. The
+#' degenerate case where *every* element of `x` or `y` is 0 (sum is 0, so
+#' the `/ sum(...)` normalization itself is 0/0) is rejected with an
+#' explicit error instead of silently producing `NaN`, consistent with how
+#' `parse_dist_values()` already refuses other degenerate inputs elsewhere
+#' in this file.
 #'
-#' - the returned value could be negative, which a KL divergence never is
-#'   (11 of 50 random pairs came out negative, over a range of
-#'   [-1.5949, 4.6112]);
-#' - `x = "1:2:3:4"`, `y = "2:2:2:2"` returned -1.311278 where the true
-#'   divergence is 0.1535607 bits;
-#' - it changed which candidate looked closest. Over 8 candidates the rank
-#'   correlation against the correct value was only 0.79 and the argmin
-#'   differed, so nearest-neighbour matching picked a different record.
+#' `philentropy::KL()` also prints an informational message
+#' ("Metric: 'kullback-leibler' with unit: 'log2'; ...") to the console on
+#' every call. Since this is an internal helper (not part of the public
+#' API), that message is suppressed here so it cannot leak into a caller's
+#' console output.
 #'
-#' `philentropy::KL()` does not warn when handed vectors that do not sum to
-#' 1, so none of this surfaced at the call site.
-#'
-#' Zero entries need care: any outcome with `y_i == 0 < x_i` makes the true
-#' divergence infinite. `epsilon` is handed to `philentropy::KL()`, which
-#' substitutes it for a zero denominator, keeping the result finite and
-#' large. The default matches `philentropy`'s own. Pass `epsilon = 0` to
-#' disable the guard and get the mathematically exact `Inf`.
-#'
-#' For comparing distributions of differing length or unequal support, this
-#' is the wrong tool -- KL needs a shared support. Prefer the quantile-vector
-#' distance in `distribution_distance()`, or the Wasserstein distance planned
-#' in #19.
+#' `x` and `y` must describe the same support (same number of elements).
+#' Previously a length mismatch was passed straight to `rbind()`, which
+#' silently recycled the shorter vector and so compared the wrong outcomes
+#' against each other. Negative inputs are rejected for the same reason: they
+#' cannot be normalised into a probability distribution. To compare
+#' distributions of differing length, use `distribution_distance()`.
 #'
 #' @param x vector
 #' @param y vector
 #' @param split split (default: ":")
-#' @param epsilon substituted for a zero denominator so the divergence stays
-#'   finite (default 1e-05, as in `philentropy::KL()`); use 0 to allow `Inf`
+#' @param epsilon substituted by `philentropy::KL()` for a zero denominator so
+#'   the divergence stays finite (default 1e-05, philentropy's own default);
+#'   pass 0 to allow the mathematically exact `Inf`. Note philentropy applies
+#'   this guard whether or not the caller asks, so it is passed explicitly
+#'   rather than left implicit.
 #'
-#' @return the KL divergence D(x || y) in bits
+#' @return numeric scalar >= 0, the KL divergence between the
+#'   sum-normalized distributions parsed from `x` and `y`; 0 when `x` and
+#'   `y` describe the same distribution.
+#'
+#' @keywords internal
 #'
 #' @importFrom philentropy KL
 #' @importFrom magrittr %>%
 calc_KL <- function(x, y, split = ":", epsilon = 1e-05) {
+  ## normalize vector to a true probability distribution (sums to 1)
   x_list <- parse_dist_values(x, split, "x")
   y_list <- parse_dist_values(y, split, "y")
 
@@ -394,51 +501,69 @@ calc_KL <- function(x, y, split = ":", epsilon = 1e-05) {
     )
   }
 
-  if (sum(x_list) <= 0 || sum(y_list) <= 0) {
+  x_sum <- sum(x_list)
+  y_sum <- sum(y_list)
+  if (x_sum == 0 || y_sum == 0) {
     stop(
-      "calc_KL(): x and y must each contain at least one positive value; ",
-      "an all-zero vector cannot be normalised into a probability ",
-      "distribution.",
+      "calc_KL(): cannot normalize a distribution whose elements are all ",
+      "zero (x sum = ", x_sum, ", y sum = ", y_sum, "); a KL divergence is ",
+      "undefined for a distribution with no probability mass.",
       call. = FALSE
     )
   }
+  x_list <- x_list / x_sum
+  y_list <- y_list / y_sum
+  dat <- rbind(x_list, y_list)
 
-  ## Normalise by the SUM so that both rows are genuine probability vectors.
-  ## This is the whole fix: the previous code divided by max(), which does not
-  ## produce a distribution and let the "divergence" go negative.
-  p <- x_list / sum(x_list)
-  q <- y_list / sum(y_list)
-
-  ## philentropy::KL() substitutes `epsilon` for a zero denominator. Note it
-  ## defaults to 1e-05 and applies that guard whether or not the caller asks,
-  ## so pass the value through explicitly rather than leaving it implicit.
-  philentropy::KL(rbind(p, q), epsilon = epsilon) %>% return()
+  ## suppressMessages(): philentropy::KL() prints "Metric: 'kullback-leibler'
+  ## with unit: 'log2'" on every call, which would leak into callers' output.
+  ## unname(): it returns a length-1 vector named "kullback-leibler", which is
+  ## a surprising thing to hand back as "the KL divergence, a numeric scalar".
+  suppressMessages(philentropy::KL(dat, epsilon = epsilon)) %>%
+    unname() %>%
+    return()
 }
 
-#' calculate distribution distance from 2 character vectors which hold a
-#' distribution expression (A:B:C:...)
+#' calculate distribution distance from 2 character vectors which have distribution expression (A:B:C:...)
 #'
-#' Both distributions are reduced to a fixed-length vector of evenly spaced
-#' quantiles, and the distance is the squared L2 distance between those two
-#' vectors. The result therefore depends only on the *shape* of each
-#' distribution, not on how many observations it contains.
+#' Measures how different the two *shapes* of the underlying per-record
+#' values are, independent of how many records each side has. Both sides are
+#' reduced to the same fixed-length vector of evenly spaced quantiles, and
+#' the distance is the squared L2 distance between those vectors.
 #'
 #' This replaces an earlier approach that padded the shorter side with its
 #' own mean and subtracted element-wise, which had two defects:
 #'
 #' 1. the number of padded elements -- i.e. the difference in record counts
-#'    -- leaked directly into the distance. Across samples drawn from a
-#'    single population (identical shape, differing n) the old distance
-#'    correlated with the count difference at r = 0.99. Record count is a
-#'    separate signal and belongs in its own score (see #22), not smuggled
-#'    into a distribution distance.
+#'    -- leaked directly into the distance. Record count is a separate signal
+#'    and belongs in its own score (see #22), not smuggled into a
+#'    distribution distance.
 #' 2. only the padded side was sorted, so two equal-length inputs were
 #'    compared in whatever order they happened to arrive:
-#'    `distribution_distance("3:1:2", "1:2:3")` returned 6 for what are two
-#'    identical multisets.
+#'    `distribution_distance("3:1:2", "1:2:3")` returned a non-zero distance
+#'    for what are two identical multisets.
 #'
 #' `quantile()` sorts internally and always yields `n_quantiles` values, so
 #' both defects are removed by construction.
+#'
+#' Two candidate fixes were developed in parallel and compared head to head
+#' before this one was adopted (see the merge notes on Issue #5):
+#'
+#' - mean-fill padding with the aggregation changed from sum to mean, which
+#'   normalises away the length scaling but leaves the ordering defect and
+#'   only reduces the count correlation from 0.61 to 0.37;
+#' - this quantile vector, which drives the count correlation to 0.16 and
+#'   makes the distance exactly order-invariant.
+#'
+#' The mean-fill variant initially looked better because it scored a slightly
+#' higher reidentification rate under noise. That measurement used a fixture
+#' in which every person had the *same* record count in RAW and ANON, so
+#' record count was itself a perfect identity signal and any count
+#' sensitivity inflated the apparent success. Re-run with record counts that
+#' differ between RAW and ANON -- the situation this function exists to
+#' handle -- the quantile form reidentifies 16-46% *more* records across
+#' noise levels. A stronger attack is the desired direction for a tool whose
+#' job is to upper-bound reidentification risk.
 #'
 #' @param x vector
 #' @param y vector
@@ -448,7 +573,12 @@ calc_KL <- function(x, y, split = ":", epsilon = 1e-05) {
 #'   these points, so it scales with `n_quantiles`; compare only distances
 #'   computed with the same value.
 #'
-#' @return squared L2 distance between the two quantile vectors
+#' @return numeric scalar >= 0, the squared L2 distance between the two
+#'   quantile vectors. Symmetric, and 0 exactly when the two distributions
+#'   have the same shape -- including when they hold different numbers of
+#'   observations, or list the same values in a different order.
+#'
+#' @keywords internal
 #'
 #' @importFrom magrittr %>%
 #' @importFrom stats quantile
@@ -463,6 +593,9 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
     )
   }
 
+  ## quantile() sorts internally and always returns n_quantiles values, so the
+  ## result depends only on the shape of each distribution -- not on how many
+  ## observations it holds, nor on the order they were written in.
   probs <- seq(0, 1, length.out = n_quantiles)
   q_x <- stats::quantile(x_list, probs = probs, names = FALSE, type = 7)
   q_y <- stats::quantile(y_list, probs = probs, names = FALSE, type = 7)
@@ -473,56 +606,96 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
 
 #' reidentify by single num static by using rank
 #'
+#' Rank ties are resolved deterministically (see `rank(..., ties.method =
+#' "min")` below): tied values receive the *same* rank rather than an
+#' arbitrary distinct one, so the same input always yields the same
+#' output. Any residual ambiguity this creates (several RAW candidates at
+#' DISTANCE == 0 for one ANON record) is resolved, as for every other
+#' reid_by_*() function, by resolve_min_distance_ties()'s "first
+#' RAW_ROW_NUMBER encountered" rule.
+#'
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
-#' @param row_number row number column name(default: "ROW_NUMBER")
+#' @param row_number name of the row-number column *before* the RAW_/ANON_
+#'   prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+#'   dat_raw_anon is expected to contain columns
+#'   paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+#'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+#'   regardless of `row_number`, so it can be passed straight into
+#'   reid_result()'s defaults even when a non-default row_number was used.
 #' @param seed integer seed for the random tie-break among equally distant
-#'   candidates, or NULL (default) to use the ambient RNG stream
+#'   candidates (default 0L, so a plain call is reproducible). Pass a
+#'   different value, or use reid_stability(), to see the run-to-run
+#'   spread. NULL uses the ambient RNG stream instead.
+#'
+#' @return a data frame with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER, the
+#'   raw `target` columns, ANON_RANK, RAW_RANK, DISTANCE and RESULT
+#'   (logical): exactly one row per ANON record, the RAW record closest in
+#'   rank of `target`, and whether that guess was correct.
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
+#' @importFrom dplyr .data
 #' @importFrom magrittr %>%
 #' @importFrom magrittr %<>%
 #' @export
-reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL) {
+reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
   raw_target <- paste("RAW_", target, sep = "")
   anon_target <- paste("ANON_", target, sep = "")
   raw_row_number <- paste("RAW_", row_number, sep = "")
   anon_row_number <- paste("ANON_", row_number, sep = "")
+  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_num_rank")
 
-  ## This function has a second source of randomness besides the distance
-  ## tie-break: rank(ties.method = "random") breaks rank ties at random too.
-  ## Both must fall under `seed`, otherwise the same seed still gives
-  ## different answers. Seed once for the whole body and let the tie-break
-  ## draw from that same (now deterministic) stream.
-  with_local_seed(seed, {
-    ## check the rank
-    dat_anon_rank <-
-      dat_raw_anon %>%
-      dplyr::select(dplyr::all_of(c(anon_row_number, anon_target))) %>%
-      dplyr::distinct()
-    dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "random")
-    dat_anon_rank %<>%
-      dplyr::select(dplyr::all_of(anon_row_number), ANON_RANK)
+  ## rank(..., na.last = TRUE) (the default) does NOT propagate NA: it
+  ## silently assigns missing values a real, high rank instead of erroring
+  ## or returning NA, which would let an ANON/RAW record with a genuinely
+  ## missing target value be reported as a confident (even DISTANCE == 0)
+  ## reidentification match. Stop instead of letting that happen silently.
+  if (anyNA(dat_raw_anon[[anon_target]]) || anyNA(dat_raw_anon[[raw_target]])) {
+    stop(
+      "reid_by_num_rank(): target column \"", target, "\" contains NA/missing ",
+      "values in RAW and/or ANON. rank(..., na.last = TRUE) would silently ",
+      "assign missing values a real rank instead of erroring, which could ",
+      "report a false reidentification match. Remove or explicitly handle ",
+      "missing values before calling reid_by_num_rank().",
+      call. = FALSE
+    )
+  }
 
-    dat_raw_rank <-
-      dat_raw_anon %>%
-      dplyr::select(dplyr::all_of(c(raw_row_number, raw_target))) %>%
-      dplyr::distinct()
-    dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "random")
-    dat_raw_rank %<>%
-      dplyr::select(dplyr::all_of(raw_row_number), RAW_RANK)
-
+  ## check the rank
+  ## ties.method = "min": deterministic (fixes the reid_by_num_rank()
+  ## non-determinism defect -- "random" gave a different result every run
+  ## for tie-heavy columns) and, more importantly, semantically correct for
+  ## a reidentification-risk tool: genuinely tied values are indistinguishable
+  ## in the data, so they should collapse to the same rank instead of being
+  ## arbitrarily split into a fake total order by incidental row position.
+  dat_anon_rank <-
     dat_raw_anon %>%
-      dplyr::inner_join(dat_raw_rank, by = raw_row_number) %>%
-      dplyr::inner_join(dat_anon_rank, by = anon_row_number) %>%
-      dplyr::mutate(DISTANCE = abs(ANON_RANK - RAW_RANK)) %>%
-      resolve_min_distance_ties(seed = NULL) %>%
-      dplyr::mutate(RESULT = (ANON_ROW_NUMBER == RAW_ROW_NUMBER)) %>%
-      dplyr::select(ANON_ROW_NUMBER, RAW_ROW_NUMBER, dplyr::all_of(c(anon_target, raw_target)), ANON_RANK, RAW_RANK, DISTANCE, RESULT)
-  })
+    dplyr::select(dplyr::all_of(c(anon_row_number, anon_target))) %>%
+    dplyr::distinct()
+  dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "min")
+  dat_anon_rank %<>%
+    dplyr::select(dplyr::all_of(anon_row_number), "ANON_RANK")
+
+  dat_raw_rank <-
+    dat_raw_anon %>%
+    dplyr::select(dplyr::all_of(c(raw_row_number, raw_target))) %>%
+    dplyr::distinct()
+  dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "min")
+  dat_raw_rank %<>%
+    dplyr::select(dplyr::all_of(raw_row_number), "RAW_RANK")
+
+  dat_raw_anon %>%
+    dplyr::inner_join(dat_raw_rank, by = raw_row_number) %>%
+    dplyr::inner_join(dat_anon_rank, by = anon_row_number) %>%
+    dplyr::mutate(RAW_ROW_NUMBER = .data[[raw_row_number]], ANON_ROW_NUMBER = .data[[anon_row_number]]) %>%
+    dplyr::mutate(DISTANCE = abs(.data$ANON_RANK - .data$RAW_RANK)) %>%
+    resolve_min_distance_ties(seed = seed) %>%
+    dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
+    dplyr::select("ANON_ROW_NUMBER", "RAW_ROW_NUMBER", dplyr::all_of(c(anon_target, raw_target)), "ANON_RANK", "RAW_RANK", "DISTANCE", "RESULT") %>%
+    return()
 }
 
 #' run a reid_by_*() attack over several tie-break seeds and summarise the

@@ -1,0 +1,36 @@
+=====================================================
+1. ORDER INVARIANCE  d('3:1:2','1:2:3') must be 0
+=====================================================
+  A_quantile           d = 0           symmetric(9:1 vs 3:1:2) = TRUE
+  B_meanfill_mse       d = 2           symmetric(9:1 vs 3:1:2) = TRUE
+  C_meanfill_sorted    d = 0           symmetric(9:1 vs 3:1:2) = TRUE
+
+=====================================================
+2. COUNT DEPENDENCE (p4p5's own fixture, n=400 random pairs)
+=====================================================
+  pre-fix (sum)        cor=+0.6130  ratio(ld>=10 / ld==0)=4.34x
+  A_quantile           cor=+0.1648  ratio(ld>=10 / ld==0)=2.15x
+  B_meanfill_mse       cor=+0.3697  ratio(ld>=10 / ld==0)=3.05x
+  C_meanfill_sorted    cor=+0.3697  ratio(ld>=10 / ld==0)=3.05x
+
+=====================================================
+3 a. RAW/ANON record counts IDENTICAL (p4p5's setting: count leaks identity) 
+=====================================================
+  noise_sd   A_quantile           B_meanfill_mse       C_meanfill_sorted   
+  0          30.00                30.00                30.00               
+  0.02       30.00                30.00                30.00               
+  0.05       28.00                28.17                28.17               
+  0.1        14.75                15.00                15.00               
+  0.2        5.25                 5.67                 5.67                
+  (success out of 30 people, mean over 12 seeds)
+
+=====================================================
+3 b. RAW/ANON record counts DIFFER randomly (count carries no identity) 
+=====================================================
+  noise_sd   A_quantile           B_meanfill_mse       C_meanfill_sorted   
+  0          18.75                12.83                12.83               
+  0.02       18.33                12.92                12.92               
+  0.05       15.58                11.75                11.75               
+  0.1        9.17                 7.92                 7.92                
+  0.2        4.25                 3.83                 3.83                
+  (success out of 30 people, mean over 12 seeds)

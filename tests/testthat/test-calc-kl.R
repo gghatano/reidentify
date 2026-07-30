@@ -80,7 +80,9 @@ test_that("calc_KL rejects inputs it cannot interpret as distributions", {
   expect_error(calc_KL("1:2:3", "1:2"), regexp = "same support")
 
   expect_error(calc_KL("1:-2:3", "1:2:3"), regexp = "non-negative")
-  expect_error(calc_KL("0:0:0", "1:2:3"), regexp = "positive value")
+  ## merged wording comes from fix/adversarial-p4p5's message
+  expect_error(calc_KL("0:0:0", "1:2:3"), regexp = "zero")
+  expect_error(calc_KL("1:2:3", "0:0:0"), regexp = "zero")
 
   ## non-numeric input is still rejected by parse_dist_values()
   expect_error(calc_KL("1:2:3", "a:b:c"), regexp = "numeric")

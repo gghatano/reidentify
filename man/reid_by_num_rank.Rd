@@ -4,18 +4,38 @@
 \alias{reid_by_num_rank}
 \title{reidentify by single num static by using rank}
 \usage{
-reid_by_num_rank(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = NULL)
+reid_by_num_rank(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L)
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
 
 \item{target}{target column}
 
-\item{row_number}{row number column name(default: "ROW_NUMBER")}
+\item{row_number}{name of the row-number column *before* the RAW_/ANON_
+prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+dat_raw_anon is expected to contain columns
+paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+regardless of `row_number`, so it can be passed straight into
+reid_result()'s defaults even when a non-default row_number was used.}
 
 \item{seed}{integer seed for the random tie-break among equally distant
-candidates, or NULL (default) to use the ambient RNG stream}
+candidates (default 0L, so a plain call is reproducible). Pass a
+different value, or use reid_stability(), to see the run-to-run
+spread. NULL uses the ambient RNG stream instead.}
+}
+\value{
+a data frame with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER, the
+  raw `target` columns, ANON_RANK, RAW_RANK, DISTANCE and RESULT
+  (logical): exactly one row per ANON record, the RAW record closest in
+  rank of `target`, and whether that guess was correct.
 }
 \description{
-reidentify by single num static by using rank
+Rank ties are resolved deterministically (see `rank(..., ties.method =
+"min")` below): tied values receive the *same* rank rather than an
+arbitrary distinct one, so the same input always yields the same
+output. Any residual ambiguity this creates (several RAW candidates at
+DISTANCE == 0 for one ANON record) is resolved, as for every other
+reid_by_*() function, by resolve_min_distance_ties()'s "first
+RAW_ROW_NUMBER encountered" rule.
 }

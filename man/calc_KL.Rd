@@ -2,8 +2,7 @@
 % Please edit documentation in R/reidentify.R
 \name{calc_KL}
 \alias{calc_KL}
-\title{Kullback-Leibler divergence D(x || y) between two distributions written
-as "A:B:C:..." strings}
+\title{calc KL divergence from 2 character vectors which have distribution expression (A:B:C:...)}
 \usage{
 calc_KL(x, y, split = ":", epsilon = 1e-05)
 }
@@ -14,42 +13,56 @@ calc_KL(x, y, split = ":", epsilon = 1e-05)
 
 \item{split}{split (default: ":")}
 
-\item{epsilon}{substituted for a zero denominator so the divergence stays
-finite (default 1e-05, as in `philentropy::KL()`); use 0 to allow `Inf`}
+\item{epsilon}{substituted by `philentropy::KL()` for a zero denominator so
+the divergence stays finite (default 1e-05, philentropy's own default);
+pass 0 to allow the mathematically exact `Inf`. Note philentropy applies
+this guard whether or not the caller asks, so it is passed explicitly
+rather than left implicit.}
 }
 \value{
-the KL divergence D(x || y) in bits
+numeric scalar >= 0, the KL divergence between the
+  sum-normalized distributions parsed from `x` and `y`; 0 when `x` and
+  `y` describe the same distribution.
 }
 \description{
-Both inputs are read as unnormalised counts/weights over a shared, ordered
-support and are converted to probability vectors by dividing by their sum.
-The result is in bits (log base 2), matching `philentropy::KL()`.
+Both `x` and `y` are parsed to numeric vectors and normalized to sum to
+1 (a true probability distribution) before being handed to
+`philentropy::KL()`. Earlier this normalized by dividing by the
+*maximum* element instead of the *sum*, which does not produce a
+distribution that sums to 1 -- the KL divergence formula is only
+guaranteed non-negative, and only 0 for identical inputs, when both
+inputs are genuine probability distributions. With the max-based
+normalization it could (and did) return negative values, e.g.
+`calc_KL("1:1:10", "1:1:1")` used to return approximately -0.664 (see
+phase 6 investigation); with sum-based normalization the KL divergence
+is always >= 0, and is exactly 0 when `x` and `y` describe the same
+distribution.
 }
 \details{
-This function previously normalised by `max()` rather than `sum()`, so it
-was fed vectors that were not probability distributions. The consequences
-were not cosmetic:
+Zero elements: if some but not all elements of a (sum-normalized)
+distribution are exactly 0, a literal KL divergence formula would
+involve `log(0)`. `philentropy::KL()` avoids this itself: by default it
+substitutes a small `epsilon` (1e-05) for zero entries before taking
+logs, so a distribution with some zero elements still yields a finite
+(rather than `NaN`/`Inf`) result; this function relies on that built-in
+behavior rather than re-implementing its own epsilon handling. The
+degenerate case where *every* element of `x` or `y` is 0 (sum is 0, so
+the `/ sum(...)` normalization itself is 0/0) is rejected with an
+explicit error instead of silently producing `NaN`, consistent with how
+`parse_dist_values()` already refuses other degenerate inputs elsewhere
+in this file.
 
-- the returned value could be negative, which a KL divergence never is
-  (11 of 50 random pairs came out negative, over a range of
-  [-1.5949, 4.6112]);
-- `x = "1:2:3:4"`, `y = "2:2:2:2"` returned -1.311278 where the true
-  divergence is 0.1535607 bits;
-- it changed which candidate looked closest. Over 8 candidates the rank
-  correlation against the correct value was only 0.79 and the argmin
-  differed, so nearest-neighbour matching picked a different record.
+`philentropy::KL()` also prints an informational message
+("Metric: 'kullback-leibler' with unit: 'log2'; ...") to the console on
+every call. Since this is an internal helper (not part of the public
+API), that message is suppressed here so it cannot leak into a caller's
+console output.
 
-`philentropy::KL()` does not warn when handed vectors that do not sum to
-1, so none of this surfaced at the call site.
-
-Zero entries need care: any outcome with `y_i == 0 < x_i` makes the true
-divergence infinite. `epsilon` is handed to `philentropy::KL()`, which
-substitutes it for a zero denominator, keeping the result finite and
-large. The default matches `philentropy`'s own. Pass `epsilon = 0` to
-disable the guard and get the mathematically exact `Inf`.
-
-For comparing distributions of differing length or unequal support, this
-is the wrong tool -- KL needs a shared support. Prefer the quantile-vector
-distance in `distribution_distance()`, or the Wasserstein distance planned
-in #19.
+`x` and `y` must describe the same support (same number of elements).
+Previously a length mismatch was passed straight to `rbind()`, which
+silently recycled the shorter vector and so compared the wrong outcomes
+against each other. Negative inputs are rejected for the same reason: they
+cannot be normalised into a probability distribution. To compare
+distributions of differing length, use `distribution_distance()`.
 }
+\keyword{internal}

@@ -24,7 +24,7 @@
 
 make_master_30 <- function(seed = 71) {
   set.seed(seed)
-  dat <- suppressWarnings(create_dummy_transaction_data(people = 30, size = 4))
+  dat <- create_dummy_transaction_data(people = 30, size = 4)
   dat$NUM_STATIC_2 <- dat$NUM_STATIC + 1
   dat$NUM_DYNAMIC_2 <- dat$NUM_DYNAMIC + 1
   dat$CHAR_STATIC <- paste("CHAR", dat$ID, sep = "")

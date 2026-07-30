@@ -18,6 +18,10 @@ parse_dist_values(str, split, side)
 
 \item{side}{label used in the error message ("x" or "y")}
 }
+\value{
+numeric vector parsed from `str`; stops with an error instead of
+  returning NA-containing output.
+}
 \description{
 Distinguishes, where possible, a genuinely non-numeric element (R's
 `as.numeric()` raises "NAs introduced by coercion") from an explicit

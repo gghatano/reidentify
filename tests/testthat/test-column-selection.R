@@ -18,7 +18,7 @@
 
 make_master <- function(people = 20, size = 4, seed = 71) {
   set.seed(seed)
-  dat <- suppressWarnings(create_dummy_transaction_data(people = people, size = size))
+  dat <- create_dummy_transaction_data(people = people, size = size)
   dat$NUM_STATIC_2 <- dat$NUM_STATIC + 1
   dat$NUM_DYNAMIC_2 <- dat$NUM_DYNAMIC + 1
   dat$CHAR_STATIC <- paste("CHAR", dat$ID, sep = "")
@@ -129,7 +129,7 @@ test_that("normal calls to the 4 reid functions raise no tidyselect deprecation 
 
 test_that("transform_transaction_to_master works when only some of STATIC_NUM/STATIC_CHAR/DYNAMIC_NUM/DYNAMIC_CHAR are given", {
   set.seed(71)
-  dat <- suppressWarnings(create_dummy_transaction_data(people = 10, size = 3))
+  dat <- create_dummy_transaction_data(people = 10, size = 3)
 
   ## only STATIC_NUM given, the rest left at their NULL default
   m1 <- expect_no_warning(

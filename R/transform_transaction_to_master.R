@@ -9,6 +9,11 @@
 #' @param DYNAMIC_NUM list of column name which shows DYNAMIC NUMBER attribute
 #' @param DYNAMIC_CHAR list of column name which shows DYNAMIC CHARACTER attribute
 #'
+#' @return a data frame with one row per distinct `ID`, combining the
+#'   STATIC_NUM/STATIC_CHAR columns as-is, MAX/MEAN/MEDIAN/MIN summaries of
+#'   DYNAMIC_NUM, colon-joined distributions (`*_DIST`) of DYNAMIC_NUM and
+#'   DYNAMIC_CHAR, a ROWCOUNT column and the minimum `ROW_NUMBER` per `ID`.
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr summarise_all
 #' @importFrom dplyr summarise

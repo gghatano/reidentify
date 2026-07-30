@@ -12,6 +12,9 @@ with_local_seed(seed, code)
 
 \item{code}{expression to evaluate}
 }
+\value{
+the value of `code`
+}
 \description{
 `seed = NULL` runs `code` against the ambient RNG stream unchanged, so a
 caller can still get reproducibility with a plain `set.seed()` before the
