@@ -139,23 +139,23 @@ test_that("transform_transaction_to_master works when only some of STATIC_NUM/ST
   expect_true(all(c("ID", "NUM_STATIC", "ROWCOUNT", "ROW_NUMBER") %in% names(m1)))
 
   ## only DYNAMIC_NUM given
-  ## NB: dplyr::summarise_all() with a *named function list* only prefixes
-  ## the result columns with the source column name when 2+ columns remain
-  ## after grouping; with a single column (our case here) it just uses the
-  ## function names (MEAN, MAX, ...) verbatim. This is pre-existing
-  ## dplyr::summarise_all() behavior, unrelated to the column-selection fix.
+  ## NB: this used to assert the bare name "MEAN". dplyr::summarise_all() with
+  ## a named function list only prefixed the result with the source column
+  ## name when 2+ columns remained after grouping, so a single column produced
+  ## MEAN/MAX/... verbatim while two produced NUM_DYNAMIC_MEAN/... That
+  ## inconsistency is Issue #26; the naming is now always <col>_<statistic>.
   m2 <- expect_no_warning(
     transform_transaction_to_master(dat, ROW_NUMBER = "ROW_NUMBER", DYNAMIC_NUM = "NUM_DYNAMIC")
   )
   expect_true(is.data.frame(m2))
-  expect_true("MEAN" %in% names(m2))
+  expect_true("NUM_DYNAMIC_MEAN" %in% names(m2))
 
-  ## only DYNAMIC_CHAR given (same single-column naming caveat as above)
+  ## only DYNAMIC_CHAR given (same naming rule, see #26)
   m3 <- expect_no_warning(
     transform_transaction_to_master(dat, ROW_NUMBER = "ROW_NUMBER", DYNAMIC_CHAR = "CHAR")
   )
   expect_true(is.data.frame(m3))
-  expect_true("DIST" %in% names(m3))
+  expect_true("CHAR_DIST" %in% names(m3))
 
   ## only STATIC_CHAR given
   m4 <- expect_no_warning(

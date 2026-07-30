@@ -34,10 +34,35 @@ transform_transaction_to_master(
 }
 \value{
 a data frame with one row per distinct `ID`, combining the
-  STATIC_NUM/STATIC_CHAR columns as-is, MAX/MEAN/MEDIAN/MIN summaries of
-  DYNAMIC_NUM, colon-joined distributions (`*_DIST`) of DYNAMIC_NUM and
-  DYNAMIC_CHAR, a ROWCOUNT column and the minimum `ROW_NUMBER` per `ID`.
+  STATIC_NUM/STATIC_CHAR columns as-is, `<col>_MAX`/`_MEAN`/`_MEDIAN`/
+  `_MIN` summaries of DYNAMIC_NUM, `collapse`-joined distributions
+  (`<col>_DIST`) of DYNAMIC_NUM and DYNAMIC_CHAR, a ROWCOUNT column and
+  the minimum `ROW_NUMBER` per `ID`.
 }
 \description{
 transform transaction -> master
 }
+\section{Column naming}{
+
+
+The aggregate columns are **always** named `<source column>_<statistic>`,
+whatever the number of columns given:
+
+* `DYNAMIC_NUM` yields `<col>_MAX`, `<col>_MEAN`, `<col>_MEDIAN`,
+  `<col>_MIN` for every column;
+* `DYNAMIC_NUM` and `DYNAMIC_CHAR` each additionally yield `<col>_DIST`.
+
+This used to depend on how many columns were passed.
+`dplyr::summarise_all()` with a named function list only prefixes the
+result with the source column name when two or more columns survive
+grouping; with a single column it used the bare function names, so
+`DYNAMIC_NUM = "NUM_DYNAMIC"` produced `MAX`/`MEAN`/`MEDIAN`/`MIN` while
+`DYNAMIC_NUM = c("BIN", "NUM_DYNAMIC")` produced `BIN_MAX`/
+`NUM_DYNAMIC_MAX`/... Downstream code therefore could not hard-code a
+column name (Issue #26).
+
+The column *order* is unchanged: statistic-major
+(`<col1>_MAX, <col2>_MAX, ..., <col1>_MEAN, ...`), matching what
+`summarise_all()` produced for the multi-column case.
+}
+

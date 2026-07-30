@@ -41,3 +41,7 @@ a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
 \description{
 reidentify by distribution column (list A, B, C is expressed by "A:B:C")
 }
+\seealso{
+[score_dist()] and [match_greedy()], the score and assignment
+  layers this is a wrapper around.
+}

@@ -28,8 +28,15 @@ spread. NULL uses the ambient RNG stream instead.}
 a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
   DISTANCE and RESULT (logical): exactly one row per ANON record, the
   RAW record closest in `target` by (Levenshtein) edit distance, and
-  whether that guess was correct.
+  whether that guess was correct. For backward compatibility this also
+  carries through every column of `dat_raw_anon`, so the exact shape of
+  the result depends on the input; [score_char()] plus [match_greedy()]
+  give the same answer in a fixed, input-independent shape.
 }
 \description{
 reidentify by character static column
+}
+\seealso{
+[score_char()] and [match_greedy()], the score and assignment
+  layers this is a wrapper around.
 }
