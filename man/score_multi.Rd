@@ -14,6 +14,8 @@ score_multi(
   split = ":",
   cov_from = c("raw", "anon", "pooled"),
   ridge = 1e-06,
+  source = c("anon", "raw", "pooled"),
+  weight = c("idf", "inv_log", "inv", "none"),
   .fn_name = "score_multi"
 )
 }
@@ -42,6 +44,8 @@ the stopgap that Issue #13 needed.}
 \item{cov_from, ridge}{passed to [score_mahalanobis()] when
 `method = "mahalanobis"`}
 
+\item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
+
 \item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
 their own name so the message points at the function the user called}
 }
@@ -61,12 +65,24 @@ weighted sum. Every column is treated as independent evidence.
 
 `"mahalanobis"` scores all `"num"` columns *jointly* with
 [score_mahalanobis()], using the covariance of the reference population, and
-adds any remaining `"char"` / `"dist"` / `"rank"` columns as separate
-normalised terms. The Mahalanobis block is given the combined weight of the
-numeric columns it absorbed, so the two methods spend the same total weight
-on the same columns and their success rates can be compared directly.
-Use it when some of the numeric columns are correlated -- see
-[score_mahalanobis()] for why a plain sum double-counts them.
+adds any remaining columns as separate normalised terms. The Mahalanobis
+block is given the combined weight of the numeric columns it absorbed, so
+the two methods spend the same total weight on the same columns and their
+success rates can be compared directly. Use it when some of the numeric
+columns are correlated -- see [score_mahalanobis()] for why a plain sum
+double-counts them.
+}
+
+\section{Columns scored as a block}{
+
+
+Two kinds of column are *not* scored one at a time. Columns declared
+`"idf"` are handed together to [score_idf_match()], because the relative
+size of the rarity weights across columns is the method itself and
+normalising each column separately would discard it. Under
+`method = "mahalanobis"` the `"num"` columns are likewise handled together.
+In both cases the block receives the summed weight of the columns it
+absorbed, and is normalised as a single component against the rest.
 }
 
 \examples{

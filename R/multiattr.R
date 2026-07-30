@@ -340,11 +340,13 @@ expand_target_spec <- function(targets, fn_name) {
          "column a score type, or none of them.", call. = FALSE)
   }
 
-  unknown <- setdiff(unique(unname(targets)), c("num", "char", "dist", "rank"))
+  unknown <- setdiff(unique(unname(targets)), reid_score_types())
   if (length(unknown) > 0) {
     stop(fn_name, "(): unknown score type(s): ",
          paste(unknown, collapse = ", "),
-         ". Expected \"num\", \"char\", \"dist\" or \"rank\".", call. = FALSE)
+         ". Expected one of ",
+         paste0("\"", reid_score_types(), "\"", collapse = ", "), ".",
+         call. = FALSE)
   }
   if (anyDuplicated(names(targets)) > 0) {
     stop(fn_name, "(): `targets` names the same column more than once (",
@@ -392,12 +394,22 @@ build_target_scores <- function(dat_raw_anon, targets, row_number, split, fn_nam
 #'
 #' `"mahalanobis"` scores all `"num"` columns *jointly* with
 #' [score_mahalanobis()], using the covariance of the reference population, and
-#' adds any remaining `"char"` / `"dist"` / `"rank"` columns as separate
-#' normalised terms. The Mahalanobis block is given the combined weight of the
-#' numeric columns it absorbed, so the two methods spend the same total weight
-#' on the same columns and their success rates can be compared directly.
-#' Use it when some of the numeric columns are correlated -- see
-#' [score_mahalanobis()] for why a plain sum double-counts them.
+#' adds any remaining columns as separate normalised terms. The Mahalanobis
+#' block is given the combined weight of the numeric columns it absorbed, so
+#' the two methods spend the same total weight on the same columns and their
+#' success rates can be compared directly. Use it when some of the numeric
+#' columns are correlated -- see [score_mahalanobis()] for why a plain sum
+#' double-counts them.
+#'
+#' @section Columns scored as a block:
+#'
+#' Two kinds of column are *not* scored one at a time. Columns declared
+#' `"idf"` are handed together to [score_idf_match()], because the relative
+#' size of the rarity weights across columns is the method itself and
+#' normalising each column separately would discard it. Under
+#' `method = "mahalanobis"` the `"num"` columns are likewise handled together.
+#' In both cases the block receives the summed weight of the columns it
+#' absorbed, and is normalised as a single component against the rest.
 #'
 #' @inheritParams score_num
 #' @param targets either a named character vector mapping column name to score
@@ -413,6 +425,7 @@ build_target_scores <- function(dat_raw_anon, targets, row_number, split, fn_nam
 #' @param split separator passed to [score_dist()] for `"dist"` columns
 #' @param cov_from,ridge passed to [score_mahalanobis()] when
 #'   `method = "mahalanobis"`
+#' @param source,weight passed to [score_idf_match()] for `"idf"` columns
 #'
 #' @return a "reid_scores" table over the candidate pairs of `dat_raw_anon`
 #'
@@ -428,10 +441,15 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
                         normalize = c("range", "zscore", "rank", "none"),
                         method = c("weighted", "mahalanobis"),
                         split = ":", cov_from = c("raw", "anon", "pooled"),
-                        ridge = 1e-6, .fn_name = "score_multi") {
+                        ridge = 1e-6,
+                        source = c("anon", "raw", "pooled"),
+                        weight = c("idf", "inv_log", "inv", "none"),
+                        .fn_name = "score_multi") {
   normalize <- match.arg(normalize)
   method <- match.arg(method)
   cov_from <- match.arg(cov_from)
+  source <- match.arg(source)
+  weight <- match.arg(weight)
 
   targets <- expand_target_spec(targets, .fn_name)
 
@@ -444,18 +462,21 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
          length(weights), ").", call. = FALSE)
   }
 
-  if (identical(method, "weighted")) {
-    parts <- build_target_scores(dat_raw_anon, targets, row_number, split, .fn_name)
-    part_weights <- weights
-  } else {
-    is_num <- unname(targets) == "num"
+  types <- unname(targets)
+  blocks <- list()
+  block_weights <- numeric(0)
+  ## Columns a block has taken over, so build_target_scores() does not also
+  ## score them one at a time and count their evidence twice.
+  absorbed <- rep(FALSE, length(targets))
+
+  if (identical(method, "mahalanobis")) {
+    is_num <- types == "num"
     if (!any(is_num)) {
       stop(.fn_name, "(): method = \"mahalanobis\" needs at least one column ",
            "of type \"num\"; a covariance matrix is only defined over numeric ",
            "coordinates. Use method = \"weighted\" instead.", call. = FALSE)
     }
-
-    mahal <- score_mahalanobis(
+    blocks$mahalanobis <- score_mahalanobis(
       dat_raw_anon,
       targets = names(targets)[is_num],
       row_number = row_number,
@@ -463,18 +484,35 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
       ridge = ridge,
       .fn_name = .fn_name
     )
-    rest <- build_target_scores(
-      dat_raw_anon, targets[!is_num], row_number, split, .fn_name
-    )
-
-    parts <- c(list(mahalanobis = mahal), rest)
     ## The block stands in for every numeric column, so it inherits their
     ## combined weight: "weighted" and "mahalanobis" then spend the same total
     ## weight on the same set of columns, and the difference between their
     ## success rates is attributable to the metric rather than to a change in
     ## how much the numeric columns count for.
-    part_weights <- c(sum(weights[is_num]), weights[!is_num])
+    block_weights <- c(block_weights, sum(weights[is_num]))
+    absorbed <- absorbed | is_num
   }
+
+  is_idf <- types == "idf"
+  if (any(is_idf)) {
+    blocks$idf <- score_idf_match(
+      dat_raw_anon,
+      targets = names(targets)[is_idf],
+      row_number = row_number,
+      source = source,
+      weight = weight,
+      .fn_name = .fn_name
+    )
+    block_weights <- c(block_weights, sum(weights[is_idf]))
+    absorbed <- absorbed | is_idf
+  }
+
+  rest <- build_target_scores(
+    dat_raw_anon, targets[!absorbed], row_number, split, .fn_name
+  )
+
+  parts <- c(blocks, rest)
+  part_weights <- c(block_weights, weights[!absorbed])
 
   combine_scores(normalize_scores(parts, method = normalize), weights = part_weights)
 }

@@ -65,11 +65,13 @@ attacker_knowledge <- function(level = c("W", "M", "S"),
            "name to score type, e.g. c(AGE = \"num\", ZIP = \"char\").",
            call. = FALSE)
     }
-    unknown <- setdiff(unique(x), c("num", "char", "dist", "rank"))
+    unknown <- setdiff(unique(x), reid_score_types())
     if (length(unknown) > 0) {
       stop("`", arg, "` has unknown score type(s): ",
            paste(unknown, collapse = ", "),
-           ". Expected \"num\", \"char\", \"dist\" or \"rank\".", call. = FALSE)
+           ". Expected one of ",
+           paste0("\"", reid_score_types(), "\"", collapse = ", "), ".",
+           call. = FALSE)
     }
     x
   }
@@ -136,9 +138,22 @@ print.attacker_knowledge <- function(x, ...) {
   invisible(x)
 }
 
+#' the score types a column specification may declare
+#'
+#' One list, used by [attacker_knowledge()], [score_multi()] and
+#' [score_fn_for_type()], so a type added in one place cannot be silently
+#' missing from the others.
+#'
+#' @return character vector of valid score type names
+#'
+#' @keywords internal
+reid_score_types <- function() {
+  c("num", "char", "dist", "rank", "idf")
+}
+
 #' pick the score function for a declared score type
 #'
-#' @param type one of "num", "char", "dist", "rank"
+#' @param type one of the values [reid_score_types()] lists
 #'
 #' @return the corresponding `score_*()` function
 #'
@@ -150,6 +165,7 @@ score_fn_for_type <- function(type) {
     char = score_char,
     dist = score_dist,
     rank = score_num_rank,
+    idf = score_idf,
     stop("unknown score type \"", type, "\".", call. = FALSE)
   )
 }
@@ -184,6 +200,7 @@ score_fn_for_type <- function(type) {
 #' @param split separator passed to [score_dist()] for `"dist"` columns
 #' @param cov_from,ridge passed to [score_mahalanobis()] when
 #'   `method = "mahalanobis"`
+#' @param source,weight passed to [score_idf_match()] for `"idf"` columns
 #'
 #' @return a "reid_scores" table over the same candidate pairs as
 #'   `dat_raw_anon`
@@ -200,7 +217,9 @@ score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER
                                normalize = c("range", "zscore", "rank", "none"),
                                method = c("weighted", "mahalanobis"),
                                split = ":", cov_from = c("raw", "anon", "pooled"),
-                               ridge = 1e-6) {
+                               ridge = 1e-6,
+                               source = c("anon", "raw", "pooled"),
+                               weight = c("idf", "inv_log", "inv", "none")) {
   if (!inherits(knowledge, "attacker_knowledge")) {
     stop("`knowledge` must be an attacker_knowledge object; see ",
          "attacker_knowledge().", call. = FALSE)
@@ -216,6 +235,8 @@ score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER
     split = split,
     cov_from = match.arg(cov_from),
     ridge = ridge,
+    source = match.arg(source),
+    weight = match.arg(weight),
     .fn_name = "score_by_knowledge"
   )
 }

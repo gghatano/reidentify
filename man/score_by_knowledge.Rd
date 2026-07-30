@@ -13,7 +13,9 @@ score_by_knowledge(
   method = c("weighted", "mahalanobis"),
   split = ":",
   cov_from = c("raw", "anon", "pooled"),
-  ridge = 1e-06
+  ridge = 1e-06,
+  source = c("anon", "raw", "pooled"),
+  weight = c("idf", "inv_log", "inv", "none")
 )
 }
 \arguments{
@@ -36,6 +38,8 @@ see [normalize_scores()]. Default `"range"`.}
 
 \item{cov_from, ridge}{passed to [score_mahalanobis()] when
 `method = "mahalanobis"`}
+
+\item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
 }
 \value{
 a "reid_scores" table over the same candidate pairs as

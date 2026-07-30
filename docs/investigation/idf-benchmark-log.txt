@@ -1,0 +1,61 @@
+Issue #17 rarity-weighted exact matching
+success_analytic, n = 300 records, 6 columns, 20 values/column
+
+== skewed (Zipf s = 1.2) value frequencies ==
+ seed  none   idf inv_log   inv
+    1 0.536 0.630   0.633 0.552
+    2 0.570 0.629   0.613 0.544
+    3 0.558 0.649   0.645 0.583
+    4 0.527 0.605   0.593 0.527
+    5 0.562 0.656   0.644 0.580
+    6 0.573 0.658   0.634 0.554
+    7 0.544 0.639   0.625 0.564
+    8 0.539 0.629   0.636 0.548
+    9 0.539 0.633   0.622 0.563
+   10 0.575 0.620   0.627 0.527
+
+  mean: none 0.5521  idf 0.6349  inv_log 0.6272  inv 0.5542
+  idf      vs none: mean +0.0828, wins 10/10
+  inv_log  vs none: mean +0.0751, wins 10/10
+  inv      vs none: mean +0.0021, wins 6/10
+
+== uniform value frequencies (control) ==
+ seed  none   idf inv_log   inv
+    1 0.738 0.748   0.748 0.744
+    2 0.783 0.770   0.770 0.760
+    3 0.781 0.785   0.785 0.780
+    4 0.781 0.788   0.788 0.780
+    5 0.786 0.802   0.800 0.795
+    6 0.790 0.801   0.801 0.791
+    7 0.771 0.785   0.784 0.770
+    8 0.783 0.795   0.792 0.775
+    9 0.757 0.782   0.778 0.769
+   10 0.788 0.810   0.813 0.801
+
+  mean: none 0.7756  idf 0.7866  inv_log 0.7859  inv 0.7766
+  idf      vs none: mean +0.0110, wins 9/10
+  inv_log  vs none: mean +0.0103, wins 9/10
+  inv      vs none: mean +0.0010, wins 5/10
+
+== effect of the frequency skew s ==
+  s = 0.0 : mean gain +0.0049 (wins 4/5)
+  s = 0.4 : mean gain +0.0151 (wins 4/5)
+  s = 0.8 : mean gain +0.0368 (wins 4/5)
+  s = 1.2 : mean gain +0.0836 (wins 5/5)
+  s = 1.6 : mean gain +0.1047 (wins 5/5)
+  s = 2.0 : mean gain +0.0845 (wins 5/5)
+
+== frequency source ==
+  source = anon   : mean 0.6340
+  source = raw    : mean 0.6296
+  source = pooled : mean 0.6322
+
+== integrated into score_multi() alongside a numeric column ==
+ seed age_only char_only idf_only char_plus_age idf_plus_age
+    1     0.02     0.136    0.144         0.241        0.263
+    2     0.02     0.173    0.176         0.253        0.259
+    3     0.02     0.149    0.147         0.264        0.264
+    4     0.02     0.151    0.154         0.281        0.290
+    5     0.02     0.152    0.156         0.267        0.273
+
+  mean: age 0.0200 | char 0.1522 | idf 0.1552 | char+age 0.2612 | idf+age 0.2701
