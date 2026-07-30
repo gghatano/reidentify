@@ -215,6 +215,11 @@ score_fn_for_type <- function(type) {
 #' @param cov_from,ridge passed to [score_mahalanobis()] when
 #'   `method = "mahalanobis"`
 #' @param source,weight passed to [score_idf_match()] for `"idf"` columns
+#' @param screen,alpha passed to [score_multi()]; they decide what happens to a
+#'   visible column that, measured alone, carries no signal. This matters more
+#'   here than anywhere else: the W / M / S levels are meant to be read as an
+#'   increasing sequence, and a dead column entering at level M or S can make
+#'   the *higher* level report a lower risk than the lower one.
 #'
 #' @return a "reid_scores" table over the same candidate pairs as
 #'   `dat_raw_anon`
@@ -233,7 +238,9 @@ score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER
                                split = ":", cov_from = c("raw", "anon", "pooled"),
                                ridge = 1e-6,
                                source = c("anon", "raw", "pooled"),
-                               weight = c("idf", "inv_log", "inv", "none")) {
+                               weight = c("idf", "inv_log", "inv", "none"),
+                               screen = c("warn", "drop", "none"),
+                               alpha = 0.05) {
   if (!inherits(knowledge, "attacker_knowledge")) {
     stop("`knowledge` must be an attacker_knowledge object; see ",
          "attacker_knowledge().", call. = FALSE)
@@ -251,6 +258,8 @@ score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER
     ridge = ridge,
     source = match.arg(source),
     weight = match.arg(weight),
+    screen = match.arg(screen),
+    alpha = alpha,
     .fn_name = "score_by_knowledge"
   )
 }

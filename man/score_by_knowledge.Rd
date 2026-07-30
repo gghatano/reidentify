@@ -15,7 +15,9 @@ score_by_knowledge(
   cov_from = c("raw", "anon", "pooled"),
   ridge = 1e-06,
   source = c("anon", "raw", "pooled"),
-  weight = c("idf", "inv_log", "inv", "none")
+  weight = c("idf", "inv_log", "inv", "none"),
+  screen = c("warn", "drop", "none"),
+  alpha = 0.05
 )
 }
 \arguments{
@@ -42,6 +44,12 @@ expression.}
 `method = "mahalanobis"`}
 
 \item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
+
+\item{screen, alpha}{passed to [score_multi()]; they decide what happens to a
+visible column that, measured alone, carries no signal. This matters more
+here than anywhere else: the W / M / S levels are meant to be read as an
+increasing sequence, and a dead column entering at level M or S can make
+the *higher* level report a lower risk than the lower one.}
 }
 \value{
 a "reid_scores" table over the same candidate pairs as

@@ -4,7 +4,15 @@
 \alias{build_target_scores}
 \title{build one score table per declared column}
 \usage{
-build_target_scores(dat_raw_anon, targets, row_number, split, fn_name)
+build_target_scores(
+  dat_raw_anon,
+  targets,
+  row_number,
+  split,
+  fn_name,
+  source = "anon",
+  weight = "idf"
+)
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
@@ -17,6 +25,8 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 \item{split}{separator passed to [score_dist()] for `"dist"` columns}
 
 \item{fn_name}{name used in error messages}
+
+\item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
 }
 \value{
 a named list of "reid_scores" tables, in the order of `targets`

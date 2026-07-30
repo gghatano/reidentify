@@ -16,6 +16,8 @@ score_multi(
   ridge = 1e-06,
   source = c("anon", "raw", "pooled"),
   weight = c("idf", "inv_log", "inv", "none"),
+  screen = c("warn", "drop", "none"),
+  alpha = 0.05,
   .fn_name = "score_multi"
 )
 }
@@ -46,11 +48,31 @@ the stopgap that Issue #13 needed.}
 
 \item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
 
+\item{screen}{what to do about a column that, measured on its own, does not
+rank the true record better than chance (see [axis_informativeness()]):
+\describe{
+  \item{`"warn"`}{(default) report it and change nothing. The returned
+    score is identical to `screen = "none"`.}
+  \item{`"drop"`}{leave it out of the combination -- equivalent to giving
+    it weight 0, except that under `method = "mahalanobis"` it also leaves
+    the covariance block. If *every* column fails, all of them are kept
+    and the warning says so: dropping them all would leave no attack.}
+  \item{`"none"`}{skip the check.}
+}
+Screening reads the RAW/ANON row-number correspondence, i.e. the ground
+truth, so it models an attacker who has been told which of their
+attributes are worth using.}
+
+\item{alpha}{significance level for the screen, passed to
+[axis_informativeness()]; ignored when `screen = "none"`}
+
 \item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
 their own name so the message points at the function the user called}
 }
 \value{
-a "reid_scores" table over the candidate pairs of `dat_raw_anon`
+a "reid_scores" table over the candidate pairs of `dat_raw_anon`.
+  Unless `screen = "none"` it carries the per-axis report in its `"axes"`
+  attribute, readable with [axis_report()].
 }
 \description{
 Scores every declared column, puts the results on a common scale and adds
@@ -90,5 +112,6 @@ d <- create_dummy_qi_data(people = 20, seed = 1)
 j <- join_raw_anon_data(d, d)
 s <- score_multi(j, c(AGE = "num", ZIP = "char", VISIT_COUNT = "num"))
 match_greedy(s)
+axis_report(s)
 
 }

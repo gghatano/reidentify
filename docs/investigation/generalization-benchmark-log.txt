@@ -1,0 +1,50 @@
+R: R version 4.6.1 (2026-06-24 ucrt) 
+date: 2026-07-30 23:17:16 
+
+generalization hierarchy: 50 edge(s) over 2 attribute(s)
+  AREA: 30 edge(s), 3 level(s), root(s): 関東, 近畿, 中部
+  AGE: 20 edge(s), 2 level(s), root(s): [0,10), [10,20), [20,30), [30,40), [40,50)
+
+== narrowing, checked against an independent count ==
+  every record's own counterpart survives:  TRUE 
+  k agrees with the independent count:      TRUE 
+  candidates offered 200 -> surviving median 3, mean 3.15, max 7
+  uniquely identified: 15.5% of records (k = 1)
+
+== narrowing per attacker knowledge subset (200 people) ==
+  SEX                    median k = 107.0   unique =   0.0%   success = 0.0100 (random 0.0050)
+  AGE                    median k =  33.0   unique =   0.0%   success = 0.0300 (random 0.0050)
+  AREA                   median k =  20.0   unique =   0.0%   success = 0.0450 (random 0.0050)
+  AGE+SEX                median k =  17.0   unique =   0.0%   success = 0.0600 (random 0.0050)
+  AGE+AREA               median k =   5.0   unique =   4.0%   success = 0.2600 (random 0.0050)
+  AGE+AREA+SEX           median k =   3.0   unique =  15.5%   success = 0.4400 (random 0.0050)
+
+== effect of the generalisation level ==
+  AGE  level 0 = 5-year bins, 1 = 10-year bins (2 = same, no coarser node)
+  AREA level 0 = municipality, 1 = prefecture, 2 = region
+  AGE level 0, AREA level 0:  median k =   1.0  unique =  64.0%  success = 0.8150  truth kept = TRUE
+  AGE level 1, AREA level 0:  median k =   1.5  unique =  50.0%  success = 0.7150  truth kept = TRUE
+  AGE level 1, AREA level 1:  median k =   3.0  unique =  15.5%  success = 0.4200  truth kept = TRUE
+  AGE level 2, AREA level 2:  median k =   8.0  unique =   2.0%  success = 0.1800  truth kept = TRUE
+
+== existing scores on the generalised AGE column ==
+  score_num(AGE)           ERROR: non-numeric argument to binary operator
+  score_char(AGE)          success = 0.0214
+  score_containment(AGE)   success = 0.0300
+
+== all three attributes ==
+  score_char x3 (combined) success = 0.1017
+  score_containment x3     success = 0.4450
+
+  score_num() on the generalised column stops with:
+    non-numeric argument to binary operator 
+  score_char() does NOT stop -- it returns edit distances between a raw
+   number and a bracket string, which look like scores but mean nothing:
+    RAW 37   vs ANON [30,40)    -> score_char = 6
+    RAW 33   vs ANON [30,40)    -> score_char = 6
+    RAW 47   vs ANON [40,50)    -> score_char = 6
+
+== a mis-declared release is reported, not hidden ==
+  TRUTH_CONTAINED holds for 19.5% of records (should be 100%)
+  records with no surviving candidate at all: 8
+  trials still counted: 200 of 200 anon records

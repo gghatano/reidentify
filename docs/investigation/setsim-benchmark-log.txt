@@ -1,0 +1,44 @@
+R: R version 4.6.1 (2026-06-24 ucrt) 
+date: 2026-07-30 22:58:48 
+
+== sparse baskets, heavy suppression ==
+people=200 catalogue=500 basket=8 retain=0.50 reps=5
+  score_jaccard(tversky .5/2)  success=0.9600  random-baseline=0.0050
+  score_jaccard                success=0.9091  random-baseline=0.0050
+  score_jaccard(dice)          success=0.9091  random-baseline=0.0050
+  score_minhash(128)           success=0.8910  random-baseline=0.0050
+  score_jaccard(overlap)       success=0.8467  random-baseline=0.0050
+  score_dist                   success=0.0650  random-baseline=0.0050
+
+== larger baskets, light suppression ==
+people=200 catalogue=500 basket=20 retain=0.80 reps=5
+  score_jaccard                success=1.0000  random-baseline=0.0050
+  score_jaccard(dice)          success=1.0000  random-baseline=0.0050
+  score_jaccard(tversky .5/2)  success=1.0000  random-baseline=0.0050
+  score_minhash(128)           success=1.0000  random-baseline=0.0050
+  score_jaccard(overlap)       success=0.9995  random-baseline=0.0050
+  score_dist                   success=0.3010  random-baseline=0.0050
+
+== small catalogue (collisions) ==
+people=200 catalogue=60 basket=8 retain=0.50 reps=5
+  score_jaccard(tversky .5/2)  success=0.8315  random-baseline=0.0050
+  score_jaccard                success=0.6930  random-baseline=0.0050
+  score_jaccard(dice)          success=0.6930  random-baseline=0.0050
+  score_minhash(128)           success=0.6618  random-baseline=0.0050
+  score_jaccard(overlap)       success=0.5581  random-baseline=0.0050
+  score_dist                   success=0.0640  random-baseline=0.0050
+
+== categorical set column ==
+  score_dist(CHAR_DIST):     ERROR: distribution_distance()/calc_KL(): could not convert the x value "3S:cI:Es:gj:Il:jU:Ml:ol:xN" to numeric after splitting on ":" (non-numeric element(s): 3S, cI, Es, gj, Il, jU, Ml, ol, xN). This function requires a numeric distribution column (e.g. "1:2:3"); a character/categorical column was passed instead. 
+  score_jaccard(CHAR_DIST): success=1.0000
+
+== min-hash accuracy vs exact Jaccard ==
+  n_hash= 32  mean|err|=0.0370  max|err|=0.2557  cor=0.8685
+  n_hash=128  mean|err|=0.0224  max|err|=0.1461  cor=0.9401
+  n_hash=512  mean|err|=0.0085  max|err|=0.0516  cor=0.9904
+
+== LSH blocking ==
+  bands= 8  kept=0.0001 of pairs  anon without candidate=119  true pairs retained=1/120
+  bands=16  kept=0.0017 of pairs  anon without candidate=96  true pairs retained=24/120
+  bands=32  kept=0.0176 of pairs  anon without candidate=2  true pairs retained=116/120
+  bands=64  kept=0.3758 of pairs  anon without candidate=0  true pairs retained=120/120
