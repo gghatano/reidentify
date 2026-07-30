@@ -73,7 +73,7 @@ test_that("reid_confidence() is unchanged for method = 'tie' and matches match_g
 
   cf <- reid_confidence(sc, method = "tie")
   expect_equal(cf$CONFIDENCE, rep(0.5, 6))
-  expect_equal(cf$CONFIDENCE, match_greedy(sc)$CONFIDENCE)
+  expect_equal(cf$CONFIDENCE, match_greedy(sc, confidence = "tie")$CONFIDENCE)
 })
 
 test_that("all candidates identical means zero margin and zero eccentricity", {
@@ -213,13 +213,32 @@ test_that("per-record output carries the margin columns whichever measure is sel
 ## threshold filtering in the assignment layer
 ## ---------------------------------------------------------------------------
 
-test_that("match_greedy() defaults are unchanged by the new arguments", {
+test_that("the confidence default is 'margin' (#44), and 'tie' is still one argument away", {
+  ## This test used to assert the opposite -- that the default was still
+  ## "tie" -- and was inverted deliberately by #44, not because it broke.
+  ## The decision: the precision-recall sweep is a primary metric, and "tie"
+  ## gives it one threshold, so the resolution has to be on by default.
   raw <- data.frame(ROW_NUMBER = 1:6, V = c(1, 1, 2, 2, 3, 3))
   sc <- score_num(join_raw_anon_data(raw, raw), "V")
 
   expect_identical(match_greedy(sc, seed = 2),
-                   match_greedy(sc, seed = 2, confidence = "tie", min_confidence = 0))
-  expect_equal(match_greedy(sc)$CONFIDENCE, rep(0.5, 6))
+                   match_greedy(sc, seed = 2, confidence = "margin",
+                                min_confidence = 0))
+  expect_identical(match_optimal(sc, seed = 2),
+                   match_optimal(sc, seed = 2, confidence = "margin"))
+  expect_equal(reid_evaluate(sc, seeds = 1:3)$confidence, "margin")
+  expect_equal(reid_confidence(sc)$CONFIDENCE, reid_confidence(sc, "margin")$CONFIDENCE)
+
+  ## Everything ties two-for-first here, so the eccentricity is 0 where the
+  ## old default reported 0.5. Same coin flip, different summary of it.
+  expect_equal(match_greedy(sc)$CONFIDENCE, rep(0, 6))
+  expect_equal(match_greedy(sc, confidence = "tie")$CONFIDENCE, rep(0.5, 6))
+
+  ## The assignment itself is untouched by the change: only CONFIDENCE moves.
+  expect_identical(match_greedy(sc, seed = 2)$RAW_ROW_NUMBER,
+                   match_greedy(sc, seed = 2, confidence = "tie")$RAW_ROW_NUMBER)
+  expect_identical(match_greedy(sc, seed = 2)$RESULT,
+                   match_greedy(sc, seed = 2, confidence = "tie")$RESULT)
 })
 
 test_that("min_confidence declines low-confidence records without dropping their rows", {

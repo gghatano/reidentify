@@ -353,10 +353,21 @@ test_that("an unnamed target vector is read as all-numeric", {
 test_that("score_multi() is the normalised weighted sum of its parts", {
   j <- simple_join()
   parts <- normalize_scores(list(score_num(j, "A"), score_char(j, "B")), "range")
-  expect_equal(
-    score_multi(j, c(A = "num", B = "char"), weights = c(2, 5))$SCORE,
-    combine_scores(parts, weights = c(2, 5))$SCORE
+
+  ## B ranks the true record 0.523 of the way down the candidate list on this
+  ## n = 8 fixture -- no better than the 0.5 of chance -- so the #35 screen
+  ## warns. True positive, asserted rather than suppressed (#43). The test is
+  ## about the weighted-sum arithmetic, which is unaffected by the screen at
+  ## the default screen = "warn".
+  ##
+  ## The assignment is inside expect_warning() because expect_warning()
+  ## returns the condition, not the value of the expression.
+  multi <- NULL
+  expect_warning(
+    multi <- score_multi(j, c(A = "num", B = "char"), weights = c(2, 5)),
+    "show no signal"
   )
+  expect_equal(multi$SCORE, combine_scores(parts, weights = c(2, 5))$SCORE)
 })
 
 test_that("score_multi() dispatches every declared score type", {
@@ -401,10 +412,15 @@ test_that("method = 'mahalanobis' needs at least one numeric column", {
 test_that("adding a column that separates nothing leaves the combined ranking alone", {
   raw <- data.frame(ROW_NUMBER = 1:6, A = 1:6, CONST = rep(7, 6))
   j <- join_raw_anon_data(raw, raw)
-  expect_equal(
-    score_multi(j, c(A = "num"))$SCORE,
-    score_multi(j, c(A = "num", CONST = "num"))$SCORE
-  )
+
+  ## CONST is constant by construction -- the whole point of this test -- so
+  ## the #35 screen firing on it is the correct behaviour. Asserting the
+  ## warning (#43) records that the constant column is intentional and keeps
+  ## the screen under test: suppressWarnings() would hide a broken screen,
+  ## expect_warning() fails if the screen stops detecting it.
+  both <- NULL
+  expect_warning(both <- score_multi(j, c(A = "num", CONST = "num")), "CONST")
+  expect_equal(score_multi(j, c(A = "num"))$SCORE, both$SCORE)
 })
 
 test_that("score_multi() rejects malformed target specifications", {

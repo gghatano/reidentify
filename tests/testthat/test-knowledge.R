@@ -127,10 +127,23 @@ test_that("score_by_knowledge() uses only the visible columns", {
   )
 
   ## but it does move a level-S score, which can see them
-  expect_false(isTRUE(all.equal(
-    score_by_knowledge(j, dummy_qi_knowledge("S"))$SCORE,
-    score_by_knowledge(j2, dummy_qi_knowledge("S"))$SCORE
-  )))
+  ##
+  ## Reversing ANON_AGE and ANON_FINGERPRINT is exactly what makes those two
+  ## axes worthless, so scoring j2 at level S trips the #35 screen while
+  ## scoring the intact j does not. That asymmetry is the corruption this
+  ## test is performing, seen from the screen's side, and asserting it (#43)
+  ## rather than suppressing it keeps the screen under test: if it stopped
+  ## detecting a deliberately scrambled axis, this expectation would fail.
+  ##
+  ## The assignment is inside expect_warning() because expect_warning()
+  ## returns the condition, not the value of the expression.
+  s_j <- score_by_knowledge(j, dummy_qi_knowledge("S"))
+  s_j2 <- NULL
+  expect_warning(
+    s_j2 <- score_by_knowledge(j2, dummy_qi_knowledge("S")),
+    "show no signal"
+  )
+  expect_false(isTRUE(all.equal(s_j$SCORE, s_j2$SCORE)))
 })
 
 test_that("score_by_knowledge() equals the single score_*() call when only one column is visible", {
@@ -159,10 +172,13 @@ test_that("normalisation gives a column with no variation exactly zero weight", 
   k_both <- attacker_knowledge("M", quasi_identifiers = c(A = "num", CONST = "num"))
 
   ## CONST separates nothing, so adding it must not change the ranking at all
-  expect_equal(
-    score_by_knowledge(j, k_a)$SCORE,
-    score_by_knowledge(j, k_both)$SCORE
-  )
+  ##
+  ## ... and the #35 screen says so out loud. Asserting the warning (#43)
+  ## makes the intent explicit: a constant column is deliberately in this
+  ## fixture, and being told about it is the correct behaviour, not noise.
+  both <- NULL
+  expect_warning(both <- score_by_knowledge(j, k_both), "CONST")
+  expect_equal(score_by_knowledge(j, k_a)$SCORE, both$SCORE)
 })
 
 test_that("score_by_knowledge() rejects a non-knowledge object", {
@@ -205,7 +221,24 @@ test_that("success rate is non-decreasing with knowledge on an identity join too
 
 test_that("reid_knowledge_curve() reports the baseline and the spread alongside each level", {
   j <- make_generalized_join(people = 30, seed = 5)
-  curve <- do.call(reid_knowledge_curve, c(list(j, seeds = 1:10), qi_args))
+
+  ## Generalisation collapses ZIP to a single value on this fixture, so the
+  ## axis carries no information and the #35 screen warns -- once per
+  ## knowledge level, i.e. three times, because the curve scores W, M and S
+  ## separately. All three are true positives and are asserted rather than
+  ## suppressed (#43); the count is part of the assertion, so losing the
+  ## screen at any one level fails this test.
+  curve <- NULL
+  expect_warning(
+    expect_warning(
+      expect_warning(
+        curve <- do.call(reid_knowledge_curve, c(list(j, seeds = 1:10), qi_args)),
+        "ZIP"
+      ),
+      "ZIP"
+    ),
+    "ZIP"
+  )
 
   expect_setequal(
     names(curve),

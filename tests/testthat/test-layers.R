@@ -180,7 +180,12 @@ test_that("match_greedy() returns exactly (ANON_ROW_NUMBER, RAW_ROW_NUMBER, CONF
 
 test_that("match_greedy() picks the unique argmin, with CONFIDENCE 1 when there is no tie", {
   d <- make_unique_join()
-  m <- match_greedy(score_num(d, "V"))
+  ## confidence = "tie" is passed explicitly because this test is about the
+  ## 1/k measure. Since #44 the default is "margin", under which these five
+  ## records score 0.63 / 0.88 / 1.20 / 0.88 / 0.63 instead of a flat 1 --
+  ## the resolution #44 wanted, and the reason the literal below needs the
+  ## argument to keep meaning what it was written to mean.
+  m <- match_greedy(score_num(d, "V"), confidence = "tie")
 
   ## ANON is an exact copy of RAW and V is unique => everyone is found
   expect_true(all(m$RESULT))
@@ -190,11 +195,17 @@ test_that("match_greedy() picks the unique argmin, with CONFIDENCE 1 when there 
 
 test_that("match_greedy() reports CONFIDENCE = 1/k for a tie group of size k", {
   d <- make_tied_join()
-  m <- match_greedy(score_num(d, "V"))
+  m <- match_greedy(score_num(d, "V"), confidence = "tie")
 
   ## V = c(1,1,2,2,3,3): every ANON record ties with exactly one other RAW
   ## record at distance 0, so k = 2 everywhere.
   expect_equal(m$CONFIDENCE, rep(0.5, 6))
+
+  ## Under the "margin" default the same records report eccentricity 0: the
+  ## two best candidates are tied, so there is no gap to be confident about.
+  ## Both statements are true of the same coin flip; they are different
+  ## summaries of it, which is exactly what #44 changed the default over.
+  expect_equal(match_greedy(score_num(d, "V"))$CONFIDENCE, rep(0, 6))
 
   ## and over many seeds the success rate converges on that same 1/2
   rate <- mean(vapply(1:200, function(s) mean(match_greedy(score_num(d, "V"), seed = s)$RESULT), numeric(1)))
@@ -327,9 +338,12 @@ test_that("combining two attributes finds records that neither attribute finds a
   )
   d <- join_raw_anon_data(raw, raw)
 
-  m_v <- match_greedy(score_num(d, "V"), seed = 1)
-  m_w <- match_greedy(score_num(d, "W"), seed = 1)
-  m_both <- match_greedy(combine_scores(list(score_num(d, "V"), score_num(d, "W"))), seed = 1)
+  ## confidence = "tie" makes the tie sizes the assertions talk about visible;
+  ## the default has been "margin" since #44.
+  m_v <- match_greedy(score_num(d, "V"), seed = 1, confidence = "tie")
+  m_w <- match_greedy(score_num(d, "W"), seed = 1, confidence = "tie")
+  m_both <- match_greedy(combine_scores(list(score_num(d, "V"), score_num(d, "W"))),
+                         seed = 1, confidence = "tie")
 
   expect_equal(m_v$CONFIDENCE, rep(0.5, 4))
   expect_equal(m_w$CONFIDENCE, rep(0.5, 4))

@@ -273,10 +273,23 @@ test_that("the new score types are registered and dispatch correctly", {
 
 test_that("score_multi() passes the separator to the profile and span types", {
   j <- profile_join(c("1|2|3", "1|40"))
-  expect_equal(
-    score_multi(j, c(P = "span"), split = "|", normalize = "none")$SCORE,
-    score_span(j, "P", split = "|")$SCORE
+
+  ## The two-row fixture is far too small for the span of P to rank anybody
+  ## better than chance, so the #35 screen fires. That warning is a true
+  ## positive and is asserted rather than silenced (#43): this test is about
+  ## the `split` argument reaching score_span(), and if the screen ever
+  ## stopped firing on a two-row constant-ish axis, that would be a real
+  ## regression and this expectation is what would catch it.
+  ##
+  ## The assignment is inside expect_warning() because expect_warning()
+  ## returns the condition, not the value of the expression.
+  multi <- NULL
+  expect_warning(
+    multi <- score_multi(j, c(P = "span"), split = "|", normalize = "none"),
+    "show no signal"
   )
+  expect_equal(multi$SCORE, score_span(j, "P", split = "|")$SCORE)
+
   expect_error(score_multi(j, c(P = "span")), regexp = "numeric")
 })
 

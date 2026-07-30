@@ -4,13 +4,14 @@
 \alias{reid_per_anon}
 \title{per-ANON-record view of a score table}
 \usage{
-reid_per_anon(scores, confidence = c("tie", "margin"))
+reid_per_anon(scores, confidence = c("margin", "tie"))
 }
 \arguments{
 \item{scores}{a score table (see [score_num()])}
 
 \item{confidence}{which confidence measure to put in the CONFIDENCE
-column, `"tie"` (default) or `"margin"`. See [reid_confidence()].}
+column, `"margin"` (default since Issue #44) or `"tie"`. See
+[reid_confidence()].}
 }
 \value{
 a data frame with one row per ANON record and columns

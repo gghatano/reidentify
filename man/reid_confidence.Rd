@@ -4,12 +4,13 @@
 \alias{reid_confidence}
 \title{per-ANON-record confidence in the best-scoring candidate}
 \usage{
-reid_confidence(scores, method = c("tie", "margin"))
+reid_confidence(scores, method = c("margin", "tie"))
 }
 \arguments{
 \item{scores}{a score table (see [score_num()])}
 
-\item{method}{`"tie"` (default, backwards compatible) or `"margin"`}
+\item{method}{`"margin"` (default since Issue #44) or `"tie"` (the
+default up to and including Issue #16)}
 }
 \value{
 a data frame with one row per ANON record, ordered by
@@ -47,28 +48,66 @@ that record's best candidate is, under either of two measures.
 }
 }
 
-\section{Choosing a threshold}{
+\section{Eccentricity does not carry between data sets}{
 
 
-Eccentricity has no natural scale, and in particular the value 1.5 that
-Narayanan & Shmatikov use does not transfer: their scores put a true match
-several sd above the field, whereas an ordinary numeric-distance score over
-`n` candidates has an sd set by the whole population, so the winner's lead
-is a small fraction of it. Measured on a 150-person two-attribute fixture,
-eccentricity ran from a median of 0.06 up to a maximum of 0.45 across
-every noise level tried, *including* one where 98% of records were
-correctly reidentified. The measure still separated correct from incorrect
-guesses cleanly there (mean 0.167 against 0.007), which is what it is for.
+This is the single most important caveat about `"margin"`, and it applies
+with full force now that `"margin"` is the **default** (Issue #44).
+Eccentricity is a ratio to *the record's own* candidate spread, so its
+numeric range is a property of the score table, not of the risk. Measured
+maxima:
 
-So pick thresholds from the observed distribution, not from a constant:
-`stats::quantile(reid_confidence(scores, "margin")$CONFIDENCE, 0.9)`.
-[match_greedy()] and [match_optimal()] warn if `min_confidence` turns out
-to reject every record, because a tool that reports zero reidentifications
-because its threshold was on the wrong scale looks exactly like a tool
-reporting that the data is safe.
+* dense 150-person two-attribute numeric fixture: **0.45**
+* sparse transaction-style scores (Issue #23): **4.86**
 
-Both are computed on the internally minimised scale, so a "similarity"
-score table gives the same answer as the distance table it negates to.
+An order of magnitude apart, on data whose *risk* is not an order of
+magnitude apart -- the dense fixture had 98% of records correctly
+reidentified, and eccentricity still separated correct guesses from
+incorrect ones there (mean 0.167 against 0.007), which is what the measure
+is for. What it is not for is comparison across tables. So:
+
+* **A threshold is not portable.** `min_confidence = 0.3` may attack the
+  confident tenth of one table and every record of another.
+* **The constant 1.5 from Narayanan & Shmatikov does not transfer.** Their
+  sparse scores put a true match several sd above the field; on dense data
+  it rejects every record, and a tool that reports zero reidentifications
+  because its threshold was on the wrong scale looks exactly like a tool
+  reporting that the data is safe (docs/lessons-learned.md section 2).
+  [match_greedy()] and [match_optimal()] warn when that happens, but the
+  warning is a backstop, not a substitute for choosing the threshold.
+* **Two eccentricities are comparable only within one score table.** Do not
+  read "data set A reached 0.9, B only 0.4" as A being riskier; use
+  `success_analytic` or `max_risk` from [reid_evaluate()] for that, which
+  are unaffected by the choice of confidence measure.
+
+Pick thresholds from the observed distribution, never from a constant:
+
+```
+stats::quantile(reid_confidence(scores, "margin")$CONFIDENCE, 0.9)
+```
+
+`"tie"` has none of this problem -- it is a probability in `(0, 1]` and
+means the same thing everywhere -- which is the trade for its near-total
+lack of resolution. On the 150-person fixture above it took a single
+distinct value (1) across all 150 records, while `"margin"` took 150.
+}
+
+\section{Changed defaults}{
+
+
+`method` defaulted to `"tie"` when this function was added (Issue #16) and
+defaults to `"margin"` from Issue #44 onwards, as do the `confidence`
+arguments of [match_greedy()], [match_optimal()] and [reid_evaluate()].
+Only the `CONFIDENCE` column moves: `TIE_SIZE`, `MARGIN`, `SD_SCORE` and
+`ECCENTRICITY` are reported under either setting, and the risk quantities
+in [reid_evaluate()] do not depend on the choice at all. Code that compared
+`CONFIDENCE` against a literal, or that fed it to `min_confidence`, will
+see different numbers than before; pass `method = "tie"` (or
+`confidence = "tie"`) for the old behaviour. See `docs/default-changes.md`.
+
+Both measures are computed on the internally minimised scale, so a
+"similarity" score table gives the same answer as the distance table it
+negates to.
 }
 
 \section{Edge cases}{
