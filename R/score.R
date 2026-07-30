@@ -244,7 +244,9 @@ score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @inheritParams score_num
 #' @param split character separating the elements of the distribution column
-#'   (default ":")
+#'   (default ":"). Treated as a **literal string**, never as a regular
+#'   expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe to
+#'   use as separators. Must be a single non-empty string.
 #'
 #' @return a "reid_scores" table whose SCORE is [distribution_distance()]
 #'   between the RAW and ANON distributions (a distance: smaller is a better

@@ -388,10 +388,9 @@ test_that("reid_by_dist() now honours the `split` argument (it used to be accept
     ROW_NUMBER = 1:4, D = c("1:2:3", "4:5:6", "7:8:9", "1:5:9"),
     stringsAsFactors = FALSE
   )
-  ## NB: `split` is handed to strsplit() and is therefore a *regular
-  ## expression*, so a separator must not be a regex metacharacter (";" is
-  ## safe, "|" or "." would not be). That is pre-existing behaviour of
-  ## parse_dist_values(), unchanged here.
+  ## NB: `split` is handed to strsplit(fixed = TRUE) and is therefore a
+  ## *literal* string; regex metacharacters such as "|" or "." are valid
+  ## separators (Issue #32). See test-split-literal.R.
   raw_semi <- raw_colon
   raw_semi$D <- gsub(":", ";", raw_semi$D, fixed = TRUE)
 

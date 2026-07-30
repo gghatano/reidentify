@@ -179,6 +179,8 @@ score_fn_for_type <- function(type) {
 #' @param normalize `"range"` (default) rescales each column's score to
 #'   \[0, 1\] before combining; `"none"` combines the raw scores
 #' @param split separator passed to [score_dist()] for `"dist"` columns
+#'   (default ":"). Treated as a literal string, never as a regular
+#'   expression.
 #'
 #' @return a "reid_scores" table over the same candidate pairs as
 #'   `dat_raw_anon`

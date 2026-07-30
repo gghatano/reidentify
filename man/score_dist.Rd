@@ -21,7 +21,9 @@ score_dist(
 prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 
 \item{split}{character separating the elements of the distribution column
-(default ":")}
+(default ":"). Treated as a **literal string**, never as a regular
+expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe to
+use as separators. Must be a single non-empty string.}
 
 \item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
 their own name so the message points at the function the user called}
