@@ -313,7 +313,10 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #'   always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
 #'   regardless of `row_number`, so it can be passed straight into
 #'   reid_result()'s defaults even when a non-default row_number was used.
-#' @param split character for split _DIST value (default: ":")
+#' @param split character separating the elements of the `_DIST` value
+#'   (default: ":"). Treated as a **literal string**, never as a regular
+#'   expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe to
+#'   use as separators. Must be a single non-empty string.
 #' @param seed integer seed for the random tie-break among equally distant
 #'   candidates (default 0L, so a plain call is reproducible). Pass a
 #'   different value, or use reid_stability(), to see the run-to-run
@@ -353,6 +356,38 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
     return()
 }
 
+#' check that a `split` separator is a usable literal string
+#'
+#' `split` is always interpreted literally (see [parse_dist_values()]), so
+#' the only remaining traps are a non-string, a vector, `NA`, or the empty
+#' string -- `strsplit(x, "", fixed = TRUE)` splits between every character,
+#' which would silently turn "123" into c(1, 2, 3). Rejecting these loudly is
+#' preferable for a tool whose job is to *measure* risk.
+#'
+#' @param split the separator to check
+#'
+#' @return `invisible(TRUE)`; stops with an error otherwise.
+#'
+#' @keywords internal
+validate_split <- function(split) {
+  if (!is.character(split) || length(split) != 1L || is.na(split)) {
+    stop(
+      "`split` must be a single non-NA character string, used as a literal ",
+      "separator (e.g. \":\").",
+      call. = FALSE
+    )
+  }
+  if (!nzchar(split)) {
+    stop(
+      "`split` must not be the empty string: that would split the value ",
+      "between every character (\"123\" -> 1, 2, 3). Pass the literal ",
+      "separator used to build the column, e.g. \":\".",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 #' parse a "A:B:C" style distribution string into a numeric vector,
 #' stopping with a clear error instead of silently returning NA when an
 #' element cannot be interpreted as a number (phase 3 fix for the
@@ -366,7 +401,8 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
 #' `as.numeric()` parses cleanly to NA with no warning).
 #'
 #' @param str character scalar, e.g. "1:2:3"
-#' @param split split character (default ":")
+#' @param split separator, treated as a **literal string** and never as a
+#'   regular expression (default ":")
 #' @param side label used in the error message ("x" or "y")
 #'
 #' @return numeric vector parsed from `str`; stops with an error instead of
@@ -374,7 +410,24 @@ reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split 
 #'
 #' @keywords internal
 parse_dist_values <- function(str, split, side) {
-  parts <- strsplit(str, split = split)[[1]]
+  ## `fixed = TRUE`: the separator is a literal string, not a regular
+  ## expression (Issue #32). strsplit()'s default is regex, so a separator
+  ## that happens to be a metacharacter used to misbehave:
+  ##   split = "|" -- an empty alternation, so the value was split between
+  ##     every character ("123" -> 1, 2, 3). When the resulting tokens all
+  ##     parsed as numbers this produced a *silently wrong* distance: e.g.
+  ##     distribution_distance("123", "132", split = "|") was 0, i.e. two
+  ##     different amounts reported as the same distribution.
+  ##   split = "." -- matched any character, so every token was empty.
+  ##   split = "(" / "[" -- not a valid regex at all, so strsplit() warned
+  ##     "TRE pattern compilation error" and returned the input unsplit.
+  ## The remaining metacharacters usually surfaced below as a "could not
+  ## convert ... to numeric" error, but that message blames the *column*
+  ## for what is really a separator problem. paste(collapse = ) on the
+  ## producing side (transform_transaction_to_master()) has always been
+  ## literal, so this also restores symmetry between the two sides.
+  validate_split(split)
+  parts <- strsplit(str, split = split, fixed = TRUE)[[1]]
 
   had_coercion_warning <- FALSE
   values <- withCallingHandlers(
@@ -455,7 +508,10 @@ parse_dist_values <- function(str, split, side) {
 #'
 #' @param x vector
 #' @param y vector
-#' @param split split (default: ":")
+#' @param split separator between the elements of the distribution string
+#'   (default: ":"). Treated as a **literal string**, never as a regular
+#'   expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe.
+#'   Must be a single non-empty string.
 #' @param epsilon substituted by `philentropy::KL()` for a zero denominator so
 #'   the divergence stays finite (default 1e-05, philentropy's own default);
 #'   pass 0 to allow the mathematically exact `Inf`. Note philentropy applies
@@ -562,7 +618,10 @@ calc_KL <- function(x, y, split = ":", epsilon = 1e-05) {
 #'
 #' @param x vector
 #' @param y vector
-#' @param split split (default: ":")
+#' @param split separator between the elements of the distribution string
+#'   (default: ":"). Treated as a **literal string**, never as a regular
+#'   expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe.
+#'   Must be a single non-empty string.
 #' @param n_quantiles number of evenly spaced quantiles used to represent
 #'   each distribution (default 10). The returned distance is a sum over
 #'   these points, so it scales with `n_quantiles`; compare only distances

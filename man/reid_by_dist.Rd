@@ -25,7 +25,10 @@ always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
 regardless of `row_number`, so it can be passed straight into
 reid_result()'s defaults even when a non-default row_number was used.}
 
-\item{split}{character for split _DIST value (default: ":")}
+\item{split}{character separating the elements of the `_DIST` value
+(default: ":"). Treated as a **literal string**, never as a regular
+expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe to
+use as separators. Must be a single non-empty string.}
 
 \item{seed}{integer seed for the random tie-break among equally distant
 candidates (default 0L, so a plain call is reproducible). Pass a

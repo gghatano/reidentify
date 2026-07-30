@@ -27,7 +27,9 @@ column, in the order of `knowledge$visible` (default: all 1)}
 \item{normalize}{`"range"` (default) rescales each column's score to
 \[0, 1\] before combining; `"none"` combines the raw scores}
 
-\item{split}{separator passed to [score_dist()] for `"dist"` columns}
+\item{split}{separator passed to [score_dist()] for `"dist"` columns
+(default ":"). Treated as a literal string, never as a regular
+expression.}
 }
 \value{
 a "reid_scores" table over the same candidate pairs as
