@@ -26,7 +26,7 @@ a data frame with exactly one row per ANON record, ordered by
 For every ANON record this picks the RAW record with the best (by default:
 smallest) SCORE. Assignments are made independently per ANON record, so the
 same RAW record may be claimed by several ANON records -- that is what
-"greedy" means here. Enforcing a one-to-one assignment is Issue #15.
+"greedy" means here. Enforcing a one-to-one assignment is [match_optimal()].
 }
 \details{
 Ties are broken uniformly at random via [resolve_min_distance_ties()], so a

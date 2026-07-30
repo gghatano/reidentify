@@ -8,6 +8,7 @@ Description: Check the safety of Anonymized data by estimating reid-attack succe
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
+  clue,
   dplyr,
   magrittr,
   stringi,
