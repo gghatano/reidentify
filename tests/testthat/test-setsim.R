@@ -195,9 +195,14 @@ test_that("identical RAW and ANON sets are matched perfectly", {
   }, character(1))
   raw <- data.frame(ROW_NUMBER = seq_along(items), S = items,
                     stringsAsFactors = FALSE)
-  m <- match_greedy(score_jaccard(join_raw_anon_data(raw, raw), "S"))
+  sc <- score_jaccard(join_raw_anon_data(raw, raw), "S")
+  m <- match_greedy(sc)
   expect_true(all(m$RESULT))
-  expect_true(all(m$CONFIDENCE == 1))
+  ## "every best candidate is unique" is what CONFIDENCE == 1 meant here; the
+  ## default measure became "margin" in #44, so say which one is being read.
+  expect_true(all(match_greedy(sc, confidence = "tie")$CONFIDENCE == 1))
+  ## and under the default every winner is clear of its runner-up
+  expect_true(all(m$CONFIDENCE > 0))
 })
 
 ## ---------------------------------------------------------------------------

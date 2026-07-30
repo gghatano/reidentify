@@ -380,7 +380,10 @@ test_that("match_greedy reports CONFIDENCE = 1/k on containment scores", {
   anon <- data.frame(ROW_NUMBER = 1:6,
                      AGE = c("20s", "20s", "30s", "30s", "30s", "50s"),
                      stringsAsFactors = FALSE)
-  m <- match_greedy(score_containment(join_raw_anon_data(raw, anon), "AGE"))
+  ## confidence = "tie" is the 1/k measure this test is named after; the
+  ## default has been "margin" since #44.
+  m <- match_greedy(score_containment(join_raw_anon_data(raw, anon), "AGE"),
+                    confidence = "tie")
 
   expect_equal(m$CONFIDENCE, c(1 / 2, 1 / 2, 1 / 3, 1 / 3, 1 / 3, 1))
   expect_true(m$RESULT[m$ANON_ROW_NUMBER == 6])
@@ -521,9 +524,13 @@ test_that("when nothing survives, the attack degenerates to guessing rather than
   s <- score_containment(d, "AREA")
   expect_true(all(s$SCORE == 1))
 
-  m <- match_greedy(s)
+  m <- match_greedy(s, confidence = "tie")
   expect_equal(nrow(m), 4L)
   expect_equal(m$CONFIDENCE, rep(1 / 4, 4))
+
+  ## Under the "margin" default (#44) an all-tied record reports eccentricity
+  ## 0 instead: a four-way coin flip has no gap to be confident about.
+  expect_equal(match_greedy(s)$CONFIDENCE, rep(0, 4))
 })
 
 ## ---------------------------------------------------------------------------
