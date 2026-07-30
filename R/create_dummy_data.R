@@ -89,6 +89,104 @@ create_dummy_transaction_data <- function(people = 100, size = 2) {
 }
 
 
+#' create dummy master data with an explicit quasi-identifier structure
+#'
+#' [create_dummy_master_data()] produces columns that are all equally
+#' "identifying", so there is nothing for an attacker knowledge model
+#' (Issue #13) to withhold. This generates data in which the columns fall into
+#' the three groups the W / M / S levels distinguish, with deliberately
+#' different discriminating power:
+#'
+#' \describe{
+#'   \item{quasi-identifiers}{`ZIP` (very coarse -- roughly `people / 5`
+#'     distinct values, so heavy collisions), `AGE` (moderately coarse) and
+#'     `SEX` (2 values, almost no information on its own)}
+#'   \item{behaviour}{`VISIT_COUNT`, `SPEND_MEAN` and the colon-joined
+#'     `SPEND_DIST`, each a rounded summary rather than an exact value}
+#'   \item{identifier}{`FINGERPRINT`, a continuous value that is unique with
+#'     probability 1 -- i.e. the RAW record itself}
+#' }
+#'
+#' A level-W attacker restricted to `ZIP` should therefore do only slightly
+#' better than guessing, while a level-S attacker holding `FINGERPRINT`
+#' should identify essentially everybody.
+#'
+#' @param people number of people
+#' @param seed integer seed, or NULL to use the ambient RNG stream. Defaults
+#'   to NULL so the function behaves like the other generators; pass a value
+#'   to make a fixture self-contained.
+#'
+#' @return a tibble with columns ROW_NUMBER, ID, AGE, ZIP, SEX, VISIT_COUNT,
+#'   SPEND_MEAN, SPEND_DIST and FINGERPRINT, one row per person.
+#'
+#' @seealso [dummy_qi_knowledge()], which declares the matching
+#'   [attacker_knowledge()] specification for this data.
+#'
+#' @examples
+#' create_dummy_qi_data(people = 10, seed = 1)
+#'
+#' @importFrom tibble tibble
+#' @importFrom stats runif
+#' @export
+#' @encoding UTF-8
+create_dummy_qi_data <- function(people = 100, seed = NULL) {
+  if (!is.numeric(people) || length(people) != 1 || is.na(people) || people < 1) {
+    stop("people is integer ( > 0)")
+  }
+  people <- as.integer(people)
+
+  with_local_seed(seed, {
+    n_zip <- max(2L, as.integer(ceiling(people / 5)))
+
+    visit_count <- sample.int(20L, size = people, replace = TRUE)
+    spend_dist <- vapply(
+      visit_count,
+      function(k) paste(round(runif(k, 0, 100)), collapse = ":"),
+      character(1)
+    )
+    spend_mean <- vapply(
+      strsplit(spend_dist, ":", fixed = TRUE),
+      function(v) round(mean(as.numeric(v)), 1),
+      numeric(1)
+    )
+
+    tibble::tibble(
+      ROW_NUMBER = seq_len(people),
+      ID = seq_len(people) + 10000L,
+      AGE = sample(20:79, size = people, replace = TRUE),
+      ZIP = sprintf("Z%03d", sample.int(n_zip, size = people, replace = TRUE)),
+      SEX = sample(c("M", "F"), size = people, replace = TRUE),
+      VISIT_COUNT = visit_count,
+      SPEND_MEAN = spend_mean,
+      SPEND_DIST = spend_dist,
+      FINGERPRINT = runif(people)
+    )
+  })
+}
+
+#' the attacker knowledge specification that matches create_dummy_qi_data()
+#'
+#' @param level one of "W", "M", "S"
+#' @param ... further arguments passed to [attacker_knowledge()]
+#'
+#' @return an [attacker_knowledge()] object for the columns
+#'   [create_dummy_qi_data()] generates
+#'
+#' @examples
+#' dummy_qi_knowledge("W")
+#'
+#' @export
+dummy_qi_knowledge <- function(level = c("W", "M", "S"), ...) {
+  attacker_knowledge(
+    level,
+    quasi_identifiers = c(ZIP = "char", AGE = "num", SEX = "char"),
+    behavior = c(VISIT_COUNT = "num", SPEND_MEAN = "num", SPEND_DIST = "dist"),
+    identifiers = c(FINGERPRINT = "num"),
+    weak_subset = "ZIP",
+    ...
+  )
+}
+
 #' create reid-format data from raw and anon data frame
 #'
 #' @param raw  raw data frame
