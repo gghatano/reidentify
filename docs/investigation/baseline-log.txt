@@ -1,0 +1,538 @@
+
+
+========================================
+== A. 環境
+========================================
+R version 4.6.1 (2026-06-24 ucrt) 
+  dplyr        1.2.1
+  magrittr     2.0.5
+  openssl      2.4.2
+  stringi      1.8.7
+  tibble       3.3.1
+  philentropy  0.10.0
+  testthat     3.3.2
+  roxygen2     8.0.0
+  pkgload      1.5.3
+devtools:  NOT INSTALLED 
+
+
+========================================
+== B. ソースからのパッケージ読み込み
+========================================
+load_all OK. exported: create_dummy_master_data, create_dummy_transaction_data, join_raw_anon_data, reid_by_char, reid_by_dist, reid_by_num, reid_by_num_rank, reid_result, transform_transaction_to_master 
+
+
+========================================
+== C. #6 NAMESPACE import 漏れ — dplyr/magrittr を attach しない状態
+========================================
+search(): .GlobalEnv devtools_shims package:reidentify package:stats package:graphics package:grDevices package:utils package:datasets package:methods Autoloads package:base 
+NAMESPACE の imports に含まれるか:
+  pull     : NOT imported
+  %<>%     : NOT imported
+  n        : NOT imported
+  select   : NOT imported
+  arrange  : NOT imported
+  all_of   : NOT imported
+  median   : NOT imported (stats)
+Warning: `data_frame()` was deprecated in tibble 1.1.0.
+ℹ Please use `tibble()` instead.
+ℹ The deprecated feature was likely used in the reidentify package.
+  Please report the issue to the authors.
+
+---- reid_result() -- pull() を使用 (attach 無し) ----
+!! ERROR: could not find function "pull"
+
+---- reid_by_char() -- pull() を使用 (attach 無し) ----
+!! ERROR: could not find function "pull"
+
+---- reid_by_num_rank() -- %<>% を使用 (attach 無し) ----
+!! ERROR: could not find function "%<>%"
+
+---- transform_transaction_to_master() -- n(), median を使用 (attach 無し) ----
+!! ERROR: ℹ In argument: `ROWCOUNT = n()`.
+ℹ In group 1: `ID = 1`.
+Caused by error in `n()`:
+! could not find function "n"
+
+
+========================================
+== D. dplyr / magrittr を attach した状態 (dev.R 相当) での再実行
+========================================
+search(): .GlobalEnv package:magrittr package:dplyr devtools_shims package:reidentify package:stats package:graphics package:grDevices package:utils package:datasets package:methods Autoloads package:base 
+
+---- reid_result() (attach 有り) ----
+-> VALUE:
+[1] " method: probe , success / trial :  2 / 3"
+
+
+========================================
+== E. 評価用データの作成 (master 形式)
+========================================
+create_dummy_master_data の返り値クラス: tbl_df/tbl/data.frame 
+  ROW_NUMBER    ID       NUM BIN CHAR
+1          1 10001 0.3329281   1   65
+2          2 10002 0.5551039   1   yp
+3          3 10003 0.3273700   0   tM
+cross join 後の次元: 2500 x 10 
+列名: RAW_ROW_NUMBER, RAW_ID, RAW_NUM, RAW_BIN, RAW_CHAR, ANON_ROW_NUMBER, ANON_ID, ANON_NUM, ANON_BIN, ANON_CHAR 
+
+
+========================================
+== F. 各 reid_by_* の実行 (attach 有り)
+========================================
+
+---- reid_by_num(target = 'NUM') ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 50x6 
+   names: RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW, ANON, DISTANCE, RESULT 
+  RAW_ROW_NUMBER ANON_ROW_NUMBER       RAW      ANON     DISTANCE RESULT
+1              9               1 0.3380099 0.3392494 0.0012394785  FALSE
+2              2               2 0.5551039 0.5559105 0.0008066662   TRUE
+3             28               3 0.3308208 0.3298252 0.0009956563  FALSE
+   rows: 50  成功: 21 
+     method: num , success / trial :  21 / 50 
+   選択された列: RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW, ANON, DISTANCE, RESULT 
+
+---- reid_by_num_rank(target = 'NUM') ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 50x8 
+   names: ANON_ROW_NUMBER, RAW_ROW_NUMBER, ANON_NUM, RAW_NUM, ANON_RANK, RAW_RANK, DISTANCE, RESULT 
+  ANON_ROW_NUMBER RAW_ROW_NUMBER  ANON_NUM   RAW_NUM ANON_RANK RAW_RANK
+1               1              1 0.3392494 0.3329281        19       19
+2               2              2 0.5559105 0.5551039        29       29
+3               3              5 0.3298252 0.3161214        16       16
+  DISTANCE RESULT
+1        0   TRUE
+2        0   TRUE
+3        0  FALSE
+   rows: 50  成功: 40 
+   選択された列: ANON_ROW_NUMBER, RAW_ROW_NUMBER, ANON_NUM, RAW_NUM, ANON_RANK, RAW_RANK, DISTANCE, RESULT 
+
+---- reid_by_char(target = 'CHAR') ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 50x12 
+   names: RAW_ROW_NUMBER, RAW_ID, RAW_NUM, RAW_BIN, RAW_CHAR, ANON_ROW_NUMBER, ANON_ID, ANON_NUM, ANON_BIN, ANON_CHAR, DISTANCE, RESULT 
+  RAW_ROW_NUMBER RAW_ID   RAW_NUM RAW_BIN RAW_CHAR ANON_ROW_NUMBER ANON_ID
+1              1  10001 0.3329281       1       65               1   10001
+2              2  10002 0.5551039       1       yp               2   10002
+3              3  10003 0.3273700       0       tM               3   10003
+   ANON_NUM ANON_BIN ANON_CHAR DISTANCE RESULT
+1 0.3392494        1        65        0   TRUE
+2 0.5559105        1        yp        0   TRUE
+3 0.3298252        0        tM        0   TRUE
+   rows: 50  成功: 49 
+
+
+========================================
+== G. transaction -> master と reid_by_dist
+========================================
+
+---- transform_transaction_to_master() ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 30x10 
+   names: ID, NUM_STATIC, MAX, MEAN, MEDIAN, MIN, NUM_DYNAMIC_DIST, CHAR_DIST, ROWCOUNT, ROW_NUMBER 
+  ID NUM_STATIC       MAX      MEAN    MEDIAN        MIN
+1 27         10 0.9537668 0.4972983 0.4925763 0.09085895
+2 28         10 0.9885454 0.7005860 0.7642447 0.12276094
+3 15         10 0.9212085 0.3659244 0.2325117 0.01811359
+                                                                                                                                                      NUM_DYNAMIC_DIST
+1                                                         0.0908589484170079:0.109464172273874:0.257927562342957:0.727224954869598:0.844547449378297:0.953766816062853
+2                       0.12276094336994:0.530508977593854:0.634505551075563:0.722146524814889:0.806342955911532:0.830646621296182:0.969230741960928:0.988545425236225
+3 0.0181135884486139:0.0182828216347843:0.0537650319747627:0.221352465450764:0.232511705486104:0.370498566655442:0.652495602844283:0.805091724498197:0.921208515763283
+                   CHAR_DIST ROWCOUNT ROW_NUMBER
+1          0k:9Q:Ak:Eo:tb:xM        6          1
+2    8N:gh:I6:mf:Ns:O0:uZ:xr        8          2
+3 fn:Gi:im:Nj:Po:RL:SY:yx:ZE        9          3
+   dim: 30 x 10 
+   列名: ID, NUM_STATIC, MAX, MEAN, MEDIAN, MIN, NUM_DYNAMIC_DIST, CHAR_DIST, ROWCOUNT, ROW_NUMBER 
+   期待した列 (ID, NUM_STATIC, *_MAX/_MEAN/_MEDIAN/_MIN, *_DIST, ROWCOUNT, ROW_NUMBER) と一致するか要確認
+  ID NUM_STATIC       MAX      MEAN    MEDIAN        MIN
+1 27         10 0.9537668 0.4972983 0.4925763 0.09085895
+2 28         10 0.9885454 0.7005860 0.7642447 0.12276094
+3 15         10 0.9212085 0.3659244 0.2325117 0.01811359
+                                                                                                                                                      NUM_DYNAMIC_DIST
+1                                                         0.0908589484170079:0.109464172273874:0.257927562342957:0.727224954869598:0.844547449378297:0.953766816062853
+2                       0.12276094336994:0.530508977593854:0.634505551075563:0.722146524814889:0.806342955911532:0.830646621296182:0.969230741960928:0.988545425236225
+3 0.0181135884486139:0.0182828216347843:0.0537650319747627:0.221352465450764:0.232511705486104:0.370498566655442:0.652495602844283:0.805091724498197:0.921208515763283
+                   CHAR_DIST ROWCOUNT ROW_NUMBER
+1          0k:9Q:Ak:Eo:tb:xM        6          1
+2    8N:gh:I6:mf:Ns:O0:uZ:xr        8          2
+3 fn:Gi:im:Nj:Po:RL:SY:yx:ZE        9          3
+
+---- reid_by_dist(target = 'NUM_DYNAMIC_DIST') ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 30x4 
+   names: RAW_ROW_NUMBER, ANON_ROW_NUMBER, DISTANCE, RESULT 
+  RAW_ROW_NUMBER ANON_ROW_NUMBER DISTANCE RESULT
+1              1               1        0   TRUE
+2              2               2        0   TRUE
+3              3               3        0   TRUE
+
+
+========================================
+== H. 指摘 1 (#2) tidyeval — 列名変数がどう解決されるか
+========================================
+
+---- dplyr::select(RAW = `raw_target`) が env の変数を見に行くか ----
+
+---- 最小再現: select(RAW = `raw_target`) ----
+!! WARNING: Using an external vector in selections was deprecated in tidyselect 1.1.0.
+ℹ Please use `all_of()` or `any_of()` instead.
+  # Was:
+  data %>% select(raw_target)
+
+  # Now:
+  data %>% select(all_of(raw_target))
+
+See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+-> VALUE:
+   class: data.frame  dim: 2500x1 
+   names: RAW 
+        RAW
+1 0.3329281
+2 0.5551039
+3 0.3273700
+
+---- 列名そのものが 'raw_target' の場合に何が起きるか（変数より列が優先されるはず） ----
+
+---- 同名列が存在する場合 ----
+-> VALUE:
+   class: data.frame  dim: 2500x1 
+   names: RAW 
+   RAW
+1 -999
+2 -999
+3 -999
+
+---- reid_by_num の実際の出力: RAW 列は RAW_NUM か、それとも罠列か ----
+
+---- 罠列付きデータで reid_by_num ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 50x6 
+   names: RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW, ANON, DISTANCE, RESULT 
+  RAW_ROW_NUMBER ANON_ROW_NUMBER  RAW      ANON DISTANCE RESULT
+1              1               1 -999 0.3392494 999.3392   TRUE
+2              1               2 -999 0.5559105 999.5559  FALSE
+3              1               3 -999 0.3298252 999.3298  FALSE
+
+---- transform_transaction_to_master の select(`ID`, `STATIC_NUM`, `STATIC_CHAR`) ----
+
+---- STATIC_CHAR = NULL のとき NULL 変数を select できるか ----
+!! WARNING: Using an external vector in selections was deprecated in tidyselect 1.1.0.
+ℹ Please use `all_of()` or `any_of()` instead.
+  # Was:
+  data %>% select(STATIC_NUM)
+
+  # Now:
+  data %>% select(all_of(STATIC_NUM))
+
+See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+!! WARNING: Using an external vector in selections was deprecated in tidyselect 1.1.0.
+ℹ Please use `all_of()` or `any_of()` instead.
+  # Was:
+  data %>% select(STATIC_CHAR)
+
+  # Now:
+  data %>% select(all_of(STATIC_CHAR))
+
+See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 150x2 
+   names: ID, NUM_STATIC 
+  ID NUM_STATIC
+1 27         10
+2 28         10
+3 15         10
+
+
+========================================
+== I. 指摘 2 (#3) タイブレークの行順依存
+========================================
+
+---- RAW_ROW_NUMBER == RAW_ROW_NUMBER[1] の挙動 ----
+
+---- 同点が多発するデータ (BIN 列: 値が 3 種しかない) で reid_by_num ----
+   rows: 50  成功: 3 / 50 
+   成功率: 0.06 
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 50x6 
+   names: RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW, ANON, DISTANCE, RESULT 
+  RAW_ROW_NUMBER ANON_ROW_NUMBER RAW ANON DISTANCE RESULT
+1              1               1   1    1        0   TRUE
+2              1               2   1    1        0  FALSE
+3              3               3   0    0        0   TRUE
+
+---- join_raw_anon_data (merge) の行順はどうなっているか ----
+   先頭 12 行の (RAW_ROW_NUMBER, ANON_ROW_NUMBER):
+   RAW_ROW_NUMBER ANON_ROW_NUMBER
+1               1               1
+2               2               1
+3               3               1
+4               4               1
+5               5               1
+6               6               1
+7               7               1
+8               8               1
+9               9               1
+10             10               1
+11             11               1
+12             12               1
+   ANON_ROW_NUMBER==1 の群内の RAW_ROW_NUMBER 並び (先頭10): 1 2 3 4 5 6 7 8 9 10 
+   その群が昇順に並んでいるか: TRUE 
+
+---- 同点集合の大きさ（BIN 列） ----
+   ANON 1 件あたりの最小距離同点数: min = 1  median = 27  max = 27 
+   1/同点数 の平均（＝ランダムタイブレークの理論成功率）: 0.06 
+
+---- 行順を無作為に並べ替えると結果が変わるか（変われば行順依存＝再現） ----
+   元の行順（merge 出力そのまま）での成功率: 0.06 
+   行順シャッフル 200 回: 平均 = 0.0576  sd = 0.0232  範囲 = [ 0.02 , 0.14 ]
+   結果が行順で変動するか（＝再現の可否）: TRUE 
+   元の行順が上位何%点か: 73 %
+
+---- RAW_ROW_NUMBER 昇順に並べた場合（＝タイブレークが常に最小 RAW を選ぶ） ----
+   RAW 昇順: 0.06 
+   RAW 降順: 0.06 
+   → 同一データ・同一手法なのに並べ方だけで成功率が変わるなら行順依存は確定
+
+---- ランダムタイブレークだったら成功率はいくつになるか（ベースライン） ----
+   ランダムタイブレーク 200 シード: 平均 = 0.0582  sd = 0.0275 
+   ★ バイアス = 元の行順 - ランダム平均 = 0.0018 
+   ★ バイアス = RAW昇順  - ランダム平均 = 0.0018 
+
+---- people を増やして再測定（人数依存の確認） ----
+   people=100  元順=0.0300  RAW昇順=0.0300  ランダム=0.0306  バイアス(元順-乱)=-0.0006
+   people=300  元順=0.0100  RAW昇順=0.0100  ランダム=0.0115  バイアス(元順-乱)=-0.0015
+
+---- ROW_NUMBER と ID の相関（ダミーデータ生成の性質） ----
+   create_dummy_master_data: ID = ROW_NUMBER + 10000 →完全相関
+   cor(ROW_NUMBER, ID) = 1 
+   ただし reid_by_* が突合に使うのは ROW_NUMBER のみ（ID は使っていない）点に注意
+
+
+========================================
+== J. 指摘 3 (#4) calc_KL の正規化
+========================================
+
+---- calc_KL の実装内部でどう正規化されているか ----
+   x = 1 2 3 4  y = 2 2 2 2 
+   max 正規化 (現行): x/max(x) = 0.25 0.5 0.75 1  合計 = 2.5 
+                      y/max(y) = 1 1 1 1  合計 = 4 
+   sum 正規化 (正):   x/sum(x) = 0.1 0.2 0.3 0.4  合計 = 1 
+                      y/sum(y) = 0.25 0.25 0.25 0.25  合計 = 1 
+   正しい KL(x||y) の手計算値 (log2) = 0.1535607 
+   同 (自然対数) = 0.1064401 
+
+---- calc_KL(x, y) の実行 ----
+Metric: 'kullback-leibler' with unit: 'log2'; comparing: 2 vectors
+-> VALUE:
+kullback-leibler 
+       -1.311278 
+
+---- スケール不変性: y を 10 倍しても KL は変わらないはず（確率分布は同じ） ----
+
+---- calc_KL('1:2:3:4', '20:20:20:20') ----
+Metric: 'kullback-leibler' with unit: 'log2'; comparing: 2 vectors
+-> VALUE:
+kullback-leibler 
+       -1.311278 
+   （正しい KL なら上と同じ 0.1535607 になるはず）
+
+---- 自分自身との KL は 0 であるべき ----
+
+---- calc_KL('1:2:3:4', '1:2:3:4') ----
+Metric: 'kullback-leibler' with unit: 'log2'; comparing: 2 vectors
+-> VALUE:
+kullback-leibler 
+               0 
+
+---- philentropy::KL に総和 1 でないベクトルを渡すと何が起きるか ----
+
+---- philentropy::KL(rbind(c(.25,.5,.75,1), c(1,1,1,1))) ----
+Metric: 'kullback-leibler' with unit: 'log2'; comparing: 2 vectors
+-> VALUE:
+kullback-leibler 
+       -1.311278 
+
+
+========================================
+== K. 指摘 4 (#5) distribution_distance の長さ合わせ
+========================================
+
+---- 件数のみ異なり分布形状が同一のペア ----
+   同一分布から 10 点 / 20 点 / 40 点を取ったもの（形状は同じ）
+
+---- distribution_distance(a10, a10) ----
+-> VALUE:
+[1] 0
+
+---- distribution_distance(a10, a20) ----
+-> VALUE:
+[1] 0.3847672
+
+---- distribution_distance(a10, a40) ----
+-> VALUE:
+[1] 1.678924
+   形状が同じなら距離は 0 付近であるべき。長さ差で増えるなら指摘は再現
+
+---- 形状が違うが件数が同じペアと比較する ----
+
+---- distribution_distance(a10, b10) 形状が大きく違う / 件数同じ ----
+-> VALUE:
+[1] 363.378
+
+---- パディング側だけ sort されて非パディング側は sort されない件 ----
+
+---- distribution_distance('3:1:2', '1:2:3') 未ソート入力 ----
+-> VALUE:
+[1] 6
+
+---- distribution_distance('1:2:3', '3:1:2') 未ソート入力 ----
+-> VALUE:
+[1] 6
+   対称なら同値になるはず
+
+---- `.**2` の magrittr パイプが意図どおり動くか ----
+
+---- distribution_distance('1:2', '3:4') = (1-3)^2+(2-4)^2 = 8 のはず ----
+-> VALUE:
+[1] 8
+
+
+========================================
+== L. 指摘 5 (#6) NAMESPACE import 漏れ — R CMD check 相当の静的確認
+========================================
+
+---- R/*.R で使われている非修飾関数のうち NAMESPACE に無いもの ----
+
+  [pull] NAMESPACE: *** NOT imported *** / 使用箇所 5 件
+       reidentify.R:48:     pull(`result`) 
+       reidentify.R:79:     pull(`raw_target`) %>% 
+       reidentify.R:82:     pull(`anon_target`) %>% 
+       reidentify.R:128:     pull(`raw_target`) %>% 
+       reidentify.R:131:     pull(`anon_target`) %>% 
+
+  [%<>%] NAMESPACE: *** NOT imported *** / 使用箇所 2 件
+       reidentify.R:228:   dat_anon_rank %<>% 
+       reidentify.R:236:   dat_raw_rank %<>% 
+
+  [n] NAMESPACE: *** NOT imported *** / 使用箇所 1 件
+       transform_transaction_to_master.R:51:     dplyr::summarise(ROWCOUNT = n()) %>% 
+
+  [median] NAMESPACE: *** NOT imported *** / 使用箇所 1 件
+       transform_transaction_to_master.R:36:     dplyr::summarise_all(list(MAX = max, MEAN = mean, MEDIAN = median, MIN = min)) %>% 
+
+
+========================================
+== M. 指摘外: tibble::data_frame() の非推奨 (#9)
+========================================
+
+---- create_dummy_master_data(people = 5) ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 5x5 
+   names: ROW_NUMBER, ID, NUM, BIN, CHAR 
+  ROW_NUMBER    ID       NUM BIN CHAR
+1          1 10001 0.9784812   1   7p
+2          2 10002 0.6511852   0   Gw
+3          3 10003 0.8057917   1   e8
+
+---- tibble::data_frame(a = 1) 直接呼び出し ----
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 1x1 
+   names: a 
+  a
+1 1
+
+
+========================================
+== O. 追加調査（実行して初めて分かった事象）
+========================================
+
+---- O-1. distribution_distance: 同じ多重集合を順序違いで渡すと 0 にならない ----
+   '3:1:2' と '1:2:3' は同じ多重集合。距離は 0 であるべき
+
+---- distribution_distance('3:1:2', '1:2:3') ----
+-> VALUE:
+[1] 6
+   → 長さが等しいと sort が一切走らないため、入力の並び順に依存する
+   参考: 長さが違う場合はパディング側だけ sort される（非対称な処理）
+
+---- distribution_distance('3:1:2', '9:1') ----
+-> VALUE:
+[1] 69
+
+---- distribution_distance('9:1', '3:1:2') ----
+-> VALUE:
+[1] 69
+   → 上 2 つが一致しなければ距離関数として対称性を満たしていない
+
+---- O-2. distribution_distance: 件数差が距離に占める寄与を実データで測る ----
+  n_x n_y len_diff  distance
+1  10  10        0 0.1686840
+2  10  11        1 0.1033465
+3  10  13        3 0.1993307
+4  10  16        6 0.5689768
+5  10  20       10 0.9517657
+6  10  30       20 1.4616625
+7  10  50       40 3.8722399
+   → 同一母集団からの標本なので分布形状は同じ。距離が len_diff とともに増えるなら混入は再現
+   相関 cor(len_diff, distance) = 0.99 
+
+---- O-3. calc_KL: 非負性が破れるか（KL は定義上必ず >= 0） ----
+   ランダムな分布ペア 50 組: 負の値が 11 件 /50
+   値域: [ -1.5949 , 4.6112 ]
+   → 1 件でも負なら KL ダイバージェンスの定義（非負性）を満たしていない
+
+---- O-4. calc_KL: max 正規化と sum 正規化で候補の順位が変わるか（再識別への実害） ----
+ cand calc_KL_current KL_sum_norm rank_current rank_true
+    1          2.6300      0.5374            7         7
+    2          0.1017      0.2145            5         4
+    3          2.4413      0.4428            6         6
+    4         -0.5437      0.1942            2         2
+    5          2.7005      0.9392            8         8
+    6         -0.9780      0.1943            1         3
+    7         -0.1617      0.0902            4         1
+    8         -0.1836      0.3109            3         5
+   Spearman 相関 = 0.7857 
+   argmin が一致するか: FALSE 
+
+---- O-5. reid_by_dist にはタイブレーク処理が無い（他の reid_by_* と非対称） ----
+   reid_by_num/char/num_rank: filter(RAW_ROW_NUMBER == RAW_ROW_NUMBER[1]) あり
+   reid_by_dist            : 無し → 同点時に ANON 1 件が複数行になりうる
+
+---- 同点を強制した入力で reid_by_dist の行数を確認 ----
+   ANON 件数 = 20  / 出力行数 = 200  / ANON 重複あり = TRUE 
+   reid_result の分母:  method: dist , success / trial :  20 / 200 
+-> VALUE:
+   class: tbl_df/tbl/data.frame  dim: 200x4 
+   names: RAW_ROW_NUMBER, ANON_ROW_NUMBER, DISTANCE, RESULT 
+  RAW_ROW_NUMBER ANON_ROW_NUMBER DISTANCE RESULT
+1              1               1        0   TRUE
+2              3               1        0  FALSE
+3              5               1        0  FALSE
+
+---- O-6. transform_transaction_to_master の集計列名（DYNAMIC_NUM が 1 列か複数かで変わる） ----
+
+---- DYNAMIC_NUM が 1 列のとき ----
+   列名: ID, NUM_STATIC, MAX, MEAN, MEDIAN, MIN, NUM_DYNAMIC_DIST, CHAR_DIST, ROWCOUNT, ROW_NUMBER 
+
+---- DYNAMIC_NUM が 2 列のとき ----
+   列名: ID, NUM_STATIC, NUM_DYNAMIC_MAX, NUM_DYNAMIC_2_MAX, NUM_DYNAMIC_MEAN, NUM_DYNAMIC_2_MEAN, NUM_DYNAMIC_MEDIAN, NUM_DYNAMIC_2_MEDIAN, NUM_DYNAMIC_MIN, NUM_DYNAMIC_2_MIN, NUM_DYNAMIC_DIST, NUM_DYNAMIC_2_DIST, CHAR_DIST, ROWCOUNT, ROW_NUMBER 
+   → 1 列のときは MAX/MEAN/MEDIAN/MIN、2 列のときは <col>_MAX ... と命名規則が変わる
+   （R/tmp/dev.R は NUM_DYNAMIC_MEAN を前提にしている＝1 列指定では動かない）
+
+---- O-7. reid_by_char / reid_by_num の返り値スキーマの不一致 ----
+   reid_by_num      : RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW, ANON, DISTANCE, RESULT 
+   reid_by_char     : RAW_ROW_NUMBER, RAW_ID, RAW_NUM, RAW_BIN, RAW_CHAR, ANON_ROW_NUMBER, ANON_ID, ANON_NUM, ANON_BIN, ANON_CHAR, DISTANCE, RESULT 
+   reid_by_num_rank : ANON_ROW_NUMBER, RAW_ROW_NUMBER, ANON_NUM, RAW_NUM, ANON_RANK, RAW_RANK, DISTANCE, RESULT 
+   → reid_by_char は入力列を全部持ち回るため列構成が入力依存
+
+---- O-8. R/tmp/dev.R は現状そのままでは動かない（関数名の誤り） ----
+   dev.R:56 は join_row_anon_data(...) を呼ぶが、実際の関数名は join_raw_anon_data
+   exists('join_row_anon_data') = FALSE 
+
+
+========================================
+== P. 終了
+========================================
+done

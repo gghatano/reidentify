@@ -5,8 +5,7 @@
 \alias{join_raw_anon_data}
 \title{create reid-format data from raw and anon data frame}
 \usage{
-join_raw_anon_data(raw, anon, raw_header = "RAW_",
-  anon_header = "ANON_")
+join_raw_anon_data(raw, anon, raw_header = "RAW_", anon_header = "ANON_")
 }
 \arguments{
 \item{raw}{raw data frame}
@@ -16,6 +15,11 @@ join_raw_anon_data(raw, anon, raw_header = "RAW_",
 \item{raw_header}{strings which is added for columns from raw data}
 
 \item{anon_header}{strings which is added for columns from anon data}
+}
+\value{
+a data frame: the cross join (every RAW row paired with every
+  ANON row) of `raw` and `anon`, with their column names prefixed by
+  `raw_header`/`anon_header` respectively.
 }
 \description{
 create reid-format data from raw and anon data frame

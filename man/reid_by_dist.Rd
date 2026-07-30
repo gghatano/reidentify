@@ -2,20 +2,42 @@
 % Please edit documentation in R/reidentify.R
 \name{reid_by_dist}
 \alias{reid_by_dist}
-\title{reidentify by single list column (list A, B, C is expressed by "A:B:C")}
+\title{reidentify by distribution column (list A, B, C is expressed by "A:B:C")}
 \usage{
-reid_by_dist(dat_raw_anon, target, row_number = "ROW_NUMBER",
-  split = ":")
+reid_by_dist(
+  dat_raw_anon,
+  target,
+  row_number = "ROW_NUMBER",
+  split = ":",
+  seed = 0L
+)
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
 
 \item{target}{target column}
 
-\item{row_number}{row number column name(default: "ROW_NUMBER")}
+\item{row_number}{name of the row-number column *before* the RAW_/ANON_
+prefixing done by join_raw_anon_data() (default: "ROW_NUMBER"), i.e.
+dat_raw_anon is expected to contain columns
+paste0("RAW_", row_number) / paste0("ANON_", row_number). The output
+always names these two columns RAW_ROW_NUMBER / ANON_ROW_NUMBER
+regardless of `row_number`, so it can be passed straight into
+reid_result()'s defaults even when a non-default row_number was used.}
 
 \item{split}{character for split _DIST value (default: ":")}
+
+\item{seed}{integer seed for the random tie-break among equally distant
+candidates (default 0L, so a plain call is reproducible). Pass a
+different value, or use reid_stability(), to see the run-to-run
+spread. NULL uses the ambient RNG stream instead.}
+}
+\value{
+a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
+  DISTANCE and RESULT (logical): exactly one row per ANON record, the
+  RAW record closest in `target` by distribution distance, and whether
+  that guess was correct.
 }
 \description{
-reidentify by single list column (list A, B, C is expressed by "A:B:C")
+reidentify by distribution column (list A, B, C is expressed by "A:B:C")
 }

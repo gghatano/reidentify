@@ -4,9 +4,13 @@
 \alias{reid_result}
 \title{craete text of reidentify result ( method: ******, success/trial : ***** / ******)}
 \usage{
-reid_result(dat_reid_result, raw_row_number = "RAW_ROW_NUMBER",
-  anon_row_number = "ANON_ROW_NUMBER", result = "RESULT",
-  method = NULL)
+reid_result(
+  dat_reid_result,
+  raw_row_number = "RAW_ROW_NUMBER",
+  anon_row_number = "ANON_ROW_NUMBER",
+  result = "RESULT",
+  method = NULL
+)
 }
 \arguments{
 \item{dat_reid_result}{reid result data frame (RAW_ROW_NUMBER, ANON_ANON_NUMBER, RESULT)}
@@ -18,6 +22,13 @@ reid_result(dat_reid_result, raw_row_number = "RAW_ROW_NUMBER",
 \item{result}{true or false}
 
 \item{method}{reid method name}
+}
+\value{
+a character scalar of the form
+  `" method: <method> , success / trial :  <success> / <trial> "`,
+  where `trial` is the number of rows in `dat_reid_result` and
+  `success` is the number of TRUE values in its `result` column;
+  `success` is always <= `trial`.
 }
 \description{
 craete text of reidentify result ( method: ******, success/trial : ***** / ******)

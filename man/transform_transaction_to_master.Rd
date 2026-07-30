@@ -4,9 +4,16 @@
 \alias{transform_transaction_to_master}
 \title{transform transaction -> master}
 \usage{
-transform_transaction_to_master(dat, ROW_NUMBER = "ROW_NUMBER",
-  ID = "ID", collapse = ":", STATIC_NUM = NULL, STATIC_CHAR = NULL,
-  DYNAMIC_NUM = NULL, DYNAMIC_CHAR = NULL)
+transform_transaction_to_master(
+  dat,
+  ROW_NUMBER = "ROW_NUMBER",
+  ID = "ID",
+  collapse = ":",
+  STATIC_NUM = NULL,
+  STATIC_CHAR = NULL,
+  DYNAMIC_NUM = NULL,
+  DYNAMIC_CHAR = NULL
+)
 }
 \arguments{
 \item{dat}{transaction data frame}
@@ -24,6 +31,12 @@ transform_transaction_to_master(dat, ROW_NUMBER = "ROW_NUMBER",
 \item{DYNAMIC_NUM}{list of column name which shows DYNAMIC NUMBER attribute}
 
 \item{DYNAMIC_CHAR}{list of column name which shows DYNAMIC CHARACTER attribute}
+}
+\value{
+a data frame with one row per distinct `ID`, combining the
+  STATIC_NUM/STATIC_CHAR columns as-is, MAX/MEAN/MEDIAN/MIN summaries of
+  DYNAMIC_NUM, colon-joined distributions (`*_DIST`) of DYNAMIC_NUM and
+  DYNAMIC_CHAR, a ROWCOUNT column and the minimum `ROW_NUMBER` per `ID`.
 }
 \description{
 transform transaction -> master
