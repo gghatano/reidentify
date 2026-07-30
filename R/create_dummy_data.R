@@ -40,22 +40,60 @@ create_dummy_master_data <- function(people = 100) {
 
 #' create dummy transaction data
 #'
+#' @section Spatio-temporal columns:
+#'
+#' With `spatiotemporal = TRUE` two further columns are appended, so that
+#' [spatiotemporal_unicity()] (Issue #24) has something with the shape of a
+#' mobility trace to measure:
+#'
+#' \describe{
+#'   \item{`PLACE`}{a zero-padded location code, `"P001"` upwards. Codes are
+#'     assigned so that **sort order tracks proximity** -- `"P004"` is next to
+#'     `"P005"` -- because that is what [coarsen_place()] assumes when it
+#'     merges neighbouring locations into a coarser grid.}
+#'   \item{`TIME`}{hours since the start of the observation window, so a
+#'     `time_resolution` of 1 means hourly and 24 means daily.}
+#' }
+#'
+#' Each person is given a home location, a small repertoire of places around
+#' it, and a preferred hour of the day; events are drawn from those habits.
+#' Without per-person structure every trace would be a uniform draw from the
+#' same pool and the unicity curve would say nothing about the method.
+#'
+#' The extra columns are **off by default** so that the returned schema is
+#' unchanged for existing callers, and they are drawn *after* the original
+#' columns, so a given seed produces the same `NUM_STATIC` / `NUM_DYNAMIC` /
+#' `BIN` / `CHAR` either way.
+#'
 #' @param people number of people
 #' @param size mean record number
+#' @param spatiotemporal add the `PLACE` and `TIME` columns described above
+#'   (default FALSE)
+#' @param places number of distinct locations, used only when
+#'   `spatiotemporal = TRUE` (default 50)
+#' @param days length of the observation window in days, used only when
+#'   `spatiotemporal = TRUE` (default 30)
+#' @param seed integer seed, or NULL (the default) to use the ambient RNG
+#'   stream as the function always has
 #'
 #' @return a tibble with columns ROW_NUMBER, ID, NUM_STATIC, NUM_DYNAMIC,
-#'   BIN, CHAR containing `people * size` rows of randomly generated dummy
+#'   BIN, CHAR -- plus PLACE and TIME when `spatiotemporal = TRUE` --
+#'   containing `people * size` rows of randomly generated dummy
 #'   transaction data.
 #'
 #' @importFrom tibble tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
-#' @importFrom stats runif
+#' @importFrom stats runif rnorm
 #' @examples
 #' data_tran = create_dummy_transaction_data(people = 10, size = 4)
+#' create_dummy_transaction_data(people = 10, size = 4, spatiotemporal = TRUE, seed = 1)
 #' @export
 #' @encoding UTF-8
-create_dummy_transaction_data <- function(people = 100, size = 2) {
+create_dummy_transaction_data <- function(people = 100, size = 2,
+                                          spatiotemporal = FALSE,
+                                          places = 50, days = 30,
+                                          seed = NULL) {
 
   if (!is.numeric(people)) {
     stop("people is integer ( > 0 )")
@@ -66,26 +104,62 @@ create_dummy_transaction_data <- function(people = 100, size = 2) {
   } else if (size <= 0) {
     stop("size is integer ( > 0 )")
   }
+  if (!is.numeric(places) || length(places) != 1 || is.na(places) || places < 1) {
+    stop("places is integer ( > 0 )")
+  }
+  if (!is.numeric(days) || length(days) != 1 || is.na(days) || days < 1) {
+    stop("days is integer ( > 0 )")
+  }
 
   row_num <- people * size
 
-  ROW_NUMBER <- 1:row_num
-  RAW_ID <- sample(x = 1:people, size = row_num, replace = TRUE)
-  RAW_NUM_STATIC <- rep(10, row_num)
-  RAW_NUM_DYNAMIC <- runif(n = row_num)
-  RAW_BIN <- sample(x = c(0, 1, 100), prob = c(20, 20, 1), size = row_num, replace = TRUE)
-  RAW_CHAR <- stringi::stri_rand_strings(n = row_num, length = 2)
+  with_local_seed(seed, {
+    ROW_NUMBER <- 1:row_num
+    RAW_ID <- sample(x = 1:people, size = row_num, replace = TRUE)
+    RAW_NUM_STATIC <- rep(10, row_num)
+    RAW_NUM_DYNAMIC <- runif(n = row_num)
+    RAW_BIN <- sample(x = c(0, 1, 100), prob = c(20, 20, 1), size = row_num, replace = TRUE)
+    RAW_CHAR <- stringi::stri_rand_strings(n = row_num, length = 2)
 
-  dat_raw <- tibble::tibble(
-    ROW_NUMBER = ROW_NUMBER,
-    ID = RAW_ID,
-    NUM_STATIC = RAW_NUM_STATIC,
-    NUM_DYNAMIC = RAW_NUM_DYNAMIC,
-    BIN = RAW_BIN,
-    CHAR = RAW_CHAR
-  )
+    dat_raw <- tibble::tibble(
+      ROW_NUMBER = ROW_NUMBER,
+      ID = RAW_ID,
+      NUM_STATIC = RAW_NUM_STATIC,
+      NUM_DYNAMIC = RAW_NUM_DYNAMIC,
+      BIN = RAW_BIN,
+      CHAR = RAW_CHAR
+    )
 
-  dat_raw %>% return()
+    ## Everything above is drawn exactly as it always was, and the branch below
+    ## only ever adds draws at the end, so switching `spatiotemporal` on cannot
+    ## change the columns that were there before.
+    if (isTRUE(spatiotemporal)) {
+      places <- as.integer(places)
+      days <- as.integer(days)
+
+      home <- sample.int(places, people, replace = TRUE)
+      ## How far each person strays from home, in location codes. A mixture, so
+      ## the population contains both people who never leave their block and
+      ## people who move across the whole area.
+      spread <- sample(c(1L, 3L, 10L), people, replace = TRUE, prob = c(3, 2, 1))
+      favourite_hour <- sample.int(24L, people, replace = TRUE) - 1L
+
+      pid <- RAW_ID
+      offset <- round(stats::rnorm(row_num, sd = spread[pid]))
+      ## Wrapped rather than clamped: clamping would pile everybody who lives
+      ## near an edge onto the same few codes and invent collisions the model
+      ## does not intend.
+      place_code <- ((home[pid] + offset - 1L) %% places) + 1L
+
+      day <- sample.int(days, row_num, replace = TRUE)
+      hour <- (favourite_hour[pid] + round(stats::rnorm(row_num, sd = 2))) %% 24L
+
+      dat_raw$PLACE <- sprintf("P%03d", place_code)
+      dat_raw$TIME <- (day - 1L) * 24L + hour
+    }
+
+    dat_raw
+  }) %>% return()
 }
 
 

@@ -5,21 +5,69 @@
 \alias{create_dummy_transaction_data}
 \title{create dummy transaction data}
 \usage{
-create_dummy_transaction_data(people = 100, size = 2)
+create_dummy_transaction_data(
+  people = 100,
+  size = 2,
+  spatiotemporal = FALSE,
+  places = 50,
+  days = 30,
+  seed = NULL
+)
 }
 \arguments{
 \item{people}{number of people}
 
 \item{size}{mean record number}
+
+\item{spatiotemporal}{add the `PLACE` and `TIME` columns described above
+(default FALSE)}
+
+\item{places}{number of distinct locations, used only when
+`spatiotemporal = TRUE` (default 50)}
+
+\item{days}{length of the observation window in days, used only when
+`spatiotemporal = TRUE` (default 30)}
+
+\item{seed}{integer seed, or NULL (the default) to use the ambient RNG
+stream as the function always has}
 }
 \value{
 a tibble with columns ROW_NUMBER, ID, NUM_STATIC, NUM_DYNAMIC,
-  BIN, CHAR containing `people * size` rows of randomly generated dummy
+  BIN, CHAR -- plus PLACE and TIME when `spatiotemporal = TRUE` --
+  containing `people * size` rows of randomly generated dummy
   transaction data.
 }
 \description{
 create dummy transaction data
 }
+\section{Spatio-temporal columns}{
+
+
+With `spatiotemporal = TRUE` two further columns are appended, so that
+[spatiotemporal_unicity()] (Issue #24) has something with the shape of a
+mobility trace to measure:
+
+\describe{
+  \item{`PLACE`}{a zero-padded location code, `"P001"` upwards. Codes are
+    assigned so that **sort order tracks proximity** -- `"P004"` is next to
+    `"P005"` -- because that is what [coarsen_place()] assumes when it
+    merges neighbouring locations into a coarser grid.}
+  \item{`TIME`}{hours since the start of the observation window, so a
+    `time_resolution` of 1 means hourly and 24 means daily.}
+}
+
+Each person is given a home location, a small repertoire of places around
+it, and a preferred hour of the day; events are drawn from those habits.
+Without per-person structure every trace would be a uniform draw from the
+same pool and the unicity curve would say nothing about the method.
+
+The extra columns are **off by default** so that the returned schema is
+unchanged for existing callers, and they are drawn *after* the original
+columns, so a given seed produces the same `NUM_STATIC` / `NUM_DYNAMIC` /
+`BIN` / `CHAR` either way.
+}
+
 \examples{
 data_tran = create_dummy_transaction_data(people = 10, size = 4)
+create_dummy_transaction_data(people = 10, size = 4, spatiotemporal = TRUE, seed = 1)
 }
