@@ -148,7 +148,16 @@ print.attacker_knowledge <- function(x, ...) {
 #'
 #' @keywords internal
 reid_score_types <- function() {
-  c("num", "char", "dist", "rank", "idf")
+  c("num", "char", "dist", "rank", "idf", "count", "profile", "span")
+}
+
+#' the score types whose function takes a `split` separator
+#'
+#' @return character vector of score type names
+#'
+#' @keywords internal
+reid_split_score_types <- function() {
+  c("dist", "profile", "span")
 }
 
 #' pick the score function for a declared score type
@@ -166,6 +175,9 @@ score_fn_for_type <- function(type) {
     dist = score_dist,
     rank = score_num_rank,
     idf = score_idf,
+    count = score_count,
+    profile = score_profile,
+    span = score_span,
     stop("unknown score type \"", type, "\".", call. = FALSE)
   )
 }

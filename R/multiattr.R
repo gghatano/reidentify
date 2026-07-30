@@ -371,7 +371,7 @@ build_target_scores <- function(dat_raw_anon, targets, row_number, split, fn_nam
     target <- names(targets)[i]
     type <- unname(targets[i])
     fn <- score_fn_for_type(type)
-    if (identical(type, "dist")) {
+    if (type %in% reid_split_score_types()) {
       fn(dat_raw_anon, target, row_number = row_number, split = split)
     } else {
       fn(dat_raw_anon, target, row_number = row_number)
