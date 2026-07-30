@@ -1,0 +1,53 @@
+﻿== 1. the failure, on the PR #34 fixture (120 people, 60% published) ==
+ seed static all_equal_weight screened drop_vs_static
+    1  0.200            0.292    0.392        0.09167
+    2  0.308            0.242    0.367       -0.06667
+    3  0.242            0.183    0.358       -0.05833
+    4  0.271            0.250    0.317       -0.02083
+    5  0.267            0.225    0.358       -0.04167
+    6  0.250            0.350    0.367        0.10000
+    7  0.325            0.333    0.417        0.00833
+    8  0.283            0.400    0.475        0.11667
+
+  mean: static 0.2682 | all axes at equal weight 0.2844 | screened 0.3812
+  equal weight is BELOW static-only in 4/8 seeds
+  screened     is BELOW static-only in 0/8 seeds
+  screened > equal weight in 8/8 seeds (mean gain +0.0969)
+
+== 2. the detector, axis by axis ==
+
+-- anonymiser = subsample
+   DAY_MEAN (static)    z  16.62 ..  17.30   rank 0.056   informative in 8/8 seeds
+   ROWCOUNT (count)     z   0.36 ..   0.85   rank 0.488   informative in 0/8 seeds
+   DOW_DIST (profile)   z   9.35 ..  12.63   rank 0.221   informative in 8/8 seeds
+   DAY_DIST (span)      z  13.38 ..  14.38   rank 0.139   informative in 8/8 seeds
+
+-- anonymiser = jitter
+   DAY_MEAN (static)    z  16.92 ..  17.53   rank 0.050   informative in 8/8 seeds
+   ROWCOUNT (count)     z  14.18 ..  14.99   rank 0.125   informative in 8/8 seeds
+   DOW_DIST (profile)   z  11.04 ..  13.29   rank 0.183   informative in 8/8 seeds
+   DAY_DIST (span)      z  13.85 ..  14.66   rank 0.130   informative in 8/8 seeds
+
+== 3. controls: a column with no relation to identity at all ==
+axis informativeness (3 axis/axes, alpha = 0.05)
+  SIGNAL               success 0.1167  baseline 0.0083  lift  14.00x  rank 0.059  z  16.88  p = 0.0000  informative
+  NOISE                success 0.0083  baseline 0.0083  lift   1.00x  rank 0.539  z  -1.33  p = 0.9079  no signal
+  CONST                success 0.0083  baseline 0.0083  lift   1.00x  rank 0.504  z   0.00  p = 1.0000  no signal
+
+== 4. false positives: axes with real but weak signal ==
+  noise sd | success | baseline |  lift | rank  |     z | informative
+       0.1 |  0.1750 |   0.0083 | 21.00 | 0.055 | 17.03 | TRUE
+       0.5 |  0.0917 |   0.0083 | 11.00 | 0.220 | 10.79 | TRUE
+         1 |  0.0500 |   0.0083 |  6.00 | 0.345 |  6.03 | TRUE
+         2 |  0.0417 |   0.0083 |  5.00 | 0.430 |  2.81 | TRUE
+         4 |  0.0250 |   0.0083 |  3.00 | 0.469 |  1.35 | FALSE
+         8 |  0.0250 |   0.0083 |  3.00 | 0.490 |  0.53 | FALSE
+        16 |  0.0250 |   0.0083 |  3.00 | 0.504 |  0.01 | FALSE
+     1e+06 |  0.0167 |   0.0083 |  2.00 | 0.530 | -0.98 | FALSE
+
+== 5. why the test is on ranks, not on the success rate ==
+  fixture / axis                    | rank p   | success-rate p
+  correlated fixture, A (n = 60)    | 0.000000 | 0.0050
+  correlated fixture, B (n = 60)    | 0.000000 | 0.0880
+  activity jitter s4, DOW profile   | 0.000000 | 0.0820
+  activity subsample s1, ROWCOUNT (dead) | 0.358416 | 0.4030
