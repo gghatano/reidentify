@@ -6,3 +6,6 @@
 ^docs$
 ^reidentify\.pdf$
 ^R/tmp$
+^\.github$
+^site$
+^.*\.tar\.gz$
