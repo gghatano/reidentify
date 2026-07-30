@@ -25,13 +25,26 @@
 #' a `1/k` chance rather than being deterministically awarded to whichever
 #' candidate happened to sort first (Issue #3).
 #'
-#' By default `CONFIDENCE` is `1 / (number of RAW records tied at the best
-#' score)`: the probability that this particular draw picked the right record,
-#' *given* that the right record is among the tied best candidates. It is 1
-#' exactly when the best candidate is unique, which on a continuous score is
-#' nearly always -- so as a *ranking* it is almost flat.
-#' `confidence = "margin"` replaces it with the eccentricity, which does
-#' separate a runaway winner from a photo finish; see [reid_confidence()].
+#' By default `CONFIDENCE` is the **eccentricity** (`confidence = "margin"`):
+#' how far ahead of the runner-up the winner is, in units of the spread of
+#' that record's own candidate scores. `confidence = "tie"` gives the older
+#' measure, `1 / (number of RAW records tied at the best score)` -- a
+#' calibrated probability, but 1 for every record whose best candidate is
+#' unique, which on a continuous score is nearly always. See
+#' [reid_confidence()] for both, and **Changed defaults** below.
+#'
+#' @section Changed defaults:
+#'
+#' `confidence` defaulted to `"tie"` up to and including the release that
+#' introduced it (Issue #16), and defaults to `"margin"` from Issue #44
+#' onwards. The same call therefore reports **different CONFIDENCE values than
+#' it used to**: `"tie"` values live in `(0, 1]` and are mostly exactly 1,
+#' while `"margin"` values are non-negative, unbounded and almost all distinct.
+#' Nothing else about the assignment changes -- the guessed
+#' `RAW_ROW_NUMBER` and `RESULT` are untouched -- but any code comparing
+#' `CONFIDENCE` against a literal, or `min_confidence` tuned against the old
+#' scale, has to be revisited. Pass `confidence = "tie"` to get the old
+#' numbers back. See `docs/default-changes.md`.
 #'
 #' @param scores a score table: a data frame with columns RAW_ROW_NUMBER,
 #'   ANON_ROW_NUMBER and SCORE, normally produced by a `score_*()` function or
@@ -40,9 +53,11 @@
 #'   ("similarity").
 #' @param seed integer seed for the random tie-break (default 0L, so a plain
 #'   call is reproducible). NULL uses the ambient RNG stream instead.
-#' @param confidence how to fill the CONFIDENCE column: `"tie"` (default,
-#'   `1 / tie size`, a calibrated probability) or `"margin"` (eccentricity,
-#'   a much finer ranking but not a probability). See [reid_confidence()].
+#' @param confidence how to fill the CONFIDENCE column: `"margin"` (default
+#'   since Issue #44: eccentricity, a fine-grained ranking but not a
+#'   probability and with **no scale that carries between data sets**) or
+#'   `"tie"` (`1 / tie size`, a calibrated probability with almost no
+#'   resolution). See [reid_confidence()].
 #' @param min_confidence decline to guess for any ANON record whose
 #'   CONFIDENCE falls below this (default 0, i.e. always guess). A declined
 #'   record keeps its row but is reported with `RAW_ROW_NUMBER = NA` and
@@ -61,7 +76,7 @@
 #' match_greedy(score_num(d, "V"))
 #'
 #' @export
-match_greedy <- function(scores, seed = 0L, confidence = c("tie", "margin"),
+match_greedy <- function(scores, seed = 0L, confidence = c("margin", "tie"),
                          min_confidence = 0) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
@@ -258,9 +273,10 @@ reid_lsap_solvers <- function() {
 #'   runtime warning is issued (default 1000). NULL disables it.
 #' @param max_size problem size above which this stops with an error instead
 #'   of running for many minutes (default 5000). NULL disables the guard.
-#' @param confidence how to fill the CONFIDENCE column: `"tie"` (default) or
-#'   `"margin"` (eccentricity). See [reid_confidence()]. Note that this is a
-#'   property of the *score* of each ANON record on its own, so it does not
+#' @param confidence how to fill the CONFIDENCE column: `"margin"` (default
+#'   since Issue #44, eccentricity) or `"tie"` (`1 / tie size`). See
+#'   [reid_confidence()] and the "Changed defaults" section of
+#'   [match_greedy()]. Note that this is a
 #'   know about the one-to-one constraint; a record the constraint pushed off
 #'   its first choice still reports the confidence of that first choice under
 #'   `"margin"`.
@@ -284,7 +300,7 @@ reid_lsap_solvers <- function() {
 match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
                           dummy_cost = NULL, solver = "clue", block = NULL,
                           warn_size = 1000L, max_size = 5000L,
-                          confidence = c("tie", "margin"),
+                          confidence = c("margin", "tie"),
                           min_confidence = 0) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")

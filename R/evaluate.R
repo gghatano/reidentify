@@ -27,14 +27,15 @@
 #'
 #' @param scores a score table (see [score_num()])
 #' @param confidence which confidence measure to put in the CONFIDENCE
-#'   column, `"tie"` (default) or `"margin"`. See [reid_confidence()].
+#'   column, `"margin"` (default since Issue #44) or `"tie"`. See
+#'   [reid_confidence()].
 #'
 #' @return a data frame with one row per ANON record and columns
 #'   ANON_ROW_NUMBER, N_CANDIDATES, BEST_SCORE, BEST_TIE_SIZE, CONFIDENCE,
 #'   MARGIN, ECCENTRICITY, TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
 #'
 #' @keywords internal
-reid_per_anon <- function(scores, confidence = c("tie", "margin")) {
+reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
 
@@ -171,13 +172,27 @@ top_k_probability <- function(n_better, tie_size, k) {
 #'   (default `c(1, 5, 10)`); values larger than the number of candidates are
 #'   dropped.
 #' @param confidence which attacker-visible confidence the precision-recall
-#'   sweep should threshold on: `"tie"` (default, `1 / tie size`) or
-#'   `"margin"` (eccentricity). `"tie"` is a calibrated probability but has
-#'   almost no resolution on continuous scores -- every record with a unique
-#'   best candidate lands on 1, so the sweep collapses to a single point equal
-#'   to the overall success rate. `"margin"` gives a distinct threshold per
-#'   record and is what makes "attack the top 10% and be right most of the
-#'   time" visible. It is an ordering, not a probability (Issue #16).
+#'   sweep should threshold on: `"margin"` (default since Issue #44,
+#'   eccentricity) or `"tie"` (`1 / tie size`). `"tie"` is a calibrated
+#'   probability but has almost no resolution on continuous scores -- every
+#'   record with a unique best candidate lands on 1, so the sweep collapses to
+#'   a single point equal to the overall success rate. `"margin"` gives a
+#'   distinct threshold per record and is what makes "attack the top 10% and
+#'   be right most of the time" visible. It is an ordering, not a probability
+#'   (Issue #16), and its scale does not carry between data sets.
+#'
+#' @section Changed defaults:
+#'
+#' `confidence` defaulted to `"tie"` before Issue #44 and to `"margin"` from
+#' #44 onwards, so `precision_recall` and the CONFIDENCE column of
+#' `per_record` **differ from what earlier versions reported for the same
+#' input.** On a 150-record continuous fixture the sweep went from 1 row
+#' (threshold 1, attack 150/150, precision 0.2467) to 150 rows (top row:
+#' threshold 0.3941, attack 1/150, precision 1.0000). `success_analytic`,
+#' `success_mean`, `baseline`, `lift`, `top_k`, `RISK` and `max_risk` are
+#' **unchanged** -- the confidence measure only reorders records, it does not
+#' alter the risk. Pass `confidence = "tie"` to reproduce old numbers. See
+#' `docs/default-changes.md`.
 #'
 #' @return an object of class "reid_evaluation": a list with
 #'   \describe{
@@ -206,7 +221,7 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' @importFrom stats sd
 #' @export
 reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
-                          confidence = c("tie", "margin")) {
+                          confidence = c("margin", "tie")) {
   confidence <- match.arg(confidence)
   validate_reid_scores(scores, "scores")
 
@@ -378,6 +393,9 @@ print.reid_evaluation <- function(x, ...) {
     "  precision-recall (threshold on attacker-visible CONFIDENCE, %s):\n",
     x$confidence %||% "tie"
   ))
+  ## The %||% fallback above stays "tie", not the new "margin" default: an
+  ## object without a `confidence` field predates Issue #16, and back then the
+  ## sweep really was thresholding on 1 / tie size.
   pr <- x$precision_recall
   show <- utils::head(pr, 5L)
   for (i in seq_len(nrow(show))) {

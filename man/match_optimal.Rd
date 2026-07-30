@@ -13,7 +13,7 @@ match_optimal(
   block = NULL,
   warn_size = 1000L,
   max_size = 5000L,
-  confidence = c("tie", "margin"),
+  confidence = c("margin", "tie"),
   min_confidence = 0
 )
 }
@@ -52,9 +52,10 @@ runtime warning is issued (default 1000). NULL disables it.}
 \item{max_size}{problem size above which this stops with an error instead
 of running for many minutes (default 5000). NULL disables the guard.}
 
-\item{confidence}{how to fill the CONFIDENCE column: `"tie"` (default) or
-`"margin"` (eccentricity). See [reid_confidence()]. Note that this is a
-property of the *score* of each ANON record on its own, so it does not
+\item{confidence}{how to fill the CONFIDENCE column: `"margin"` (default
+since Issue #44, eccentricity) or `"tie"` (`1 / tie size`). See
+[reid_confidence()] and the "Changed defaults" section of
+[match_greedy()]. Note that this is a
 know about the one-to-one constraint; a record the constraint pushed off
 its first choice still reports the confidence of that first choice under
 `"margin"`.}

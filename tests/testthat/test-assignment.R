@@ -180,11 +180,19 @@ test_that("match_optimal() CONFIDENCE reduces to match_greedy()'s 1/k when the c
   ## one-to-one constraint costs nothing and both rules agree.
   raw <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
   d <- join_raw_anon_data(raw, raw)
-  m <- match_optimal(score_num(d, "V"), seed = 1)
+  ## "1/k" is the confidence = "tie" measure, which stopped being the default
+  ## in #44; say so rather than letting the literal below drift.
+  m <- match_optimal(score_num(d, "V"), seed = 1, confidence = "tie")
 
   expect_equal(m$RAW_ROW_NUMBER, 1:5)
   expect_equal(m$CONFIDENCE, rep(1, 5))
   expect_true(all(m$RESULT))
+
+  ## and the two rules still agree under the "margin" default
+  expect_equal(
+    match_optimal(score_num(d, "V"), seed = 1)$CONFIDENCE,
+    match_greedy(score_num(d, "V"), seed = 1)$CONFIDENCE
+  )
 })
 
 test_that("match_optimal() is reproducible for a fixed seed", {

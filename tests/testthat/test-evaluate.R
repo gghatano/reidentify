@@ -146,7 +146,11 @@ test_that("top_k values beyond the candidate count are dropped rather than repor
 ## ---------------------------------------------------------------------------
 
 test_that("the precision-recall sweep separates 'few records, high precision' from the overall mean", {
-  e <- reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:5)
+  ## confidence = "tie" is explicit because the hand calculation below is the
+  ## 1/k one. The default became "margin" in #44; the margin version of this
+  ## same fixture is the next test.
+  e <- reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:5,
+                     confidence = "tie")
   pr <- e$precision_recall
 
   ## Two distinct confidence levels: 1 (records 1-3) and 1/3 (records 4-6).
@@ -166,6 +170,43 @@ test_that("the precision-recall sweep separates 'few records, high precision' fr
   ## This is the whole point of the metric: precision is much better than the
   ## headline rate if the attacker is allowed to pick their targets.
   expect_gt(pr$precision[1], e$success_analytic)
+})
+
+test_that("the default sweep ('margin', #44) refines the tie sweep rather than replacing it", {
+  ## Same fixture, default confidence. V = c(10, 20, 30, 40, 40, 40):
+  ##
+  ##   record 1: margin 10, sd 12.649 => eccentricity 0.7906
+  ##   record 2: margin 10, sd  8.165 => eccentricity 1.2247
+  ##   record 3: margin 10, sd  6.325 => eccentricity 1.5811
+  ##   records 4-6: tied three ways at the top => margin 0 => eccentricity 0
+  ##
+  ## so the sweep has 4 rows where "tie" had 2. This is the change #44 made
+  ## the default: the same risk, reported at a resolution that shows the
+  ## shape of it.
+  tie <- reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:5,
+                       confidence = "tie")
+  e <- reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:5)
+  pr <- e$precision_recall
+
+  expect_equal(e$confidence, "margin")
+  expect_equal(nrow(pr), 4)
+  expect_equal(nrow(tie$precision_recall), 2)
+
+  expect_equal(pr$threshold, c(1.5811388, 1.2247449, 0.7905694, 0), tolerance = 1e-6)
+  expect_equal(pr$n_attacked, c(1, 2, 3, 6))
+  expect_equal(pr$precision, c(1, 1, 1, e$success_analytic))
+  expect_equal(pr$recall, c(1, 2, 3, 4) / 6)
+
+  ## The two rows the tie sweep reported are still there, at rows 3 and 4:
+  ## "margin" adds thresholds, it does not move the ones "tie" could see.
+  expect_equal(pr[c(3, 4), c("n_attacked", "coverage", "precision", "recall")],
+               tie$precision_recall[, c("n_attacked", "coverage", "precision", "recall")],
+               ignore_attr = TRUE)
+
+  ## and the risk itself is untouched by the choice of measure
+  expect_equal(e$success_analytic, tie$success_analytic)
+  expect_equal(e$max_risk, tie$max_risk)
+  expect_equal(e$top_k, tie$top_k)
 })
 
 test_that("lowering the threshold increases coverage and recall monotonically", {
