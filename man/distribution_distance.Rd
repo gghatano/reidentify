@@ -11,7 +11,10 @@ distribution_distance(x, y, split = ":", n_quantiles = 10)
 
 \item{y}{vector}
 
-\item{split}{split (default: ":")}
+\item{split}{separator between the elements of the distribution string
+(default: ":"). Treated as a **literal string**, never as a regular
+expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe.
+Must be a single non-empty string.}
 
 \item{n_quantiles}{number of evenly spaced quantiles used to represent
 each distribution (default 10). The returned distance is a sum over

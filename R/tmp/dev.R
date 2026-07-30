@@ -1,4 +1,25 @@
-library(reidentify)
+## Development scratch script -- a manual smoke test of the whole pipeline
+## (dummy transaction data -> master -> join -> each reid_by_* method).
+## Not part of the package: R/tmp/ is excluded by .Rbuildignore, so nothing
+## here is built, installed or checked. Run it with
+##
+##   Rscript R/tmp/dev.R
+##
+## from the repository root.
+
+## Load the package *from this working tree*, not from the library. A stale
+## `reidentify` is very likely to be installed, and `library(reidentify)`
+## would silently exercise that copy instead of the code being edited.
+local({
+  here <- tryCatch(dirname(sys.frame(1)$ofile), error = function(e) NULL)
+  root <- if (is.null(here)) "." else file.path(here, "..", "..")
+  if (requireNamespace("pkgload", quietly = TRUE) &&
+      file.exists(file.path(root, "DESCRIPTION"))) {
+    pkgload::load_all(root, quiet = TRUE)
+  } else {
+    library(reidentify)
+  }
+})
 library(dplyr)
 library(magrittr)
 
@@ -42,10 +63,11 @@ dat_master %>% dim()
 dat_master %>%
   as.data.frame() %>%
   head()
-dat_master %>% write.csv("dat_master.csv", quote = FALSE, row.names = FALSE)
-
-# system("head dat_master.csv")
-# system("python3 ./pandas_profiling.py")
+## written under tempdir() so that running this script does not drop a file
+## into the repository root
+out_csv <- file.path(tempdir(), "dat_master.csv")
+dat_master %>% write.csv(out_csv, quote = FALSE, row.names = FALSE)
+cat("wrote", out_csv, "\n")
 
 dat_master$ROW_NUMBER %>% table()
 dat2_master <- dat_master %>%
@@ -53,11 +75,16 @@ dat2_master <- dat_master %>%
   mutate(NUM_STATIC_2 = NUM_STATIC_2 + runif(nrow(.)) * 1) %>%
   mutate(ID = paste("ID_", ID, sep = ""))
 
-dat_raw_anon <- join_row_anon_data(dat_master, dat2_master)
+## NB: the function is join_raw_anon_data() -- this line used to say
+## join_row_anon_data() ("row" for "raw"), so the script could not run at
+## all past this point (Issue #27).
+dat_raw_anon <- join_raw_anon_data(dat_master, dat2_master)
 
 ## 分布間の距離
-# result_dist = reid_by_dist(dat_raw_anon = dat_raw_anon, target = "NUM_DYNAMIC_DIST")
-# reid_result(dat_reid_result = result_dist, method = "dist") %>% print
+## (was commented out because the line above errored; re-enabled and
+## verified to run)
+result_dist <- reid_by_dist(dat_raw_anon = dat_raw_anon, target = "NUM_DYNAMIC_DIST")
+reid_result(dat_reid_result = result_dist, method = "dist") %>% print()
 
 ## 文字列の一致度合い
 result_char <- reid_by_char(dat_raw_anon = dat_raw_anon, target = "CHAR_STATIC")

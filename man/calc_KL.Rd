@@ -11,7 +11,10 @@ calc_KL(x, y, split = ":", epsilon = 1e-05)
 
 \item{y}{vector}
 
-\item{split}{split (default: ":")}
+\item{split}{separator between the elements of the distribution string
+(default: ":"). Treated as a **literal string**, never as a regular
+expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe.
+Must be a single non-empty string.}
 
 \item{epsilon}{substituted by `philentropy::KL()` for a zero denominator so
 the divergence stays finite (default 1e-05, philentropy's own default);

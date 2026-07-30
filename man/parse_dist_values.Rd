@@ -14,7 +14,8 @@ parse_dist_values(str, split, side)
 \arguments{
 \item{str}{character scalar, e.g. "1:2:3"}
 
-\item{split}{split character (default ":")}
+\item{split}{separator, treated as a **literal string** and never as a
+regular expression (default ":")}
 
 \item{side}{label used in the error message ("x" or "y")}
 }

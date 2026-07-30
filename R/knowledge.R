@@ -210,6 +210,8 @@ score_fn_for_type <- function(type) {
 #'   see [normalize_scores()]. Default `"range"`.
 #' @param method `"weighted"` (default) or `"mahalanobis"`; see [score_multi()]
 #' @param split separator passed to [score_dist()] for `"dist"` columns
+#'   (default ":"). Treated as a literal string, never as a regular
+#'   expression.
 #' @param cov_from,ridge passed to [score_mahalanobis()] when
 #'   `method = "mahalanobis"`
 #' @param source,weight passed to [score_idf_match()] for `"idf"` columns

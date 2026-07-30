@@ -3,7 +3,14 @@
 #' @param dat transaction data frame
 #' @param ROW_NUMBER column name for row number in the create data frame
 #' @param ID  identifier name
-#' @param collapse separation character (defalt ":")
+#' @param collapse separator used to join the per-ID values of a `_DIST`
+#'   column (default ":"). It is handed to `paste(collapse = )` and is
+#'   therefore a **literal string**. Pass the same value as `split` when
+#'   the resulting `_DIST` column is later scored by [score_dist()] /
+#'   [reid_by_dist()]; those read the column back with a literal separator
+#'   too, so the two sides are symmetric and any character -- including
+#'   regex metacharacters such as `"|"` or `"."` -- round-trips (Issue #32).
+#'   Do not use a separator that occurs inside the values themselves.
 #' @param STATIC_NUM list of column name which shows STATIC NUMBER attribute
 #' @param STATIC_CHAR list of column name which shows STATIC CHARACTER attribute
 #' @param DYNAMIC_NUM list of column name which shows DYNAMIC NUMBER attribute

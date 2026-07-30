@@ -34,7 +34,9 @@ see [normalize_scores()]. Default `"range"`.}
 
 \item{method}{`"weighted"` (default) or `"mahalanobis"`; see [score_multi()]}
 
-\item{split}{separator passed to [score_dist()] for `"dist"` columns}
+\item{split}{separator passed to [score_dist()] for `"dist"` columns
+(default ":"). Treated as a literal string, never as a regular
+expression.}
 
 \item{cov_from, ridge}{passed to [score_mahalanobis()] when
 `method = "mahalanobis"`}
