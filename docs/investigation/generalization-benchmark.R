@@ -152,12 +152,36 @@ show("score_containment x3",
 
 cat("\n  score_num() on the generalised column stops with:\n   ",
     tryCatch(score_num(d3, "AGE"), error = function(e) conditionMessage(e)), "\n")
-cat("  score_char() does NOT stop -- it returns edit distances between a raw\n",
-    "  number and a bracket string, which look like scores but mean nothing:\n")
+
+## ---------------------------------------------------------------------------
+## 4b. Issue #40: score_char() used to run here. It does not any more.
+##
+## The two lines above are the record of the defect: score_char() returned edit
+## distances between a raw number and a bracket string, which look like scores
+## and mean nothing. The numbers below are what that misuse reported, and are
+## now reachable only by asking for them with generalized = "ignore".
+## ---------------------------------------------------------------------------
+cat("\n  score_char() now stops with:\n   ",
+    tryCatch(score_char(d3, "AGE"), error = function(e) conditionMessage(e)), "\n")
+cat("\n  what it used to return silently (generalized = \"ignore\"):\n")
 i <- which(d3$RAW_ROW_NUMBER == d3$ANON_ROW_NUMBER)[1:3]
 cat(sprintf("    RAW %-4s vs ANON %-10s -> score_char = %g\n",
-            d3$RAW_AGE[i], d3$ANON_AGE[i], score_char(d3, "AGE")$SCORE[i]),
+            d3$RAW_AGE[i], d3$ANON_AGE[i],
+            score_char(d3, "AGE", generalized = "ignore")$SCORE[i]),
     sep = "")
+show("score_char x3, generalized='ignore'",
+     combine_scores(lapply(c("AGE", "AREA", "SEX"), function(t) {
+       score_char(d3, t, generalized = "ignore")
+     })))
+
+cat("\n  NOTE: AREA is generalised *categorically* (chiyoda -> tokyo). No\n",
+    "  structural test can see that -- nothing about the string \"tokyo\" says\n",
+    "  it contains \"chiyoda\" -- so score_char(AREA) is NOT stopped:\n")
+show("score_char(AREA)", score_char(d3, "AREA"))
+cat("  score_num_rank(AREA) is stopped, but by the type check, not the\n",
+    "  generalisation check:\n   ",
+    tryCatch(score_num_rank(d3, "AREA"), error = function(e) conditionMessage(e)),
+    "\n")
 
 ## ---------------------------------------------------------------------------
 ## 5. a release the raw data does not agree with must be visible

@@ -9,6 +9,7 @@ score_dist(
   target,
   row_number = "ROW_NUMBER",
   split = ":",
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_dist"
 )
 }
@@ -24,6 +25,12 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 (default ":"). Treated as a **literal string**, never as a regular
 expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe to
 use as separators. Must be a single non-empty string.}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+generalised value has no distribution to compare, so this normally only
+replaces the coercion error raised further down with one that names the
+score to use instead (Issue #40).}
 
 \item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
 their own name so the message points at the function the user called}

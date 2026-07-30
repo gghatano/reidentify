@@ -612,6 +612,11 @@ test_that("score_num cannot read a generalised column at all", {
                      stringsAsFactors = FALSE)
   d <- join_raw_anon_data(raw, anon)
 
-  expect_error(score_num(d, "AGE"), "non-numeric")
+  ## Issue #40: it always stopped, but with base R's "non-numeric argument to
+  ## binary operator", which names neither the function, the column, nor the
+  ## score that does apply. It now says all three.
+  expect_error(score_num(d, "AGE"), "score_num\\(\\)")
+  expect_error(score_num(d, "AGE"), "not numeric")
+  expect_error(score_num(d, "AGE"), "score_containment")
   expect_true(all(match_greedy(score_containment(d, "AGE"))$RESULT))
 })

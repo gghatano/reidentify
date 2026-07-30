@@ -1,4 +1,4 @@
-#' stop with a clear, actionable error message if any of `cols` is missing
+﻿#' stop with a clear, actionable error message if any of `cols` is missing
 #' from `dat_raw_anon`, instead of letting reid_by_*() fail downstream with
 #' a confusing low-level error (e.g. base R's "replacement has 0 rows,
 #' data has NNN" from reid_by_char()/reid_by_dist() indexing a
@@ -267,6 +267,10 @@ reid_result <- function(dat_reid_result,
 #'   candidates (default 0L, so a plain call is reproducible). Pass a
 #'   different value, or use reid_stability(), to see the run-to-run
 #'   spread. NULL uses the ambient RNG stream instead.
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+#'   See [score_char()]; comparing a raw value with a published region reports
+#'   a success rate far below the real one and raises no error (Issue #40).
 #'
 #' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
 #'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
@@ -287,8 +291,10 @@ reid_result <- function(dat_reid_result,
 #' @importFrom magrittr %>%
 #' @importFrom utils adist
 #' @export
-reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
-  scores <- score_char(dat_raw_anon, target, row_number, .fn_name = "reid_by_char")
+reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L,
+                         generalized = c("stop", "warn", "ignore")) {
+  scores <- score_char(dat_raw_anon, target, row_number, generalized = generalized,
+                       .fn_name = "reid_by_char")
   picked <- match_greedy(scores, seed = seed)
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, "reid_by_char")
 
@@ -321,6 +327,10 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #'   candidates (default 0L, so a plain call is reproducible). Pass a
 #'   different value, or use reid_stability(), to see the run-to-run
 #'   spread. NULL uses the ambient RNG stream instead.
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+#'   See [score_char()]; comparing a raw value with a published region reports
+#'   a success rate far below the real one and raises no error (Issue #40).
 #'
 #' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
 #'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
@@ -337,12 +347,14 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #' @importFrom dplyr .data
 #' @importFrom magrittr %>%
 #' @export
-reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":", seed = 0L) {
+reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":", seed = 0L,
+                         generalized = c("stop", "warn", "ignore")) {
   ## NB: `split` used to be accepted and then silently dropped -- the old body
   ## called distribution_distance() without it, so a non-default separator was
   ## ignored and the whole column was parsed as one number. It is now wired
   ## through score_dist(). For the default split = ":" the result is unchanged.
-  scores <- score_dist(dat_raw_anon, target, row_number, split = split, .fn_name = "reid_by_dist")
+  scores <- score_dist(dat_raw_anon, target, row_number, split = split,
+                       generalized = generalized, .fn_name = "reid_by_dist")
   picked <- match_greedy(scores, seed = seed)
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, "reid_by_dist")
 
@@ -681,6 +693,10 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
 #'   candidates (default 0L, so a plain call is reproducible). Pass a
 #'   different value, or use reid_stability(), to see the run-to-run
 #'   spread. NULL uses the ambient RNG stream instead.
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+#'   See [score_char()]; comparing a raw value with a published region reports
+#'   a success rate far below the real one and raises no error (Issue #40).
 #'
 #' @return a data frame with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER, the
 #'   raw `target` columns, ANON_RANK, RAW_RANK, DISTANCE and RESULT
@@ -698,8 +714,10 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
 #' @importFrom magrittr %>%
 #' @importFrom magrittr %<>%
 #' @export
-reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
-  ranks <- compute_num_ranks(dat_raw_anon, target, row_number, "reid_by_num_rank")
+reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L,
+                             generalized = c("stop", "warn", "ignore")) {
+  ranks <- compute_num_ranks(dat_raw_anon, target, row_number, "reid_by_num_rank",
+                             generalized = generalized)
   cols <- ranks$cols
 
   scores <- new_reid_scores(

@@ -199,6 +199,20 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                       .fn_name = "score_num") {
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
 
+  ## Subtracting a character column raises "non-numeric argument to binary
+  ## operator", which names neither the function nor the column, and above all
+  ## does not say what to do about a *generalised* column -- the case that
+  ## actually brings callers here (Issue #40).
+  is_text <- function(v) is.character(v) || is.factor(v)
+  if (is_text(dat_raw_anon[[cols$raw_target]]) ||
+        is_text(dat_raw_anon[[cols$anon_target]])) {
+    stop(non_numeric_target_message(
+      dat_raw_anon, cols, target, .fn_name,
+      alternative = paste0("Use score_char() or score_idf() for a categorical ",
+                           "column, or convert \"", target, "\" to numeric.")
+    ), call. = FALSE)
+  }
+
   new_reid_scores(
     raw_row_number = dat_raw_anon[[cols$raw_row_number]],
     anon_row_number = dat_raw_anon[[cols$anon_row_number]],
@@ -210,16 +224,37 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' The score layer behind [reid_by_char()].
 #'
+#' **Generalised columns are refused.** Edit distance between a raw value and
+#' a published *region* -- `adist("37", "[30,40)")` is 6 -- measures the length
+#' of the bracket string and nothing else, but it is a plausible-looking number
+#' and no error is raised. On
+#' `docs/investigation/generalization-benchmark.R` that misuse reports a
+#' success rate of 0.1017 where [score_containment()] reports 0.4450, so the
+#' release looks about four times safer than it is (Issue #40, and
+#' `docs/lessons-learned.md` section 2). This stops instead; see
+#' [is_generalized_value()] for exactly what is detected, and note that a
+#' *categorical* generalisation (千代田区 published as 東京都) cannot be
+#' detected structurally at all.
+#'
 #' @inheritParams score_num
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` (compute the edit
+#'   distances anyway, having said so) or `"ignore"` (skip the check). Use
+#'   `"ignore"` only when the column is meant to be compared literally, e.g.
+#'   when RAW and ANON carry the *same* already-binned values.
 #'
 #' @return a "reid_scores" table whose SCORE is the edit distance between the
 #'   RAW and ANON values of `target` (a distance: smaller is a better match).
 #'
+#' @seealso [score_containment()] for generalised columns.
+#'
 #' @importFrom utils adist
 #' @export
 score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
+                       generalized = c("stop", "warn", "ignore"),
                        .fn_name = "score_char") {
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  check_generalized_target(dat_raw_anon, cols, target, generalized, .fn_name)
 
   raw_target_col <- as.character(dat_raw_anon[[cols$raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[cols$anon_target]])
@@ -247,6 +282,11 @@ score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'   (default ":"). Treated as a **literal string**, never as a regular
 #'   expression, so metacharacters such as `"|"`, `"."` or `"$"` are safe to
 #'   use as separators. Must be a single non-empty string.
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+#'   generalised value has no distribution to compare, so this normally only
+#'   replaces the coercion error raised further down with one that names the
+#'   score to use instead (Issue #40).
 #'
 #' @return a "reid_scores" table whose SCORE is [distribution_distance()]
 #'   between the RAW and ANON distributions (a distance: smaller is a better
@@ -254,8 +294,11 @@ score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @export
 score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
-                       split = ":", .fn_name = "score_dist") {
+                       split = ":",
+                       generalized = c("stop", "warn", "ignore"),
+                       .fn_name = "score_dist") {
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  check_generalized_target(dat_raw_anon, cols, target, generalized, .fn_name)
 
   raw_target_col <- as.character(dat_raw_anon[[cols$raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[cols$anon_target]])
@@ -279,7 +322,16 @@ score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #' data, so they collapse to the same rank instead of being split into a fake
 #' total order by incidental row position.
 #'
+#' **The target column must be numeric.** `rank()` accepts a character column
+#' and orders it lexicographically, so a generalised or categorical column used
+#' to come back as a full set of plausible rank gaps with no error at all --
+#' the same silent under-report as [score_char()] (Issue #40).
+#'
 #' @inheritParams score_num
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+#'   generalised column is also non-numeric, so this normally only decides
+#'   which of the two errors is raised.
 #'
 #' @return a "reid_scores" table whose SCORE is the absolute difference
 #'   between the ANON-side and RAW-side ranks of `target` (a distance:
@@ -287,8 +339,10 @@ score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @export
 score_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
+                           generalized = c("stop", "warn", "ignore"),
                            .fn_name = "score_num_rank") {
-  ranks <- compute_num_ranks(dat_raw_anon, target, row_number, .fn_name)
+  ranks <- compute_num_ranks(dat_raw_anon, target, row_number, .fn_name,
+                             generalized = generalized)
 
   new_reid_scores(
     raw_row_number = ranks$raw_row_number,
@@ -309,14 +363,36 @@ score_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @inheritParams score_num
 #' @param fn_name name used in error messages
+#' @param generalized `"stop"`, `"warn"` or `"ignore"`; see [score_num_rank()]
 #'
 #' @return a list with the per-candidate-row vectors `raw_row_number`,
 #'   `anon_row_number`, `raw_rank`, `anon_rank`, plus the resolved column
 #'   names in `cols`.
 #'
 #' @keywords internal
-compute_num_ranks <- function(dat_raw_anon, target, row_number, fn_name) {
+compute_num_ranks <- function(dat_raw_anon, target, row_number, fn_name,
+                              generalized = c("stop", "warn", "ignore")) {
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, fn_name)
+  check_generalized_target(dat_raw_anon, cols, target, generalized, fn_name)
+
+  ## rank() happily orders a character column lexicographically, so a
+  ## generalised or categorical target used to produce a complete set of
+  ## plausible rank gaps and no error -- "30代" simply sorted before "40代".
+  ## The gaps are then edit-distance-like noise, not evidence, and the reported
+  ## success rate lands far below the real one (Issue #40). The structural
+  ## generalisation check above cannot see a categorical generalisation, so the
+  ## type check below is what actually closes that hole.
+  is_text <- function(v) is.character(v) || is.factor(v)
+  if (is_text(dat_raw_anon[[cols$raw_target]]) ||
+        is_text(dat_raw_anon[[cols$anon_target]])) {
+    stop(non_numeric_target_message(
+      dat_raw_anon, cols, target, fn_name,
+      alternative = paste0("rank() would order it lexicographically, which is ",
+                           "not a distance between records. Use score_char() ",
+                           "or score_idf() for a categorical column, or ",
+                           "convert \"", target, "\" to numeric.")
+    ), call. = FALSE)
+  }
 
   ## rank(..., na.last = TRUE) (the default) does NOT propagate NA: it
   ## silently assigns missing values a real, high rank instead of erroring

@@ -1,5 +1,5 @@
-R: R version 4.6.1 (2026-06-24 ucrt) 
-date: 2026-07-30 23:17:16 
+﻿R: R version 4.6.1 (2026-06-24 ucrt) 
+date: 2026-07-31 07:57:39 
 
 generalization hierarchy: 50 edge(s) over 2 attribute(s)
   AREA: 30 edge(s), 3 level(s), root(s): 関東, 近畿, 中部
@@ -28,21 +28,33 @@ generalization hierarchy: 50 edge(s) over 2 attribute(s)
   AGE level 2, AREA level 2:  median k =   8.0  unique =   2.0%  success = 0.1800  truth kept = TRUE
 
 == existing scores on the generalised AGE column ==
-  score_num(AGE)           ERROR: non-numeric argument to binary operator
-  score_char(AGE)          success = 0.0214
+  score_num(AGE)           ERROR: score_num(): column "AGE" is character or factor, not numeric, so no arithmetic distance is defined on it. Its ANON values are generalised regions (RAW "37" falls inside ANON "[30,40)"; RAW "47" falls inside ANON "[40,50)"; RAW "71" falls inside ANON "[70,80)"). Use score_containment(dat, "AGE"): a generalised column answers "which RAW records could have produced this published region", not "how far apart are these two values" (docs/lessons-learned.md section 2).
+  score_char(AGE)          ERROR: score_char(): column "AGE" is generalised on the ANON side (100% of its published values are regions) -- the published value is a region containing the raw one, not a value to compare with it (RAW "37" falls inside ANON "[30,40)"; RAW "47" falls inside ANON "[40,50)"; RAW "71" falls inside ANON "[70,80)"). Comparing them directly measures the printed shape of the region, not the risk: on generalised data it reports a success rate several times lower than the real one and raises no error, so the release looks safer than it is (docs/lessons-learned.md section 2). Use score_containment(dat, "AGE"), which asks which RAW records could have produced each published region. If this column really is meant to be compared literally, pass generalized = "warn" or generalized = "ignore".
   score_containment(AGE)   success = 0.0300
 
 == all three attributes ==
-  score_char x3 (combined) success = 0.1017
+  score_char x3 (combined) ERROR: score_char(): column "AGE" is generalised on the ANON side (100% of its published values are regions) -- the published value is a region containing the raw one, not a value to compare with it (RAW "37" falls inside ANON "[30,40)"; RAW "47" falls inside ANON "[40,50)"; RAW "71" falls inside ANON "[70,80)"). Comparing them directly measures the printed shape of the region, not the risk: on generalised data it reports a success rate several times lower than the real one and raises no error, so the release looks safer than it is (docs/lessons-learned.md section 2). Use score_containment(dat, "AGE"), which asks which RAW records could have produced each published region. If this column really is meant to be compared literally, pass generalized = "warn" or generalized = "ignore".
   score_containment x3     success = 0.4450
 
   score_num() on the generalised column stops with:
-    non-numeric argument to binary operator 
-  score_char() does NOT stop -- it returns edit distances between a raw
-   number and a bracket string, which look like scores but mean nothing:
+    score_num(): column "AGE" is character or factor, not numeric, so no arithmetic distance is defined on it. Its ANON values are generalised regions (RAW "37" falls inside ANON "[30,40)"; RAW "47" falls inside ANON "[40,50)"; RAW "71" falls inside ANON "[70,80)"). Use score_containment(dat, "AGE"): a generalised column answers "which RAW records could have produced this published region", not "how far apart are these two values" (docs/lessons-learned.md section 2). 
+
+  score_char() now stops with:
+    score_char(): column "AGE" is generalised on the ANON side (100% of its published values are regions) -- the published value is a region containing the raw one, not a value to compare with it (RAW "37" falls inside ANON "[30,40)"; RAW "47" falls inside ANON "[40,50)"; RAW "71" falls inside ANON "[70,80)"). Comparing them directly measures the printed shape of the region, not the risk: on generalised data it reports a success rate several times lower than the real one and raises no error, so the release looks safer than it is (docs/lessons-learned.md section 2). Use score_containment(dat, "AGE"), which asks which RAW records could have produced each published region. If this column really is meant to be compared literally, pass generalized = "warn" or generalized = "ignore". 
+
+  what it used to return silently (generalized = "ignore"):
     RAW 37   vs ANON [30,40)    -> score_char = 6
     RAW 33   vs ANON [30,40)    -> score_char = 6
     RAW 47   vs ANON [40,50)    -> score_char = 6
+  score_char x3, generalized='ignore' success = 0.1017
+
+  NOTE: AREA is generalised *categorically* (chiyoda -> tokyo). No
+   structural test can see that -- nothing about the string "tokyo" says
+   it contains "chiyoda" -- so score_char(AREA) is NOT stopped:
+  score_char(AREA)         success = 0.0213
+  score_num_rank(AREA) is stopped, but by the type check, not the
+   generalisation check:
+    score_num_rank(): column "AREA" is character or factor, not numeric, so no arithmetic distance is defined on it. rank() would order it lexicographically, which is not a distance between records. Use score_char() or score_idf() for a categorical column, or convert "AREA" to numeric. 
 
 == a mis-declared release is reported, not hidden ==
   TRUTH_CONTAINED holds for 19.5% of records (should be 100%)

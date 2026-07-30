@@ -8,6 +8,7 @@ score_num_rank(
   dat_raw_anon,
   target,
   row_number = "ROW_NUMBER",
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_num_rank"
 )
 }
@@ -18,6 +19,11 @@ score_num_rank(
 
 \item{row_number}{name of the row-number column *before* the RAW_/ANON_
 prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+generalised column is also non-numeric, so this normally only decides
+which of the two errors is raised.}
 
 \item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
 their own name so the message points at the function the user called}
@@ -32,4 +38,10 @@ The score layer behind [reid_by_num_rank()]. Rank ties are resolved with
 `ties.method = "min"`: genuinely tied values are indistinguishable in the
 data, so they collapse to the same rank instead of being split into a fake
 total order by incidental row position.
+}
+\details{
+**The target column must be numeric.** `rank()` accepts a character column
+and orders it lexicographically, so a generalised or categorical column used
+to come back as a full set of plausible rank gaps with no error at all --
+the same silent under-report as [score_char()] (Issue #40).
 }

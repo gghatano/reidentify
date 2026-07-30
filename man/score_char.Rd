@@ -8,6 +8,7 @@ score_char(
   dat_raw_anon,
   target,
   row_number = "ROW_NUMBER",
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_char"
 )
 }
@@ -19,6 +20,12 @@ score_char(
 \item{row_number}{name of the row-number column *before* the RAW_/ANON_
 prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` (compute the edit
+distances anyway, having said so) or `"ignore"` (skip the check). Use
+`"ignore"` only when the column is meant to be compared literally, e.g.
+when RAW and ANON carry the *same* already-binned values.}
+
 \item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
 their own name so the message points at the function the user called}
 }
@@ -28,4 +35,20 @@ a "reid_scores" table whose SCORE is the edit distance between the
 }
 \description{
 The score layer behind [reid_by_char()].
+}
+\details{
+**Generalised columns are refused.** Edit distance between a raw value and
+a published *region* -- `adist("37", "[30,40)")` is 6 -- measures the length
+of the bracket string and nothing else, but it is a plausible-looking number
+and no error is raised. On
+`docs/investigation/generalization-benchmark.R` that misuse reports a
+success rate of 0.1017 where [score_containment()] reports 0.4450, so the
+release looks about four times safer than it is (Issue #40, and
+`docs/lessons-learned.md` section 2). This stops instead; see
+[is_generalized_value()] for exactly what is detected, and note that a
+*categorical* generalisation (千代田区 published as 東京都) cannot be
+detected structurally at all.
+}
+\seealso{
+[score_containment()] for generalised columns.
 }
