@@ -7,7 +7,7 @@
 score_fn_for_type(type)
 }
 \arguments{
-\item{type}{one of "num", "char", "dist", "rank"}
+\item{type}{one of the values [reid_score_types()] lists}
 }
 \value{
 the corresponding `score_*()` function

@@ -9,8 +9,13 @@ score_by_knowledge(
   knowledge,
   row_number = "ROW_NUMBER",
   weights = NULL,
-  normalize = c("range", "none"),
-  split = ":"
+  normalize = c("range", "zscore", "rank", "none"),
+  method = c("weighted", "mahalanobis"),
+  split = ":",
+  cov_from = c("raw", "anon", "pooled"),
+  ridge = 1e-06,
+  source = c("anon", "raw", "pooled"),
+  weight = c("idf", "inv_log", "inv", "none")
 )
 }
 \arguments{
@@ -24,12 +29,19 @@ prefixing (default "ROW_NUMBER")}
 \item{weights}{numeric vector of per-column weights, one per visible
 column, in the order of `knowledge$visible` (default: all 1)}
 
-\item{normalize}{`"range"` (default) rescales each column's score to
-\[0, 1\] before combining; `"none"` combines the raw scores}
+\item{normalize}{normalisation applied to each column before combining;
+see [normalize_scores()]. Default `"range"`.}
+
+\item{method}{`"weighted"` (default) or `"mahalanobis"`; see [score_multi()]}
 
 \item{split}{separator passed to [score_dist()] for `"dist"` columns
 (default ":"). Treated as a literal string, never as a regular
 expression.}
+
+\item{cov_from, ridge}{passed to [score_mahalanobis()] when
+`method = "mahalanobis"`}
+
+\item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
 }
 \value{
 a "reid_scores" table over the same candidate pairs as
@@ -47,9 +59,11 @@ make the attack worse -- which would make the whole W/M/S comparison
 meaningless. A column with no variation at all contributes exactly 0,
 because it cannot discriminate between candidates.
 
-This is a deliberately crude stopgap, not a solution: a principled
-weighting (standardisation, Mahalanobis, learned weights) is Issue #14.
-Pass `normalize = "none"` to get the raw weighted sum instead.
+The combination itself is done by [score_multi()] (Issue #14); this function
+only decides *which* columns are handed to it. `normalize` and `method`
+therefore accept everything `score_multi()` does, including the correlation
+aware `method = "mahalanobis"`. The default is unchanged (`"range"` /
+`"weighted"`), which is the stopgap Issue #13 needed.
 }
 \examples{
 d <- create_dummy_qi_data(people = 20, seed = 1)

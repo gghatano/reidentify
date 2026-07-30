@@ -1,0 +1,66 @@
+Issue #22 activity profile benchmark
+120 people, master format via transform_transaction_to_master()
+anonymiser 'jitter': every person's events kept, count moved by -1/0/+1
+random-assignment baseline: 0.0083
+
+== each axis on its own ==
+  count (log_ratio)                            : 0.0503
+  count (absolute)                             : 0.0503
+  count (relative)                             : 0.0503
+  profile DOW (l1)                             : 0.0583
+  profile DOW (l2)                             : 0.0458
+  profile DOW, volume kept                     : 0.0681
+  span DAY                                     : 0.0435
+  -- for comparison: DAY_DIST via score_dist() : 0.4667
+
+== combined through score_multi() (#14) ==
+  count only               : 0.0503
+  profile only             : 0.0583
+  span only                : 0.0435
+  count + profile          : 0.1583
+  count + profile + span   : 0.3917
+  DAY_MEAN only            : 0.2167
+  DAY_MEAN + activity      : 0.6417
+
+== across 8 data seeds, anonymiser = jitter ==
+ seed  random  count profile   span static activity  both
+    1 0.00833 0.0503  0.0583 0.0435  0.217    0.392 0.642
+    2 0.00833 0.0607  0.0750 0.0230  0.333    0.417 0.617
+    3 0.00833 0.0575  0.0500 0.0551  0.283    0.383 0.642
+    4 0.00833 0.0680  0.0250 0.0455  0.317    0.350 0.633
+    5 0.00833 0.0692  0.0583 0.0193  0.267    0.404 0.692
+    6 0.00833 0.0531  0.0500 0.0508  0.246    0.442 0.625
+    7 0.00833 0.0501  0.0583 0.0428  0.275    0.383 0.592
+    8 0.00833 0.0448  0.0500 0.0335  0.317    0.467 0.692
+
+  mean: random 0.0083 | count 0.0567 | profile 0.0531 | span 0.0392 | static 0.2818 | activity 0.4047 | both 0.6417
+  count    beats the random baseline in 8/8 seeds
+  profile  beats the random baseline in 8/8 seeds
+  span     beats the random baseline in 8/8 seeds
+  both > static in 8/8, both > activity in 8/8
+
+== across 8 data seeds, anonymiser = subsample ==
+ seed  random   count profile   span static activity  both
+    1 0.00833 0.00833  0.0333 0.0416  0.200   0.1083 0.292
+    2 0.00833 0.00833  0.0417 0.0260  0.308   0.0750 0.242
+    3 0.00833 0.00833  0.0500 0.0502  0.242   0.0917 0.183
+    4 0.00833 0.00833  0.0417 0.0372  0.271   0.1083 0.250
+    5 0.00833 0.01250  0.0250 0.0287  0.267   0.0667 0.225
+    6 0.00833 0.00833  0.0375 0.0457  0.250   0.1417 0.350
+    7 0.00833 0.00833  0.0417 0.0233  0.325   0.1250 0.333
+    8 0.00833 0.00833  0.0583 0.0398  0.283   0.1583 0.400
+
+  mean: random 0.0083 | count 0.0089 | profile 0.0411 | span 0.0366 | static 0.2682 | activity 0.1094 | both 0.2844
+  count    beats the random baseline in 1/8 seeds
+  profile  beats the random baseline in 8/8 seeds
+  span     beats the random baseline in 8/8 seeds
+  both > static in 4/8, both > activity in 8/8
+
+== is the shape score really independent of the volume? ==
+  every event duplicated: max |shape score change| = 0
+  same, with shape_only = FALSE : max change = 4
+
+== correlation between the count axis and the shape axis ==
+  cor(count, shape) = +0.093
+  cor(count, span)  = +0.005
+  cor(shape, span)  = +0.030

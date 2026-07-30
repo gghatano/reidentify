@@ -1,0 +1,74 @@
+Issue #14 multi-attribute benchmark
+success_analytic (exact expected single-guess success rate), n = 200
+
+== scenario 1: redundant A/B + independent C, latent perturbation ==
+  single  A                 : 0.0300
+  single  B                 : 0.0350
+  single  C                 : 0.0500
+  --- best single           : 0.0500
+  multi none               : 0.0950
+  multi range              : 0.0850
+  multi zscore             : 0.0850
+  multi rank               : 0.0800
+  mahalanobis range        : 0.3000
+  mahalanobis none         : 0.3000
+
+== scenario 2 (control): independent, isotropic perturbation ==
+  single  A                 : 0.0150
+  single  B                 : 0.0200
+  single  C                 : 0.0350
+  --- best single           : 0.0350
+  multi none               : 0.1700
+  multi range              : 0.1700
+  multi zscore             : 0.1750
+  multi rank               : 0.1650
+  mahalanobis range        : 0.1700
+  mahalanobis none         : 0.1700
+
+== scenario 3: independent, units 3 orders of magnitude apart ==
+  single  SMALL             : 0.0250
+  single  MEDIUM            : 0.0250
+  single  LARGE             : 0.0400
+  --- best single           : 0.0400
+  multi none               : 0.0550
+  multi range              : 0.3800
+  multi zscore             : 0.3700
+  multi rank               : 0.3700
+  mahalanobis range        : 0.3300
+  mahalanobis none         : 0.3300
+
+== scenario 1 across 10 data seeds ==
+ seed weighted mahalanobis delta
+    1    0.085       0.300 0.215
+    2    0.085       0.330 0.245
+    3    0.070       0.285 0.215
+    4    0.090       0.360 0.270
+    5    0.085       0.355 0.270
+    6    0.080       0.295 0.215
+    7    0.115       0.365 0.250
+    8    0.115       0.400 0.285
+    9    0.120       0.295 0.175
+   10    0.120       0.320 0.200
+
+  mean delta = +0.2340, mahalanobis wins in 10/10 seeds
+
+== scenario 2 (control) across 10 data seeds ==
+ seed weighted mahalanobis  delta
+    1    0.170       0.170  0.000
+    2    0.215       0.230  0.015
+    3    0.195       0.210  0.015
+    4    0.220       0.235  0.015
+    5    0.195       0.220  0.025
+    6    0.205       0.190 -0.015
+    7    0.235       0.250  0.015
+    8    0.205       0.210  0.005
+    9    0.170       0.180  0.010
+   10    0.235       0.265  0.030
+
+  mean delta = +0.0115, mahalanobis wins in 8/10 seeds
+
+== W/M/S knowledge curve under each normalisation ==
+  normalize = none    : W 0.0263  M 0.8500  S 0.8500   NOT strictly increasing
+  normalize = range   : W 0.0263  M 0.6500  S 0.9000   strictly increasing
+  normalize = zscore  : W 0.0263  M 0.6833  S 0.9333   strictly increasing
+  normalize = rank    : W 0.0263  M 0.7333  S 0.9333   strictly increasing

@@ -65,11 +65,13 @@ attacker_knowledge <- function(level = c("W", "M", "S"),
            "name to score type, e.g. c(AGE = \"num\", ZIP = \"char\").",
            call. = FALSE)
     }
-    unknown <- setdiff(unique(x), c("num", "char", "dist", "rank"))
+    unknown <- setdiff(unique(x), reid_score_types())
     if (length(unknown) > 0) {
       stop("`", arg, "` has unknown score type(s): ",
            paste(unknown, collapse = ", "),
-           ". Expected \"num\", \"char\", \"dist\" or \"rank\".", call. = FALSE)
+           ". Expected one of ",
+           paste0("\"", reid_score_types(), "\"", collapse = ", "), ".",
+           call. = FALSE)
     }
     x
   }
@@ -136,9 +138,31 @@ print.attacker_knowledge <- function(x, ...) {
   invisible(x)
 }
 
+#' the score types a column specification may declare
+#'
+#' One list, used by [attacker_knowledge()], [score_multi()] and
+#' [score_fn_for_type()], so a type added in one place cannot be silently
+#' missing from the others.
+#'
+#' @return character vector of valid score type names
+#'
+#' @keywords internal
+reid_score_types <- function() {
+  c("num", "char", "dist", "rank", "idf", "count", "profile", "span")
+}
+
+#' the score types whose function takes a `split` separator
+#'
+#' @return character vector of score type names
+#'
+#' @keywords internal
+reid_split_score_types <- function() {
+  c("dist", "profile", "span")
+}
+
 #' pick the score function for a declared score type
 #'
-#' @param type one of "num", "char", "dist", "rank"
+#' @param type one of the values [reid_score_types()] lists
 #'
 #' @return the corresponding `score_*()` function
 #'
@@ -150,6 +174,10 @@ score_fn_for_type <- function(type) {
     char = score_char,
     dist = score_dist,
     rank = score_num_rank,
+    idf = score_idf,
+    count = score_count,
+    profile = score_profile,
+    span = score_span,
     stop("unknown score type \"", type, "\".", call. = FALSE)
   )
 }
@@ -166,9 +194,11 @@ score_fn_for_type <- function(type) {
 #' meaningless. A column with no variation at all contributes exactly 0,
 #' because it cannot discriminate between candidates.
 #'
-#' This is a deliberately crude stopgap, not a solution: a principled
-#' weighting (standardisation, Mahalanobis, learned weights) is Issue #14.
-#' Pass `normalize = "none"` to get the raw weighted sum instead.
+#' The combination itself is done by [score_multi()] (Issue #14); this function
+#' only decides *which* columns are handed to it. `normalize` and `method`
+#' therefore accept everything `score_multi()` does, including the correlation
+#' aware `method = "mahalanobis"`. The default is unchanged (`"range"` /
+#' `"weighted"`), which is the stopgap Issue #13 needed.
 #'
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param knowledge an [attacker_knowledge()] object
@@ -176,11 +206,15 @@ score_fn_for_type <- function(type) {
 #'   prefixing (default "ROW_NUMBER")
 #' @param weights numeric vector of per-column weights, one per visible
 #'   column, in the order of `knowledge$visible` (default: all 1)
-#' @param normalize `"range"` (default) rescales each column's score to
-#'   \[0, 1\] before combining; `"none"` combines the raw scores
+#' @param normalize normalisation applied to each column before combining;
+#'   see [normalize_scores()]. Default `"range"`.
+#' @param method `"weighted"` (default) or `"mahalanobis"`; see [score_multi()]
 #' @param split separator passed to [score_dist()] for `"dist"` columns
 #'   (default ":"). Treated as a literal string, never as a regular
 #'   expression.
+#' @param cov_from,ridge passed to [score_mahalanobis()] when
+#'   `method = "mahalanobis"`
+#' @param source,weight passed to [score_idf_match()] for `"idf"` columns
 #'
 #' @return a "reid_scores" table over the same candidate pairs as
 #'   `dat_raw_anon`
@@ -193,36 +227,32 @@ score_fn_for_type <- function(type) {
 #'
 #' @export
 score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER",
-                               weights = NULL, normalize = c("range", "none"),
-                               split = ":") {
+                               weights = NULL,
+                               normalize = c("range", "zscore", "rank", "none"),
+                               method = c("weighted", "mahalanobis"),
+                               split = ":", cov_from = c("raw", "anon", "pooled"),
+                               ridge = 1e-6,
+                               source = c("anon", "raw", "pooled"),
+                               weight = c("idf", "inv_log", "inv", "none")) {
   if (!inherits(knowledge, "attacker_knowledge")) {
     stop("`knowledge` must be an attacker_knowledge object; see ",
          "attacker_knowledge().", call. = FALSE)
   }
-  normalize <- match.arg(normalize)
 
-  visible <- knowledge$visible
-  scores <- lapply(seq_along(visible), function(i) {
-    target <- names(visible)[i]
-    fn <- score_fn_for_type(visible[[i]])
-    s <- if (identical(visible[[i]], "dist")) {
-      fn(dat_raw_anon, target, row_number = row_number, split = split)
-    } else {
-      fn(dat_raw_anon, target, row_number = row_number)
-    }
-
-    if (identical(normalize, "range")) {
-      rng <- range(s$SCORE)
-      span <- rng[2] - rng[1]
-      ## A column whose score never varies separates nothing, so it is given
-      ## weight 0 rather than an arbitrary constant that would still shift
-      ## the combined total.
-      s$SCORE <- if (span > 0) (s$SCORE - rng[1]) / span else 0
-    }
-    s
-  })
-
-  combine_scores(scores, weights = weights)
+  score_multi(
+    dat_raw_anon,
+    targets = knowledge$visible,
+    row_number = row_number,
+    weights = weights,
+    normalize = match.arg(normalize),
+    method = match.arg(method),
+    split = split,
+    cov_from = match.arg(cov_from),
+    ridge = ridge,
+    source = match.arg(source),
+    weight = match.arg(weight),
+    .fn_name = "score_by_knowledge"
+  )
 }
 
 #' compare reidentification risk across the W / M / S knowledge levels
