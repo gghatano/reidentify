@@ -4,15 +4,18 @@
 \alias{reid_per_anon}
 \title{per-ANON-record view of a score table}
 \usage{
-reid_per_anon(scores)
+reid_per_anon(scores, confidence = c("tie", "margin"))
 }
 \arguments{
 \item{scores}{a score table (see [score_num()])}
+
+\item{confidence}{which confidence measure to put in the CONFIDENCE
+column, `"tie"` (default) or `"margin"`. See [reid_confidence()].}
 }
 \value{
 a data frame with one row per ANON record and columns
   ANON_ROW_NUMBER, N_CANDIDATES, BEST_SCORE, BEST_TIE_SIZE, CONFIDENCE,
-  TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
+  MARGIN, ECCENTRICITY, TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
 }
 \description{
 Reduces the long score table to one row per ANON record, recording where

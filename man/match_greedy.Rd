@@ -4,7 +4,12 @@
 \alias{match_greedy}
 \title{assign each ANON record to its best-scoring RAW record, independently}
 \usage{
-match_greedy(scores, seed = 0L)
+match_greedy(
+  scores,
+  seed = 0L,
+  confidence = c("tie", "margin"),
+  min_confidence = 0
+)
 }
 \arguments{
 \item{scores}{a score table: a data frame with columns RAW_ROW_NUMBER,
@@ -15,12 +20,23 @@ score is the smallest ("distance", the default) or the largest
 
 \item{seed}{integer seed for the random tie-break (default 0L, so a plain
 call is reproducible). NULL uses the ambient RNG stream instead.}
+
+\item{confidence}{how to fill the CONFIDENCE column: `"tie"` (default,
+`1 / tie size`, a calibrated probability) or `"margin"` (eccentricity,
+a much finer ranking but not a probability). See [reid_confidence()].}
+
+\item{min_confidence}{decline to guess for any ANON record whose
+CONFIDENCE falls below this (default 0, i.e. always guess). A declined
+record keeps its row but is reported with `RAW_ROW_NUMBER = NA` and
+`RESULT = FALSE`, so the trial count is unchanged and the reported rate
+cannot be inflated by simply attacking less.}
 }
 \value{
 a data frame with exactly one row per ANON record, ordered by
   ANON_ROW_NUMBER, with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER,
-  CONFIDENCE (numeric, in (0, 1]) and RESULT (logical: whether the guessed
-  RAW record is in fact the one the ANON record came from).
+  CONFIDENCE (numeric; in (0, 1] for `confidence = "tie"`, non-negative and
+  possibly unbounded for `"margin"`) and RESULT (logical: whether the
+  guessed RAW record is in fact the one the ANON record came from).
 }
 \description{
 For every ANON record this picks the RAW record with the best (by default:
@@ -34,12 +50,13 @@ record that is genuinely indistinguishable from `k` others is credited with
 a `1/k` chance rather than being deterministically awarded to whichever
 candidate happened to sort first (Issue #3).
 
-`CONFIDENCE` is `1 / (number of RAW records tied at the best score)`: the
-probability that this particular draw picked the right record, *given* that
-the right record is among the tied best candidates. It is 1 exactly when the
-best candidate is unique. It deliberately says nothing about how far ahead
-of the runners-up the winner is -- margin / eccentricity confidence is
-Issue #16.
+By default `CONFIDENCE` is `1 / (number of RAW records tied at the best
+score)`: the probability that this particular draw picked the right record,
+*given* that the right record is among the tied best candidates. It is 1
+exactly when the best candidate is unique, which on a continuous score is
+nearly always -- so as a *ranking* it is almost flat.
+`confidence = "margin"` replaces it with the eccentricity, which does
+separate a runaway winner from a photo finish; see [reid_confidence()].
 }
 \examples{
 raw <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))

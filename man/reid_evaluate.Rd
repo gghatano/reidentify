@@ -5,7 +5,12 @@
 \title{evaluate a reidentification attack: baselines, precision-recall, top-k and
 per-record risk}
 \usage{
-reid_evaluate(scores, seeds = 1:20, top_k = c(1, 5, 10))
+reid_evaluate(
+  scores,
+  seeds = 1:20,
+  top_k = c(1, 5, 10),
+  confidence = c("tie", "margin")
+)
 }
 \arguments{
 \item{scores}{a score table produced by a `score_*()` function or
@@ -17,11 +22,21 @@ success rate (default 1:20). Must contain at least 2 distinct values.}
 \item{top_k}{integer vector of guess budgets for the top-k hit rate
 (default `c(1, 5, 10)`); values larger than the number of candidates are
 dropped.}
+
+\item{confidence}{which attacker-visible confidence the precision-recall
+sweep should threshold on: `"tie"` (default, `1 / tie size`) or
+`"margin"` (eccentricity). `"tie"` is a calibrated probability but has
+almost no resolution on continuous scores -- every record with a unique
+best candidate lands on 1, so the sweep collapses to a single point equal
+to the overall success rate. `"margin"` gives a distinct threshold per
+record and is what makes "attack the top 10% and be right most of the
+time" visible. It is an ordering, not a probability (Issue #16).}
 }
 \value{
 an object of class "reid_evaluation": a list with
   \describe{
     \item{n_anon, n_raw, n_pairs}{size of the problem}
+    \item{confidence}{which confidence measure the sweep thresholded on}
     \item{success_analytic}{exact expected single-guess success rate}
     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
       same quantity simulated over `seeds`}

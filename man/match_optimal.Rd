@@ -12,7 +12,9 @@ match_optimal(
   solver = "clue",
   block = NULL,
   warn_size = 1000L,
-  max_size = 5000L
+  max_size = 5000L,
+  confidence = c("tie", "margin"),
+  min_confidence = 0
 )
 }
 \arguments{
@@ -49,6 +51,16 @@ runtime warning is issued (default 1000). NULL disables it.}
 
 \item{max_size}{problem size above which this stops with an error instead
 of running for many minutes (default 5000). NULL disables the guard.}
+
+\item{confidence}{how to fill the CONFIDENCE column: `"tie"` (default) or
+`"margin"` (eccentricity). See [reid_confidence()]. Note that this is a
+property of the *score* of each ANON record on its own, so it does not
+know about the one-to-one constraint; a record the constraint pushed off
+its first choice still reports the confidence of that first choice under
+`"margin"`.}
+
+\item{min_confidence}{decline to guess below this confidence (default 0).
+Applied on top of any declining the padding already did.}
 }
 \value{
 a data frame with the same four columns as [match_greedy()] --

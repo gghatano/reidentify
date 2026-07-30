@@ -26,13 +26,16 @@
 #' records are indistinguishable from it.
 #'
 #' @param scores a score table (see [score_num()])
+#' @param confidence which confidence measure to put in the CONFIDENCE
+#'   column, `"tie"` (default) or `"margin"`. See [reid_confidence()].
 #'
 #' @return a data frame with one row per ANON record and columns
 #'   ANON_ROW_NUMBER, N_CANDIDATES, BEST_SCORE, BEST_TIE_SIZE, CONFIDENCE,
-#'   TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
+#'   MARGIN, ECCENTRICITY, TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
 #'
 #' @keywords internal
-reid_per_anon <- function(scores) {
+reid_per_anon <- function(scores, confidence = c("tie", "margin")) {
+  confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
 
   value <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
@@ -82,7 +85,20 @@ reid_per_anon <- function(scores) {
     )
   })
 
-  do.call(rbind, rows)
+  out <- do.call(rbind, rows)
+
+  ## MARGIN / ECCENTRICITY are reported whichever measure was asked for, so a
+  ## reader can see why the threshold sweep has the resolution it has without
+  ## rerunning anything (Issue #16).
+  conf <- reid_confidence(scores, method = confidence)
+  ord <- match(out$ANON_ROW_NUMBER, conf$ANON_ROW_NUMBER)
+  out$MARGIN <- conf$MARGIN[ord]
+  out$ECCENTRICITY <- conf$ECCENTRICITY[ord]
+  if (identical(confidence, "margin")) {
+    out$CONFIDENCE <- conf$CONFIDENCE[ord]
+  }
+
+  out
 }
 
 #' probability that the true RAW record is inside an attacker's k best guesses
@@ -154,10 +170,19 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' @param top_k integer vector of guess budgets for the top-k hit rate
 #'   (default `c(1, 5, 10)`); values larger than the number of candidates are
 #'   dropped.
+#' @param confidence which attacker-visible confidence the precision-recall
+#'   sweep should threshold on: `"tie"` (default, `1 / tie size`) or
+#'   `"margin"` (eccentricity). `"tie"` is a calibrated probability but has
+#'   almost no resolution on continuous scores -- every record with a unique
+#'   best candidate lands on 1, so the sweep collapses to a single point equal
+#'   to the overall success rate. `"margin"` gives a distinct threshold per
+#'   record and is what makes "attack the top 10% and be right most of the
+#'   time" visible. It is an ordering, not a probability (Issue #16).
 #'
 #' @return an object of class "reid_evaluation": a list with
 #'   \describe{
 #'     \item{n_anon, n_raw, n_pairs}{size of the problem}
+#'     \item{confidence}{which confidence measure the sweep thresholded on}
 #'     \item{success_analytic}{exact expected single-guess success rate}
 #'     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
 #'       same quantity simulated over `seeds`}
@@ -180,7 +205,9 @@ top_k_probability <- function(n_better, tie_size, k) {
 #'
 #' @importFrom stats sd
 #' @export
-reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10)) {
+reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
+                          confidence = c("tie", "margin")) {
+  confidence <- match.arg(confidence)
   validate_reid_scores(scores, "scores")
 
   if (length(seeds) < 2) {
@@ -191,7 +218,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10)) {
     stop("reid_evaluate(): `seeds` must not contain duplicates.", call. = FALSE)
   }
 
-  per_anon <- reid_per_anon(scores)
+  per_anon <- reid_per_anon(scores, confidence = confidence)
   n_anon <- nrow(per_anon)
   n_raw <- length(unique(scores$RAW_ROW_NUMBER))
 
@@ -280,6 +307,8 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10)) {
     TRUE_RANK = per_anon$TRUE_RANK,
     TIE_SIZE = per_anon$TRUE_TIE_SIZE,
     CONFIDENCE = per_anon$CONFIDENCE,
+    MARGIN = per_anon$MARGIN,
+    ECCENTRICITY = per_anon$ECCENTRICITY,
     RISK = risk,
     EMPIRICAL_RATE = as.numeric(hit_counts) / length(seeds),
     stringsAsFactors = FALSE
@@ -292,6 +321,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10)) {
       n_anon = n_anon,
       n_raw = n_raw,
       n_pairs = nrow(scores),
+      confidence = confidence,
       success_analytic = success_analytic,
       success_mean = mean(per_seed$rate),
       success_sd = stats::sd(per_seed$rate),
@@ -344,7 +374,10 @@ print.reid_evaluation <- function(x, ...) {
   ))
   cat(sprintf("  max per-record risk: %.4f\n", x$max_risk))
 
-  cat("  precision-recall (threshold on attacker-visible CONFIDENCE):\n")
+  cat(sprintf(
+    "  precision-recall (threshold on attacker-visible CONFIDENCE, %s):\n",
+    x$confidence %||% "tie"
+  ))
   pr <- x$precision_recall
   show <- utils::head(pr, 5L)
   for (i in seq_len(nrow(show))) {

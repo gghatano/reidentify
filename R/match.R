@@ -25,12 +25,13 @@
 #' a `1/k` chance rather than being deterministically awarded to whichever
 #' candidate happened to sort first (Issue #3).
 #'
-#' `CONFIDENCE` is `1 / (number of RAW records tied at the best score)`: the
-#' probability that this particular draw picked the right record, *given* that
-#' the right record is among the tied best candidates. It is 1 exactly when the
-#' best candidate is unique. It deliberately says nothing about how far ahead
-#' of the runners-up the winner is -- margin / eccentricity confidence is
-#' Issue #16.
+#' By default `CONFIDENCE` is `1 / (number of RAW records tied at the best
+#' score)`: the probability that this particular draw picked the right record,
+#' *given* that the right record is among the tied best candidates. It is 1
+#' exactly when the best candidate is unique, which on a continuous score is
+#' nearly always -- so as a *ranking* it is almost flat.
+#' `confidence = "margin"` replaces it with the eccentricity, which does
+#' separate a runaway winner from a photo finish; see [reid_confidence()].
 #'
 #' @param scores a score table: a data frame with columns RAW_ROW_NUMBER,
 #'   ANON_ROW_NUMBER and SCORE, normally produced by a `score_*()` function or
@@ -39,11 +40,20 @@
 #'   ("similarity").
 #' @param seed integer seed for the random tie-break (default 0L, so a plain
 #'   call is reproducible). NULL uses the ambient RNG stream instead.
+#' @param confidence how to fill the CONFIDENCE column: `"tie"` (default,
+#'   `1 / tie size`, a calibrated probability) or `"margin"` (eccentricity,
+#'   a much finer ranking but not a probability). See [reid_confidence()].
+#' @param min_confidence decline to guess for any ANON record whose
+#'   CONFIDENCE falls below this (default 0, i.e. always guess). A declined
+#'   record keeps its row but is reported with `RAW_ROW_NUMBER = NA` and
+#'   `RESULT = FALSE`, so the trial count is unchanged and the reported rate
+#'   cannot be inflated by simply attacking less.
 #'
 #' @return a data frame with exactly one row per ANON record, ordered by
 #'   ANON_ROW_NUMBER, with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER,
-#'   CONFIDENCE (numeric, in (0, 1]) and RESULT (logical: whether the guessed
-#'   RAW record is in fact the one the ANON record came from).
+#'   CONFIDENCE (numeric; in (0, 1] for `confidence = "tie"`, non-negative and
+#'   possibly unbounded for `"margin"`) and RESULT (logical: whether the
+#'   guessed RAW record is in fact the one the ANON record came from).
 #'
 #' @examples
 #' raw <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
@@ -51,7 +61,9 @@
 #' match_greedy(score_num(d, "V"))
 #'
 #' @export
-match_greedy <- function(scores, seed = 0L) {
+match_greedy <- function(scores, seed = 0L, confidence = c("tie", "margin"),
+                         min_confidence = 0) {
+  confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
 
   ## Internally everything is minimised. A similarity is negated rather than
@@ -84,10 +96,15 @@ match_greedy <- function(scores, seed = 0L) {
     stringsAsFactors = FALSE
   )
 
+  score_row <- picked$SCORE_ROW
+  out <- apply_confidence(out, scores, confidence, min_confidence)
+
   ## Which row of `scores` each winner came from. The reid_by_*() wrappers use
   ## this to recover the per-pair detail columns they have always reported;
   ## it is an implementation detail, not part of the documented return value.
-  attr(out, "score_row") <- picked$SCORE_ROW
+  ## It still points at the argmin row even for a declined record, so the
+  ## wrappers keep reporting the pair the attacker looked at.
+  attr(out, "score_row") <- score_row
 
   out
 }
@@ -241,6 +258,14 @@ reid_lsap_solvers <- function() {
 #'   runtime warning is issued (default 1000). NULL disables it.
 #' @param max_size problem size above which this stops with an error instead
 #'   of running for many minutes (default 5000). NULL disables the guard.
+#' @param confidence how to fill the CONFIDENCE column: `"tie"` (default) or
+#'   `"margin"` (eccentricity). See [reid_confidence()]. Note that this is a
+#'   property of the *score* of each ANON record on its own, so it does not
+#'   know about the one-to-one constraint; a record the constraint pushed off
+#'   its first choice still reports the confidence of that first choice under
+#'   `"margin"`.
+#' @param min_confidence decline to guess below this confidence (default 0).
+#'   Applied on top of any declining the padding already did.
 #'
 #' @return a data frame with the same four columns as [match_greedy()] --
 #'   ANON_ROW_NUMBER, RAW_ROW_NUMBER, CONFIDENCE, RESULT -- one row per ANON
@@ -258,7 +283,10 @@ reid_lsap_solvers <- function() {
 #' @export
 match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
                           dummy_cost = NULL, solver = "clue", block = NULL,
-                          warn_size = 1000L, max_size = 5000L) {
+                          warn_size = 1000L, max_size = 5000L,
+                          confidence = c("tie", "margin"),
+                          min_confidence = 0) {
+  confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
 
   if (nrow(scores) == 0) {
@@ -366,6 +394,14 @@ match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
 
   res <- res[order(res$ANON_ROW_NUMBER), , drop = FALSE]
   rownames(res) <- NULL
+
+  ## A record the padding already declined keeps CONFIDENCE 0 whichever
+  ## measure is asked for: it made no claim, so there is nothing to be
+  ## confident about.
+  declined_by_padding <- is.na(res$RAW_ROW_NUMBER)
+  res <- apply_confidence(res, scores, confidence, min_confidence)
+  res$CONFIDENCE[declined_by_padding] <- 0
+
   res
 }
 
