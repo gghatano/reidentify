@@ -100,16 +100,17 @@ test_that("transform_transaction_to_master computes MAX/MEAN/MEDIAN/MIN, ROWCOUN
 
   ## ID 1 has NUM_DYNAMIC = {1, 3}; ID 2 has {5}
   ##
-  ## NB: the statistic columns are named MAX/MEAN/MEDIAN/MIN *without* the
-  ## source column prefix here, because summarise_all() only prefixes when
-  ## 2+ columns remain after grouping and DYNAMIC_NUM is a single column.
-  ## With 2+ DYNAMIC_NUM columns they become NUM_DYNAMIC_MAX etc. instead.
-  ## That inconsistency is tracked as Issue #26; this test pins the current
-  ## behaviour so the fix there is a visible change.
-  expect_equal(m$MAX, c(3, 5))
-  expect_equal(m$MEAN, c(2, 5))
-  expect_equal(m$MEDIAN, c(2, 5))
-  expect_equal(m$MIN, c(1, 5))
+  ## NB: these used to be named MAX/MEAN/MEDIAN/MIN *without* the source
+  ## column prefix, because summarise_all() only prefixed when 2+ columns
+  ## remained after grouping and DYNAMIC_NUM is a single column here. Issue
+  ## #26 made the naming independent of the column count, so they are now
+  ## NUM_DYNAMIC_MAX etc. -- the same names a 2+ column call produces. This
+  ## test was written to pin the old behaviour so that the fix showed up as a
+  ## visible change; this is that change.
+  expect_equal(m$NUM_DYNAMIC_MAX, c(3, 5))
+  expect_equal(m$NUM_DYNAMIC_MEAN, c(2, 5))
+  expect_equal(m$NUM_DYNAMIC_MEDIAN, c(2, 5))
+  expect_equal(m$NUM_DYNAMIC_MIN, c(1, 5))
 
   ## ROWCOUNT is the number of transaction rows per ID
   expect_equal(m$ROWCOUNT, c(2, 1))

@@ -9,14 +9,38 @@
 #' @param DYNAMIC_NUM list of column name which shows DYNAMIC NUMBER attribute
 #' @param DYNAMIC_CHAR list of column name which shows DYNAMIC CHARACTER attribute
 #'
+#' @section Column naming:
+#'
+#' The aggregate columns are **always** named `<source column>_<statistic>`,
+#' whatever the number of columns given:
+#'
+#' * `DYNAMIC_NUM` yields `<col>_MAX`, `<col>_MEAN`, `<col>_MEDIAN`,
+#'   `<col>_MIN` for every column;
+#' * `DYNAMIC_NUM` and `DYNAMIC_CHAR` each additionally yield `<col>_DIST`.
+#'
+#' This used to depend on how many columns were passed.
+#' `dplyr::summarise_all()` with a named function list only prefixes the
+#' result with the source column name when two or more columns survive
+#' grouping; with a single column it used the bare function names, so
+#' `DYNAMIC_NUM = "NUM_DYNAMIC"` produced `MAX`/`MEAN`/`MEDIAN`/`MIN` while
+#' `DYNAMIC_NUM = c("BIN", "NUM_DYNAMIC")` produced `BIN_MAX`/
+#' `NUM_DYNAMIC_MAX`/... Downstream code therefore could not hard-code a
+#' column name (Issue #26).
+#'
+#' The column *order* is unchanged: statistic-major
+#' (`<col1>_MAX, <col2>_MAX, ..., <col1>_MEAN, ...`), matching what
+#' `summarise_all()` produced for the multi-column case.
+#'
 #' @return a data frame with one row per distinct `ID`, combining the
-#'   STATIC_NUM/STATIC_CHAR columns as-is, MAX/MEAN/MEDIAN/MIN summaries of
-#'   DYNAMIC_NUM, colon-joined distributions (`*_DIST`) of DYNAMIC_NUM and
-#'   DYNAMIC_CHAR, a ROWCOUNT column and the minimum `ROW_NUMBER` per `ID`.
+#'   STATIC_NUM/STATIC_CHAR columns as-is, `<col>_MAX`/`_MEAN`/`_MEDIAN`/
+#'   `_MIN` summaries of DYNAMIC_NUM, `collapse`-joined distributions
+#'   (`<col>_DIST`) of DYNAMIC_NUM and DYNAMIC_CHAR, a ROWCOUNT column and
+#'   the minimum `ROW_NUMBER` per `ID`.
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr summarise_all
 #' @importFrom dplyr summarise
+#' @importFrom dplyr across
 #' @importFrom dplyr distinct
 #' @importFrom dplyr inner_join
 #' @importFrom dplyr ungroup
@@ -35,20 +59,46 @@ transform_transaction_to_master <- function(dat, ROW_NUMBER = "ROW_NUMBER", ID =
     dplyr::distinct() %>%
     ungroup()
 
+  ## Reorder aggregate columns to statistic-major, i.e. all columns' MAX,
+  ## then all columns' MEAN, and so on. dplyr::across() emits them
+  ## column-major; summarise_all() used to emit them statistic-major, and
+  ## Issue #26 is about the *names*, so the order is kept as it was.
+  statistic_major <- function(dat_agg, cols, fns) {
+    ## NB: paste() recycles a zero-length vector to "", so the no-columns case
+    ## has to be short-circuited rather than falling through to paste().
+    if (length(cols) == 0) {
+      return(dat_agg)
+    }
+    ordered <- unlist(lapply(fns, function(f) paste(cols, f, sep = "_")))
+    dat_agg[, c(ID, ordered), drop = FALSE]
+  }
+
   ## max and mean and min and...
+  ## across(.names = "{.col}_{.fn}") names the results the same way whether one
+  ## column or several were passed; summarise_all() did not.
+  stat_fns <- list(MAX = max, MEAN = mean, MEDIAN = median, MIN = min)
   dat_master_statistic <-
     dat %>%
     dplyr::select(dplyr::all_of(c(ID, DYNAMIC_NUM))) %>%
     dplyr::group_by(.data[[ID]]) %>%
-    dplyr::summarise_all(list(MAX = max, MEAN = mean, MEDIAN = median, MIN = min)) %>%
-    dplyr::ungroup()
+    dplyr::summarise(dplyr::across(
+      dplyr::all_of(DYNAMIC_NUM), stat_fns,
+      .names = "{.col}_{.fn}"
+    )) %>%
+    dplyr::ungroup() %>%
+    statistic_major(DYNAMIC_NUM, names(stat_fns))
 
   # distribution
+  dist_cols <- c(DYNAMIC_NUM, DYNAMIC_CHAR)
   dat_master_dist <-
     dat %>%
-    dplyr::select(dplyr::all_of(c(ID, DYNAMIC_NUM, DYNAMIC_CHAR))) %>%
+    dplyr::select(dplyr::all_of(c(ID, dist_cols))) %>%
     dplyr::group_by(.data[[ID]]) %>%
-    dplyr::summarise_all(list(DIST = ~ paste(sort(.), collapse = collapse))) %>%
+    dplyr::summarise(dplyr::across(
+      dplyr::all_of(dist_cols),
+      list(DIST = ~ paste(sort(.), collapse = collapse)),
+      .names = "{.col}_{.fn}"
+    )) %>%
     dplyr::ungroup()
 
   # row count
