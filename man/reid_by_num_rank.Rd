@@ -39,3 +39,7 @@ DISTANCE == 0 for one ANON record) is resolved, as for every other
 reid_by_*() function, by resolve_min_distance_ties()'s "first
 RAW_ROW_NUMBER encountered" rule.
 }
+\seealso{
+[score_num_rank()] and [match_greedy()], the score and assignment
+  layers this is a wrapper around.
+}

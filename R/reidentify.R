@@ -180,6 +180,9 @@ resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
 #'   the RAW record closest in `target` by absolute difference, and whether
 #'   that guess was correct.
 #'
+#' @seealso [score_num()] and [match_greedy()], the score and assignment
+#'   layers this is a wrapper around.
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
@@ -188,17 +191,16 @@ resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
 #' @importFrom magrittr %>%
 #' @export
 reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
-  raw_target <- paste("RAW_", target, sep = "")
-  anon_target <- paste("ANON_", target, sep = "")
-  raw_row_number <- paste("RAW_", row_number, sep = "")
-  anon_row_number <- paste("ANON_", row_number, sep = "")
-  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_num")
+  scores <- score_num(dat_raw_anon, target, row_number, .fn_name = "reid_by_num")
+  picked <- match_greedy(scores, seed = seed)
+  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, "reid_by_num")
 
   dat_raw_anon %>%
-    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(anon_row_number), RAW = dplyr::all_of(raw_target), ANON = dplyr::all_of(anon_target)) %>%
+    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(cols$raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(cols$anon_row_number), RAW = dplyr::all_of(cols$raw_target), ANON = dplyr::all_of(cols$anon_target)) %>%
     dplyr::mutate(DISTANCE = abs(.data$RAW - .data$ANON)) %>%
-    resolve_min_distance_ties(seed = seed) %>%
+    dplyr::slice(attr(picked, "score_row")) %>%
     dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
+    as_reid_output() %>%
     return()
 }
 
@@ -269,7 +271,13 @@ reid_result <- function(dat_reid_result,
 #' @return a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
 #'   DISTANCE and RESULT (logical): exactly one row per ANON record, the
 #'   RAW record closest in `target` by (Levenshtein) edit distance, and
-#'   whether that guess was correct.
+#'   whether that guess was correct. For backward compatibility this also
+#'   carries through every column of `dat_raw_anon`, so the exact shape of
+#'   the result depends on the input; [score_char()] plus [match_greedy()]
+#'   give the same answer in a fixed, input-independent shape.
+#'
+#' @seealso [score_char()] and [match_greedy()], the score and assignment
+#'   layers this is a wrapper around.
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
@@ -280,28 +288,17 @@ reid_result <- function(dat_reid_result,
 #' @importFrom utils adist
 #' @export
 reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
-  raw_target <- paste("RAW_", target, sep = "")
-  anon_target <- paste("ANON_", target, sep = "")
-  raw_row_number <- paste("RAW_", row_number, sep = "")
-  anon_row_number <- paste("ANON_", row_number, sep = "")
-  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_char")
+  scores <- score_char(dat_raw_anon, target, row_number, .fn_name = "reid_by_char")
+  picked <- match_greedy(scores, seed = seed)
+  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, "reid_by_char")
 
-  raw_target_col <- as.character(dat_raw_anon[[raw_target]])
-  anon_target_col <- as.character(dat_raw_anon[[anon_target]])
-
-  vec_distance <- mapply(
-    FUN = function(x, y) {
-      return(adist(x, y)[[1]])
-    },
-    anon_target_col, raw_target_col
-  )
-
-  dat_raw_anon$DISTANCE <- vec_distance
+  dat_raw_anon$DISTANCE <- scores$SCORE
 
   dat_raw_anon %>%
-    dplyr::mutate(RAW_ROW_NUMBER = .data[[raw_row_number]], ANON_ROW_NUMBER = .data[[anon_row_number]], DISTANCE = .data$DISTANCE) %>%
+    dplyr::mutate(RAW_ROW_NUMBER = .data[[cols$raw_row_number]], ANON_ROW_NUMBER = .data[[cols$anon_row_number]], DISTANCE = .data$DISTANCE) %>%
     dplyr::mutate(RESULT = (.data$RAW_ROW_NUMBER == .data$ANON_ROW_NUMBER)) %>%
-    resolve_min_distance_ties(seed = seed) %>%
+    dplyr::slice(attr(picked, "score_row")) %>%
+    as_reid_output() %>%
     return()
 }
 
@@ -327,6 +324,9 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #'   RAW record closest in `target` by distribution distance, and whether
 #'   that guess was correct.
 #'
+#' @seealso [score_dist()] and [match_greedy()], the score and assignment
+#'   layers this is a wrapper around.
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
@@ -335,26 +335,21 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #' @importFrom magrittr %>%
 #' @export
 reid_by_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", split = ":", seed = 0L) {
-  #
-  raw_target <- paste("RAW_", target, sep = "")
-  anon_target <- paste("ANON_", target, sep = "")
-  raw_row_number <- paste("RAW_", row_number, sep = "")
-  anon_row_number <- paste("ANON_", row_number, sep = "")
-  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_dist")
+  ## NB: `split` used to be accepted and then silently dropped -- the old body
+  ## called distribution_distance() without it, so a non-default separator was
+  ## ignored and the whole column was parsed as one number. It is now wired
+  ## through score_dist(). For the default split = ":" the result is unchanged.
+  scores <- score_dist(dat_raw_anon, target, row_number, split = split, .fn_name = "reid_by_dist")
+  picked <- match_greedy(scores, seed = seed)
+  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, "reid_by_dist")
 
-  raw_target_col <- as.character(dat_raw_anon[[raw_target]])
-  anon_target_col <- as.character(dat_raw_anon[[anon_target]])
-
-  ## calc distribution distance
-  # distance = mapply(FUN = calc_KL, raw_target_col, anon_target_col)
-  distance <- mapply(FUN = distribution_distance, raw_target_col, anon_target_col)
-
-  dat_raw_anon$DISTANCE <- distance
+  dat_raw_anon$DISTANCE <- scores$SCORE
 
   dat_raw_anon %>%
-    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(anon_row_number), "DISTANCE") %>%
-    resolve_min_distance_ties(seed = seed) %>%
+    dplyr::select(RAW_ROW_NUMBER = dplyr::all_of(cols$raw_row_number), ANON_ROW_NUMBER = dplyr::all_of(cols$anon_row_number), "DISTANCE") %>%
+    dplyr::slice(attr(picked, "score_row")) %>%
     dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
+    as_reid_output() %>%
     return()
 }
 
@@ -633,6 +628,9 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
 #'   (logical): exactly one row per ANON record, the RAW record closest in
 #'   rank of `target`, and whether that guess was correct.
 #'
+#' @seealso [score_num_rank()] and [match_greedy()], the score and assignment
+#'   layers this is a wrapper around.
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
@@ -642,59 +640,31 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
 #' @importFrom magrittr %<>%
 #' @export
 reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L) {
-  raw_target <- paste("RAW_", target, sep = "")
-  anon_target <- paste("ANON_", target, sep = "")
-  raw_row_number <- paste("RAW_", row_number, sep = "")
-  anon_row_number <- paste("ANON_", row_number, sep = "")
-  check_raw_anon_columns_exist(dat_raw_anon, c(raw_target, anon_target, raw_row_number, anon_row_number), "reid_by_num_rank")
+  ranks <- compute_num_ranks(dat_raw_anon, target, row_number, "reid_by_num_rank")
+  cols <- ranks$cols
 
-  ## rank(..., na.last = TRUE) (the default) does NOT propagate NA: it
-  ## silently assigns missing values a real, high rank instead of erroring
-  ## or returning NA, which would let an ANON/RAW record with a genuinely
-  ## missing target value be reported as a confident (even DISTANCE == 0)
-  ## reidentification match. Stop instead of letting that happen silently.
-  if (anyNA(dat_raw_anon[[anon_target]]) || anyNA(dat_raw_anon[[raw_target]])) {
-    stop(
-      "reid_by_num_rank(): target column \"", target, "\" contains NA/missing ",
-      "values in RAW and/or ANON. rank(..., na.last = TRUE) would silently ",
-      "assign missing values a real rank instead of erroring, which could ",
-      "report a false reidentification match. Remove or explicitly handle ",
-      "missing values before calling reid_by_num_rank().",
-      call. = FALSE
+  scores <- new_reid_scores(
+    raw_row_number = ranks$raw_row_number,
+    anon_row_number = ranks$anon_row_number,
+    score = abs(ranks$anon_rank - ranks$raw_rank)
+  )
+  picked <- match_greedy(scores, seed = seed)
+
+  out <-
+    dat_raw_anon %>%
+    dplyr::select(
+      ANON_ROW_NUMBER = dplyr::all_of(cols$anon_row_number),
+      RAW_ROW_NUMBER = dplyr::all_of(cols$raw_row_number),
+      dplyr::all_of(c(cols$anon_target, cols$raw_target))
     )
-  }
+  out$ANON_RANK <- ranks$anon_rank
+  out$RAW_RANK <- ranks$raw_rank
+  out$DISTANCE <- scores$SCORE
 
-  ## check the rank
-  ## ties.method = "min": deterministic (fixes the reid_by_num_rank()
-  ## non-determinism defect -- "random" gave a different result every run
-  ## for tie-heavy columns) and, more importantly, semantically correct for
-  ## a reidentification-risk tool: genuinely tied values are indistinguishable
-  ## in the data, so they should collapse to the same rank instead of being
-  ## arbitrarily split into a fake total order by incidental row position.
-  dat_anon_rank <-
-    dat_raw_anon %>%
-    dplyr::select(dplyr::all_of(c(anon_row_number, anon_target))) %>%
-    dplyr::distinct()
-  dat_anon_rank$ANON_RANK <- rank(dat_anon_rank[[anon_target]], ties.method = "min")
-  dat_anon_rank %<>%
-    dplyr::select(dplyr::all_of(anon_row_number), "ANON_RANK")
-
-  dat_raw_rank <-
-    dat_raw_anon %>%
-    dplyr::select(dplyr::all_of(c(raw_row_number, raw_target))) %>%
-    dplyr::distinct()
-  dat_raw_rank$RAW_RANK <- rank(dat_raw_rank[[raw_target]], ties.method = "min")
-  dat_raw_rank %<>%
-    dplyr::select(dplyr::all_of(raw_row_number), "RAW_RANK")
-
-  dat_raw_anon %>%
-    dplyr::inner_join(dat_raw_rank, by = raw_row_number) %>%
-    dplyr::inner_join(dat_anon_rank, by = anon_row_number) %>%
-    dplyr::mutate(RAW_ROW_NUMBER = .data[[raw_row_number]], ANON_ROW_NUMBER = .data[[anon_row_number]]) %>%
-    dplyr::mutate(DISTANCE = abs(.data$ANON_RANK - .data$RAW_RANK)) %>%
-    resolve_min_distance_ties(seed = seed) %>%
+  out %>%
+    dplyr::slice(attr(picked, "score_row")) %>%
     dplyr::mutate(RESULT = (.data$ANON_ROW_NUMBER == .data$RAW_ROW_NUMBER)) %>%
-    dplyr::select("ANON_ROW_NUMBER", "RAW_ROW_NUMBER", dplyr::all_of(c(anon_target, raw_target)), "ANON_RANK", "RAW_RANK", "DISTANCE", "RESULT") %>%
+    as_reid_output() %>%
     return()
 }
 

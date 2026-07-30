@@ -33,3 +33,7 @@ a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW,
 \description{
 reidentify by single num static column by using L2 norm
 }
+\seealso{
+[score_num()] and [match_greedy()], the score and assignment
+  layers this is a wrapper around.
+}
