@@ -9,7 +9,8 @@ reid_by_dist(
   target,
   row_number = "ROW_NUMBER",
   split = ":",
-  seed = 0L
+  seed = 0L,
+  generalized = c("stop", "warn", "ignore")
 )
 }
 \arguments{
@@ -34,6 +35,11 @@ use as separators. Must be a single non-empty string.}
 candidates (default 0L, so a plain call is reproducible). Pass a
 different value, or use reid_stability(), to see the run-to-run
 spread. NULL uses the ambient RNG stream instead.}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+See [score_char()]; comparing a raw value with a published region reports
+a success rate far below the real one and raises no error (Issue #40).}
 }
 \value{
 a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,

@@ -4,7 +4,13 @@
 \alias{reid_by_char}
 \title{reidentify by character static column}
 \usage{
-reid_by_char(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 0L)
+reid_by_char(
+  dat_raw_anon,
+  target,
+  row_number = "ROW_NUMBER",
+  seed = 0L,
+  generalized = c("stop", "warn", "ignore")
+)
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
@@ -23,6 +29,11 @@ reid_result()'s defaults even when a non-default row_number was used.}
 candidates (default 0L, so a plain call is reproducible). Pass a
 different value, or use reid_stability(), to see the run-to-run
 spread. NULL uses the ambient RNG stream instead.}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+See [score_char()]; comparing a raw value with a published region reports
+a success rate far below the real one and raises no error (Issue #40).}
 }
 \value{
 a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,

@@ -295,6 +295,302 @@ node_matches <- function(values, node, rule = "auto", units = generalization_uni
 }
 
 ## ---------------------------------------------------------------------------
+## detecting a generalised column (Issue #40)
+##
+## score_num() and score_dist() stop on a generalised column: neither "30代"
+## nor "[30,40)" can be coerced to a number. score_char() does not stop.
+## adist("37", "[30,40)") is 6, and 6 looks exactly like a score -- it is
+## really the length of the bracket string. Measured on
+## docs/investigation/generalization-benchmark.R that misuse reports a success
+## rate of 0.1017 where score_containment() reports 0.4450: a fourfold
+## under-report that raises no error, which is precisely the failure direction
+## docs/lessons-learned.md section 2 is about.
+##
+## WHAT COUNTS AS EVIDENCE. Only a *demonstrated* mismatch: an ANON value that
+## is structurally a region (an interval spanning more than one point, or a
+## suppression mask) together with a RAW value that falls inside it and is not
+## literally equal to it. Both halves are required. Flagging every
+## interval-looking string on its own would stop a perfectly valid call in
+## which both sides carry the same already-binned column ("30代" vs "30代"),
+## where literal comparison is the right thing to do; requiring only the
+## containment half would flag "37" against "37.0", which is a formatting
+## difference and not a generalisation.
+##
+## WHAT THIS CANNOT SEE. A categorical generalisation -- 千代田区 published as
+## 東京都 -- is invisible to any structural test: nothing about the string
+## "東京都" says it contains 千代田区. That relationship exists only in a
+## declared hierarchy (generalization_hierarchy()), which the value-comparison
+## scores do not take. Structural detection is a floor, not a guarantee. For
+## anything generalised categorically the only safe route is
+## score_containment() with the hierarchy, and containment_counts() to see
+## that the narrowing is what you expect.
+## ---------------------------------------------------------------------------
+
+#' is this value a suppression mask?
+#'
+#' @param x character vector
+#'
+#' @return logical vector
+#'
+#' @keywords internal
+is_generalization_mask <- function(x) {
+  s <- trimws(as.character(x))
+  !is.na(s) & grepl("\\*$", s)
+}
+
+#' does a value name a region rather than a single value?
+#'
+#' `TRUE` for a value that is structurally a *generalisation*: an interval
+#' covering more than one point (`"[30,40)"`, `"30代"`, `"30-39"`, `"65以上"`),
+#' or a suppression mask (`"*"`, `"135****"`). `FALSE` for an ordinary value,
+#' including a bare number -- `"35"` parses as the degenerate interval
+#' `[35, 35]`, which is a value and not a region.
+#'
+#' `NA` is `FALSE`. A missing value can mean anything, and treating it as a
+#' generalisation would flag every column that merely has a gap in it.
+#'
+#' The `"30代"` / `"30s"` decade form is only accepted for a multiple of ten.
+#' [parse_generalized_interval()] reads `"8s"` as `[8, 18)`, which is right for
+#' containment (a hierarchy may legitimately declare such a node) but wrong
+#' here: over 200,000 random two-character strings, 0.256% were of the form
+#' digit + `"s"` and every one of them was reported as a generalisation --
+#' which is how this check first stopped a passing test that had nothing to do
+#' with generalisation. Requiring a multiple of ten drops the rate to 0.0245%,
+#' and nobody writes "the 8s" for a decade.
+#'
+#' A *categorical* generalisation cannot be recognised this way: nothing about
+#' the string `"東京都"` says it contains `"千代田区"`. That relationship lives
+#' in a declared hierarchy, so this returns `FALSE` for it. See the note at the
+#' head of `R/generalize.R`.
+#'
+#' @param x vector of values
+#' @param units unit strings that may follow a number, see
+#'   [generalization_units()]
+#'
+#' @return logical vector, one per element of `x`
+#'
+#' @seealso [score_containment()], the score to use once a column turns out to
+#'   hold generalised values.
+#'
+#' @examples
+#' is_generalized_value(c("37", "30s", "[30,40)", "135****", "M", NA))
+#'
+#' @export
+is_generalized_value <- function(x, units = generalization_units()) {
+  v <- as.character(x)
+  out <- rep(FALSE, length(v))
+  known <- !is.na(v)
+  if (!any(known)) {
+    return(out)
+  }
+
+  ## Parse once per distinct value: a candidate table repeats the same handful
+  ## of generalised strings across every pair.
+  s <- trimws(v[known])
+  u <- unique(s)
+  hit <- is_generalization_mask(u)
+
+  ## "8s" parses as [8, 18); see the note above for why that does not count
+  ## as a generalisation here.
+  odd_decade <- grepl(paste0("^(", GEN_NUM, ")\\s*(", GEN_DECADE, "|s)$"), u) &
+    !grepl(paste0("^[-+]?[0-9]*0\\s*(", GEN_DECADE, "|s)$"), u)
+
+  for (i in which(!hit & !odd_decade)) {
+    iv <- parse_generalized_interval(u[i], units)
+    hit[i] <- !is.null(iv) && isTRUE(iv$lower < iv$upper)
+  }
+
+  out[known] <- hit[match(s, u)]
+  out
+}
+
+## How much of the ANON side has to look like a region before the column is
+## called generalised.
+##
+## A single region-looking value is not enough, and this is measured rather
+## than assumed. `stringi::stri_rand_strings(n, 2)` -- the generator behind
+## create_dummy_master_data()'s CHAR column, and as ordinary a character column
+## as exists -- produces a value this test calls a region 0.0245% of the time
+## (see is_generalized_value()); over 2000 draws of 40 such strings the largest
+## share of any one column was 0.025 and the mean was 0.00026. A real
+## generalised column sits at 1.00: every published value is a region, and a
+## fully masked one likewise. The threshold below leaves roughly an order of
+## magnitude of clearance on each side.
+##
+## The cost of the threshold is that a column where only a small minority of
+## values are suppressed is not reported. That is the deliberate trade: a stop
+## on ordinary data would be a tool that cries wolf, and a tool people switch
+## off is worth less than one that catches the case Issue #40 measured, where
+## every value is a region.
+GENERALIZATION_SHARE_THRESHOLD <- 0.2
+
+#' pairs showing that a target column is generalised on the ANON side
+#'
+#' Requires two independent facts, because either alone misfires: enough of the
+#' ANON side has to be region-shaped (`min_share`), *and* some RAW value has to
+#' fall inside one of those regions without being equal to it. Without the
+#' second, `"37"` against `"37.0"` would be reported as a generalisation;
+#' without the first, one accidental `"0s"` in a column of random codes would.
+#'
+#' @param raw_vals,anon_vals the two sides of one column of a candidate table
+#' @param units unit strings, see [generalization_units()]
+#' @param max_examples how many distinct example pairs to keep for the message
+#' @param min_share the share of non-missing ANON entries that must be regions
+#'
+#' @return a data frame with columns `RAW` and `ANON`, with zero rows when
+#'   there is no evidence. The share actually observed is attached as the
+#'   `share` attribute.
+#'
+#' @keywords internal
+generalization_evidence <- function(raw_vals, anon_vals,
+                                    units = generalization_units(),
+                                    max_examples = 3L,
+                                    min_share = GENERALIZATION_SHARE_THRESHOLD) {
+  none <- data.frame(RAW = character(0), ANON = character(0),
+                     stringsAsFactors = FALSE)
+
+  rv <- as.character(raw_vals)
+  av <- as.character(anon_vals)
+  known <- av[!is.na(av)]
+  uv <- unique(rv[!is.na(rv)])
+  if (length(uv) == 0 || length(known) == 0) {
+    return(none)
+  }
+
+  ug <- unique(known)
+  is_region <- is_generalized_value(ug, units)
+  share <- mean(is_region[match(known, ug)])
+  if (share < min_share) {
+    return(structure(none, share = share))
+  }
+
+  ug <- ug[is_region]
+  if (length(ug) == 0) {
+    return(structure(none, share = share))
+  }
+
+  hit_raw <- character(0)
+  hit_anon <- character(0)
+  for (g in ug) {
+    rule <- if (is_generalization_mask(g)) "prefix" else "auto"
+    inside <- node_matches(uv, g, rule, units) & uv != g
+    if (any(inside)) {
+      hit_raw <- c(hit_raw, uv[which(inside)[1]])
+      hit_anon <- c(hit_anon, g)
+      if (length(hit_anon) >= max_examples) {
+        break
+      }
+    }
+  }
+  if (length(hit_anon) == 0) {
+    return(structure(none, share = share))
+  }
+  structure(
+    data.frame(RAW = hit_raw, ANON = hit_anon, stringsAsFactors = FALSE),
+    share = share
+  )
+}
+
+#' render the evidence pairs for an error message
+#'
+#' @param ev the data frame from [generalization_evidence()]
+#'
+#' @return a single string
+#'
+#' @keywords internal
+generalization_evidence_text <- function(ev) {
+  paste(sprintf("RAW \"%s\" falls inside ANON \"%s\"", ev$RAW, ev$ANON),
+        collapse = "; ")
+}
+
+#' stop, or warn, when a value-comparison score is given a generalised column
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param cols resolved column names from [reid_prefixed_columns()]
+#' @param target the target name as the caller wrote it
+#' @param action `"stop"`, `"warn"` or `"ignore"`
+#' @param fn_name the user-facing function name, for the message
+#' @param units unit strings, see [generalization_units()]
+#'
+#' @return `invisible(TRUE)` when evidence was found and `action` was not
+#'   `"stop"`, `invisible(FALSE)` when there was none
+#'
+#' @keywords internal
+check_generalized_target <- function(dat_raw_anon, cols, target, action,
+                                     fn_name, units = generalization_units()) {
+  action <- match.arg(action, c("stop", "warn", "ignore"))
+  if (identical(action, "ignore")) {
+    return(invisible(FALSE))
+  }
+
+  ev <- generalization_evidence(dat_raw_anon[[cols$raw_target]],
+                                dat_raw_anon[[cols$anon_target]], units)
+  if (nrow(ev) == 0) {
+    return(invisible(FALSE))
+  }
+
+  msg <- paste0(
+    fn_name, "(): column \"", target, "\" is generalised on the ANON side (",
+    format(round(100 * (attr(ev, "share") %||% 1), 1)), "% of its published ",
+    "values are regions) -- the published value is a region containing the raw ",
+    "one, not a value to compare with it (",
+    generalization_evidence_text(ev), "). Comparing them ",
+    "directly measures the printed shape of the region, not the risk: on ",
+    "generalised data it reports a success rate several times lower than the ",
+    "real one and raises no error, so the release looks safer than it is ",
+    "(docs/lessons-learned.md section 2). Use score_containment(dat, \"",
+    target, "\"), which asks which RAW records could have produced each ",
+    "published region. If this column really is meant to be compared ",
+    "literally, pass generalized = \"warn\" or generalized = \"ignore\"."
+  )
+
+  if (identical(action, "stop")) {
+    stop(msg, call. = FALSE)
+  }
+  warning(msg, call. = FALSE)
+  invisible(TRUE)
+}
+
+#' the error message for a target column that has to be numeric and is not
+#'
+#' Named separately from [check_generalized_target()] because these callers
+#' cannot continue at all: there is no arithmetic to do on a character column,
+#' so there is no `"warn"` to offer. The message still runs the generalisation
+#' check, because "this column is character" and "this column is a set of
+#' published regions" call for completely different fixes.
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param cols resolved column names from [reid_prefixed_columns()]
+#' @param target the target name as the caller wrote it
+#' @param fn_name the user-facing function name
+#' @param alternative what to suggest when the column is *not* generalised
+#' @param units unit strings, see [generalization_units()]
+#'
+#' @return a single string
+#'
+#' @keywords internal
+non_numeric_target_message <- function(dat_raw_anon, cols, target, fn_name,
+                                       alternative,
+                                       units = generalization_units()) {
+  ev <- generalization_evidence(dat_raw_anon[[cols$raw_target]],
+                                dat_raw_anon[[cols$anon_target]], units)
+  base <- paste0(
+    fn_name, "(): column \"", target, "\" is character or factor, not ",
+    "numeric, so no arithmetic distance is defined on it."
+  )
+  if (nrow(ev) == 0) {
+    return(paste0(base, " ", alternative))
+  }
+  paste0(
+    base, " Its ANON values are generalised regions (",
+    generalization_evidence_text(ev), "). Use score_containment(dat, \"",
+    target, "\"): a generalised column answers \"which RAW records could have ",
+    "produced this published region\", not \"how far apart are these two ",
+    "values\" (docs/lessons-learned.md section 2)."
+  )
+}
+
+## ---------------------------------------------------------------------------
 ## generalisation hierarchies
 ## ---------------------------------------------------------------------------
 

@@ -4,7 +4,13 @@
 \alias{compute_num_ranks}
 \title{compute the per-row RAW/ANON ranks used by score_num_rank()}
 \usage{
-compute_num_ranks(dat_raw_anon, target, row_number, fn_name)
+compute_num_ranks(
+  dat_raw_anon,
+  target,
+  row_number,
+  fn_name,
+  generalized = c("stop", "warn", "ignore")
+)
 }
 \arguments{
 \item{dat_raw_anon}{dataframe of raw_anon form}
@@ -15,6 +21,8 @@ compute_num_ranks(dat_raw_anon, target, row_number, fn_name)
 prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 
 \item{fn_name}{name used in error messages}
+
+\item{generalized}{`"stop"`, `"warn"` or `"ignore"`; see [score_num_rank()]}
 }
 \value{
 a list with the per-candidate-row vectors `raw_row_number`,
