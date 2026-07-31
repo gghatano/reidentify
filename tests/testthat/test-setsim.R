@@ -389,11 +389,19 @@ test_that("more bands keep more pairs", {
     stringsAsFactors = FALSE
   )
 
-  kept <- vapply(c(8, 16, 32, 64), function(b) {
-    attr(lsh_candidates(raw, anon, "S", n_hash = 64, bands = b),
-         "blocking")$n_pairs_kept
-  }, numeric(1))
+  ## Fewer bands means a stricter filter, so the recall-loss warning added in
+  ## Issue #36 fires for the low-band settings; that is the behaviour under
+  ## test two lines down, not a surprise.
+  info <- lapply(c(8, 16, 32, 64), function(b) {
+    suppressWarnings(attr(lsh_candidates(raw, anon, "S", n_hash = 64, bands = b),
+                          "blocking"))
+  })
+  kept <- vapply(info, function(i) i$n_pairs_kept, numeric(1))
   expect_true(all(diff(kept) >= 0))
+
+  ## and keeping more pairs can only keep more true pairs (Issue #36)
+  recall <- vapply(info, function(i) i$recall, numeric(1))
+  expect_true(all(diff(recall) >= 0))
 })
 
 test_that("lsh_candidates validates its arguments", {
@@ -411,8 +419,15 @@ test_that("lsh_candidates on wholly disjoint data keeps nothing and says so", {
                     stringsAsFactors = FALSE)
   anon <- data.frame(ROW_NUMBER = 1:3, S = c("u:v", "w:x", "y:z"),
                      stringsAsFactors = FALSE)
-  blocked <- lsh_candidates(raw, anon, "S", n_hash = 32, bands = 8)
+  ## Losing every true pair is the loudest case there is, so it warns
+  ## (Issue #36): a candidate set with nothing in it reports zero
+  ## reidentifications, which is indistinguishable from a safe release.
+  expect_warning(
+    blocked <- lsh_candidates(raw, anon, "S", n_hash = 32, bands = 8),
+    "LOWER bound"
+  )
 
   expect_equal(nrow(blocked), 0L)
   expect_equal(attr(blocked, "blocking")$n_anon_without_candidate, 3)
+  expect_equal(attr(blocked, "blocking")$recall, 0)
 })

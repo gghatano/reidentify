@@ -23,6 +23,7 @@
 - [多属性を同時に使う](#多属性を同時に使う)
 - [まれな値ほど強い手がかり: IDF 重み](#まれな値ほど強い手がかり-idf-重み)
 - [集合属性（買い物かご・訪問先）](#集合属性買い物かご訪問先)
+- [大規模データ: ブロッキングで候補を絞る](#大規模データ-ブロッキングで候補を絞る)
 - [一般化された値（「30代」「東京都」）](#一般化された値30代東京都)
 - [疎なデータ: Scoreboard-RH](#疎なデータ-scoreboard-rh)
 - [割当層: 貪欲と大域最適](#割当層-貪欲と大域最適)
@@ -43,14 +44,14 @@ R 4.x と、依存パッケージ（`dplyr`, `magrittr`, `stringi`, `tibble`, `p
 必要です。**`devtools` は不要**です。
 
 `match_optimal()`（大域最適割当）を使う場合は `clue` も必要です。
-`score_minhash()` / `lsh_candidates()` は `openssl` を使います。
-どちらも無くても、他の機能はそのまま動きます。
+無くても、他の機能はそのまま動きます。
+`score_minhash()` / `lsh_candidates()` のハッシュは自前実装なので、追加の依存はありません。
 
 ### 方法 1: GitHub から直接（base R のみ、1 行）
 
 ```r
 install.packages(c("dplyr", "magrittr", "stringi", "tibble", "philentropy"))
-install.packages(c("clue", "openssl"))  # match_optimal() / minhash 系を使う場合
+install.packages("clue")  # match_optimal()（大域最適割当）を使う場合
 
 install.packages(
   "https://github.com/gghatano/reidentify/archive/refs/heads/master.tar.gz",
@@ -398,34 +399,165 @@ c(dist    = reid_evaluate(score_dist(set_pairs, "ITEMS"), seeds = 1:20)$success_
 「この稀な品目を両方が持っている」という最も強い証拠を捨ててしまいます。
 `score_jaccard()` は `method = "dice"` / `"overlap"` / `"tversky"` も選べます。
 
-件数が多くて総当たりが重いときは `lsh_candidates()` で候補を絞れます。
+件数が多くて総当たりが重いときは、次節の `lsh_candidates()` で候補を絞れます。
+
+---
+
+## 大規模データ: ブロッキングで候補を絞る
+
+`join_raw_anon_data()` は RAW × ANON の**全**ペアを作ります。これは n² で伸びるため、
+n = 100,000 では 10¹⁰ ペア・約 149 GB になります。**どんなに速い割当ソルバでも
+この壁は越えられません**（Issue #36）。
+
+ブロッキングは「安いキーが一致するペアだけを候補にする」ことで n² を崩します。
+`block_candidates()` は準識別子の完全一致（またはその粗視化）で絞ります。
+
+```r
+cand <- block_candidates(raw, anon, keys = "ZIP")
+attr(cand, "blocking")
+#> blocking (deterministic): 1,156 of 40,000 pair(s) kept (2.89% of the full 200 x 200 join)
+#>   recall       : 1.0000  (200 of 200 true pair(s) retained)
+#>   ANON records with no candidate at all: 0
+#>   settings     : keys = ZIP
+```
+
+ペアの 97.1% を捨てて、**正解ペアは 1 つも失っていません**（recall 1.0000）。
+このとき再識別率は総当たりと完全に一致します。
+
+```r
+qi <- c(AGE = "num", ZIP = "char", SEX = "char")
+c(full    = reid_evaluate(score_multi(pairs, qi, screen = "none"),
+                          seeds = 1:20)$success_analytic,
+  blocked = reid_evaluate(score_multi(cand,  qi, screen = "none"),
+                          seeds = 1:20)$success_analytic)
+#>    full blocked 
+#>    0.92    0.92 
+```
+
+（`screen = "none"` を渡しているのは、ブロッキングキーは**ブロック内では定数**に
+なるため、同じ列をスコアにも入れると軸診断が正しく「無情報」と警告するからです。）
+
+### 再現率（recall）を必ず見る
+
+**ブロッキングが正解ペアを取りこぼすと、再識別率は実際より低く出ます。**
+低い数値は歓迎され、疑われにくいので、これはもっとも危険な壊れ方です。
+この節の関数はすべて **recall（正解ペアが候補に残った割合）を実測して報告し、
+1 を下回れば警告します。**
+
+ANON 側で AGE にノイズを加えてあるので、AGE の完全一致でブロックすると壊れます。
+
+```r
+lossy <- block_candidates(raw, anon, keys = "AGE")
+attr(lossy, "blocking")
+#> blocking (deterministic): 768 of 40,000 pair(s) kept (1.92% of the full 200 x 200 join)
+#>   recall       : 0.3900  (78 of 200 true pair(s) retained)
+#>   ANON records with no candidate at all: 2
+#>   ! 122 true pair(s) were discarded. A reidentification rate measured on
+#>     this candidate set is a LOWER bound: those records cannot be found.
+#>   settings     : keys = AGE
+```
+
+`reid_evaluate()` は、渡された候補表が総当たりでないことを**スコア表そのものから
+検出します**（全結合なら必ず `n_anon × n_raw` 行あるため）。属性を引き継ぐ必要も、
+利用者が申告する必要もありません。
+
+```r
+reid_evaluate(score_multi(lossy, qi, screen = "none"), seeds = 1:20)
+#> reid evaluation: 198 ANON x 191 RAW record(s), 768 candidate pair(s)
+#>   candidate set  : BLOCKED -- 2.031% of the full 37818-pair join kept
+#>     true RAW record absent from the candidates of 120/198 ANON record(s)
+#>     -> the success rate below is a LOWER bound. ANON records that were left
+#>        with no candidate at all are not counted here at all.
+#>   success rate   : 0.3838 exact | simulated mean 0.3833 sd 0.0049 range [0.3737, 0.3889] over 20 seeds
+#>   baseline       : random 0.1122 | mode 0.0051   (lift vs random: 3.42x)
+#>   top-k hit rate : k=1 0.3838  k=5 0.3939
+#>   max per-record risk: 1.0000
+#>   precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+#>     conf >= Inf : attack 21/198 (10.6%)  precision 0.0952  recall 0.0101
+#>     conf >= 2.2361 : attack 23/198 (11.6%)  precision 0.1304  recall 0.0152
+#>     conf >= 2.0000 : attack 31/198 (15.7%)  precision 0.1613  recall 0.0253
+#>     conf >= 1.7321 : attack 41/198 (20.7%)  precision 0.1951  recall 0.0404
+#>     conf >= 1.6641 : attack 43/198 (21.7%)  precision 0.2093  recall 0.0455
+#>     ... 42 more threshold(s)
+```
+
+0.92 が 0.38 に落ちています。**キーの選び方だけで、リスクが 2.4 倍安全に見えます。**
+
+取りこぼしを買い戻す方法は 2 つあります。キーを粗くする（`transform`）か、
+複数のキーで絞った結果を**和集合**にする（`keys` にリストを渡す）かです。
+
+```r
+attr(block_candidates(raw, anon, keys = "AGE",
+                      transform = list(AGE = function(x) x %/% 10)),
+     "blocking")$recall
+#> [1] 0.88
+
+attr(block_candidates(raw, anon, keys = list("ZIP", "AGE")), "blocking")$recall
+#> [1] 1
+```
+
+### 集合属性には min-hash + LSH
+
+集合値の列（買い物かご・訪問先）には一致するキーがないので、min-hash 署名の
+バンド衝突で候補を作ります。`bands` を増やすほど候補は増え、recall も上がります。
 
 ```r
 blocked <- lsh_candidates(set_raw, set_anon, "ITEMS", bands = 32, seed = 1)
 attr(blocked, "blocking")
-#> $n_pairs_full
-#> [1] 40000
-#>
-#> $n_pairs_kept
-#> [1] 1355
-#>
-#> $kept_fraction
-#> [1] 0.033875
-#>
-#> $n_anon_without_candidate
-#> [1] 13
-#>
-#> $n_hash
-#> [1] 128
-#>
-#> $bands
-#> [1] 32
-#>
+#> blocking (minhash-lsh): 1,355 of 40,000 pair(s) kept (3.388% of the full 200 x 200 join)
+#>   recall       : 0.8850  (177 of 200 true pair(s) retained)
+#>   ANON records with no candidate at all: 13
+#>   ! 23 true pair(s) were discarded. A reidentification rate measured on
+#>     this candidate set is a LOWER bound: those records cannot be found.
+#>   settings     : n_hash = 128, bands = 32
 ```
 
-> **ブロッキングは真の相手を取りこぼします。** 上の例では 13 件の ANON レコードが
-> 候補ゼロになりました。ここで測った成功率は**下がる方向に偏る**ので、
-> 総当たりが可能な規模なら絞らずに測ってください。
+**この recall 0.8850 は、Issue #36 まで見えていませんでした。** 既定の `bands = 32`
+は 11.5% の正解ペアを捨てます。`bands = 64` にすると recall 1.0 になる代わりに
+候補は 45% まで戻ります（実測は
+[`docs/investigation/blocking-benchmark-log.txt`](docs/investigation/blocking-benchmark-log.txt)）。
+
+### 上位 k 件だけ残す
+
+スコアを計算した**後**で絞るのが `top_k_candidates()` です。第 1 段の安いスコアで
+候補を k 件に落とし、第 2 段の高いスコアをその上だけで回す、という使い方をします。
+
+```r
+attr(top_k_candidates(s_multi, k = 10), "blocking")
+#> blocking (top-k): 2,077 of 40,000 pair(s) kept (5.192% of the full 200 x 200 join)
+#>   recall       : 1.0000  (200 of 200 true pair(s) retained)
+#>   ANON records with no candidate at all: 0
+#>   settings     : k = 10, ties = keep
+```
+
+同点は既定で**切らずに残します**（`ties = "keep"`）。k 番目と k+1 番目が同点なら
+選ぶ根拠がなく、行順で切れば理由なく正解ペアを落として数値を下げるからです。
+
+自作のフィルタで候補を絞った場合は、`blocking_recall()` で同じ指標を測れます。
+
+```r
+blocking_recall(cand, raw, anon)$kept_fraction
+#> [1] 0.0289
+```
+
+### 実測: n を増やしたときの伸び方
+
+`docs/investigation/blocking-benchmark.R` の実測（`ZIP` でブロッキング、recall は
+全 n で 1.0000）。log-log 傾きで、ペア数・メモリの指数が **2.00 → 1.00** に落ちます。
+
+| n | 総当たりペア | 総当たり秒 | 総当たり MB | ブロック後ペア | ブロック秒 | ブロック MB |
+|---|---|---|---|---|---|---|
+| 500 | 250,000 | 0.27 | 26.8 | 2,982 | 0.00 | 0.4 |
+| 1,000 | 1,000,000 | 1.32 | 107.0 | 6,164 | 0.00 | 0.8 |
+| 2,000 | 4,000,000 | 6.41 | 427.6 | 12,120 | 0.01 | 1.7 |
+| 4,000 | 16,000,000 | 28.00 | 1,709.7 | 23,790 | 0.01 | 3.3 |
+| 8,000 | — | — | — | 47,796 | 0.03 | 6.6 |
+| 16,000 | — | — | — | 95,918 | 0.11 | 13.1 |
+| 32,000 | — | — | — | 192,480 | 0.39 | 26.3 |
+
+n = 32,000 の候補生成からスコア・評価まで通しで **49.9 秒 / 26 MB** です
+（うち候補生成は 0.4 秒で、残りはスコア計算と 5 シードの評価）。
+同じ問題の総当たりは 10 億ペアで、このマシンでは作れません。
 
 ---
 
@@ -855,7 +987,7 @@ reid_by_dist(join_raw_anon_data(m2, m2), "NUM_DYNAMIC_DIST", split = "|")
 
 ## 関数一覧
 
-エクスポートされている 52 関数のすべてです。
+エクスポートされている 55 関数のすべてです。
 
 ### データ準備
 
@@ -887,7 +1019,18 @@ reid_by_dist(join_raw_anon_data(m2, m2), "NUM_DYNAMIC_DIST", split = "|")
 | `score_profile(dat, target, bins)` | 分布列の構成比の形の近さ |
 | `score_containment(dat, targets, hierarchy)` | 一般化区画に RAW が含まれるかで絞る |
 | `score_scoreboard(dat, targets, tolerance)` | 疎行列向け Scoreboard-RH スコア |
-| `lsh_candidates(raw, anon, target, bands)` | min-hash LSH で候補ペアを事前に絞る |
+
+### 候補生成・ブロッキング
+
+いずれも**削減率と再現率（recall）を実測して `blocking` 属性に記録**し、
+recall が 1 を下回れば警告します。
+
+| 関数 | 説明 |
+|---|---|
+| `block_candidates(raw, anon, keys, transform)` | 準識別子の完全一致（または粗視化）で候補を絞る決定的ブロッキング。`keys` にリストを渡すと和集合 |
+| `lsh_candidates(raw, anon, target, bands)` | 集合属性向け。min-hash LSH で候補ペアを絞る |
+| `top_k_candidates(scores, k, ties)` | スコア表を ANON ごとに上位 k 件へ刈り込む |
+| `blocking_recall(candidates, raw, anon)` | 自作の候補集合の削減率と再現率を測る |
 
 ### 統合層・軸の診断
 
@@ -966,6 +1109,17 @@ reid_by_dist(join_raw_anon_data(m2, m2), "NUM_DYNAMIC_DIST", split = "|")
   誤用すると実リスクの約 1/4 しか出ません（Issue #40: 0.1017 対 0.4450）。
   **低い数値が出たときこそ、手法が対象に合っているかを疑ってください。**
 
+- **ブロッキングは、再現率が 100% でなければリスクを過小報告します。**
+  `block_candidates()` / `lsh_candidates()` / `top_k_candidates()` は候補ペアを
+  捨てるので、正解ペアを落とせばそのレコードは**永久に特定できなくなり、
+  成功率は下がります**。上の実測では、キーを `ZIP`（recall 1.0000）から
+  `AGE`（recall 0.3900）に変えただけで 0.92 が 0.38 になりました。
+  必ず `attr(candidates, "blocking")` の recall を確認し、
+  1 でないなら結果を**下界**として報告してください。`reid_evaluate()` は
+  総当たりでない候補表を自動検出して出力の先頭に明示しますが、
+  候補ゼロになった ANON レコードはそもそも母数に入りません。
+  総当たりが可能な規模なら、絞らずに測るのが正解です（Issue #36）。
+
 - **`match_optimal()` は重なりが部分的なときリスクを過小報告します。**
   重なりが不明なら `match_greedy()` の値を併記してください（Issue #15）。
 
@@ -997,7 +1151,7 @@ reid_by_dist(join_raw_anon_data(m2, m2), "NUM_DYNAMIC_DIST", split = "|")
 
 | ドキュメント | 内容 |
 |---|---|
-| [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) | 再識別手法カタログ（22 件）と評価フレームの設計。実装済み・未実装の全体像 |
+| [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) | 再識別手法カタログ（24 件）と評価フレームの設計。実装済み・未実装の全体像 |
 | [`docs/default-changes.md`](docs/default-changes.md) | 既定値の変更履歴。同じデータで過去と違う数値が出る変更の記録 |
 | [`docs/implementation-plan.md`](docs/implementation-plan.md) | Issue 候補と依存関係、実装の進め方 |
 | [`docs/lessons-learned.md`](docs/lessons-learned.md) | 調査・修正・統合作業から得た知見 |

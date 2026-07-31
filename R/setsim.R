@@ -477,10 +477,11 @@ band_keys <- function(sig, bands) {
 #' failure direction a safety-checking tool must not take quietly
 #' (docs/lessons-learned.md section 2), so this function is opt-in, never used
 #' by any other function in the package, and records what it discarded in the
-#' `blocking` attribute of its result (`n_pairs_full`, `n_pairs_kept`,
-#' `kept_fraction`, `n_anon_without_candidate`). Use it to make a large
-#' assessment feasible, then confirm the conclusion on the full join for a
-#' subsample -- and read the resulting rate as a lower bound.
+#' `blocking` attribute of its result -- including the **recall**, the fraction
+#' of true pairs it kept, which it measures exactly against the shared
+#' `row_number` (Issue #36). It warns when that recall is below 1. Use it to
+#' make a large assessment feasible, then confirm the conclusion on the full
+#' join for a subsample -- and read the resulting rate as a lower bound.
 #'
 #' @param raw,anon data frames, as for [join_raw_anon_data()]
 #' @param target name of the set-valued column, present in both, **before**
@@ -496,8 +497,10 @@ band_keys <- function(sig, bands) {
 #' @param raw_header,anon_header column prefixes, as for [join_raw_anon_data()]
 #'
 #' @return a data frame in raw_anon form holding a *subset* of the pairs
-#'   [join_raw_anon_data()] would produce, carrying a `blocking` attribute
-#'   describing what was dropped.
+#'   [join_raw_anon_data()] would produce, carrying a `blocking` attribute (a
+#'   [print()]able "reid_blocking" record; see [block_candidates()]).
+#'
+#' @seealso [block_candidates()] for deterministic blocking on a key column.
 #'
 #' @examples
 #' raw <- data.frame(
@@ -576,21 +579,20 @@ lsh_candidates <- function(raw, anon, target, row_number = "ROW_NUMBER",
     ai <- pairs$ai
   }
 
-  out_raw <- raw[ri, , drop = FALSE]
-  out_anon <- anon[ai, , drop = FALSE]
-  names(out_raw) <- paste0(raw_header, names(out_raw))
-  names(out_anon) <- paste0(anon_header, names(out_anon))
-  out <- cbind(out_raw, out_anon)
-  rownames(out) <- NULL
+  out <- assemble_candidates(raw, anon, ri, ai, raw_header, anon_header)
 
-  n_full <- nrow(raw) * nrow(anon)
-  attr(out, "blocking") <- list(
-    n_pairs_full = n_full,
+  truth <- count_true_pairs(raw[[row_number]], anon[[row_number]], ri, ai)
+  info <- new_blocking_info(
+    method = "minhash-lsh",
+    n_raw = nrow(raw), n_anon = nrow(anon),
+    n_pairs_full = as.numeric(nrow(raw)) * as.numeric(nrow(anon)),
     n_pairs_kept = length(ri),
-    kept_fraction = if (n_full > 0) length(ri) / n_full else NA_real_,
+    n_true_pairs = truth$n_true_pairs,
+    n_true_pairs_kept = truth$n_true_pairs_kept,
     n_anon_without_candidate = nrow(anon) - length(unique(ai)),
-    n_hash = as.integer(n_hash),
-    bands = as.integer(bands)
+    extra = list(n_hash = as.integer(n_hash), bands = as.integer(bands))
   )
+  attr(out, "blocking") <- info
+  warn_blocking_loss(info, "lsh_candidates")
   out
 }

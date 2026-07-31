@@ -37,6 +37,10 @@ be right most of the time" visible. It is an ordering, not a probability
 an object of class "reid_evaluation": a list with
   \describe{
     \item{n_anon, n_raw, n_pairs}{size of the problem}
+    \item{n_pairs_full, candidate_coverage, blocked, n_true_missing}{whether
+      the candidate set is the full cross join, what fraction of it is
+      present, and for how many ANON records the true RAW record is not a
+      candidate at all}
     \item{confidence}{which confidence measure the sweep thresholded on}
     \item{success_analytic}{exact expected single-guess success rate}
     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -91,6 +95,19 @@ threshold 0.3941, attack 1/150, precision 1.0000). `success_analytic`,
 **unchanged** -- the confidence measure only reorders records, it does not
 alter the risk. Pass `confidence = "tie"` to reproduce old numbers. See
 `docs/default-changes.md`.
+}
+
+\section{Blocked candidate sets}{
+
+
+A full cross join has exactly `n_anon * n_raw` rows. Anything smaller was
+filtered -- by [block_candidates()], [lsh_candidates()],
+[top_k_candidates()] or by hand -- and a filtered candidate set can only
+lower the measured rate, never raise it. That is checked here from the score
+table itself rather than from an attribute the caller has to remember to
+pass on, and reported as `blocked` / `candidate_coverage` /
+`n_true_missing`, which the print method shows above the success rate
+(Issue #36).
 }
 
 \examples{

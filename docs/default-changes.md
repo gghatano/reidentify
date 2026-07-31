@@ -201,3 +201,45 @@ n=8 で順位 0.523 の列、2 行しかないフィクスチャの `P`、
 `expect_warning()` は「警告が出ることが正しい」という検証になり、
 将来スクリーニングが壊れたときにテストが落ちる。
 真陽性の警告を黙らせるのは、まさに §2 が警告している失敗様式である。
+
+---
+
+## 3. `lsh_candidates()` の `blocking` 属性が classed オブジェクトになり、取りこぼしで警告するようになった（Issue #36）
+
+**対象**: `lsh_candidates()` の返り値に付く `attr(x, "blocking")`。
+
+**変更前**: 素の `list`（`n_pairs_full`, `n_pairs_kept`, `kept_fraction`,
+`n_anon_without_candidate`, `n_hash`, `bands`）。`print()` するとリストがそのまま出る。
+
+**変更後**: `"reid_blocking"` クラスの list。既存フィールドは**すべてそのまま残る**ので
+`attr(x, "blocking")$n_pairs_kept` などは従来どおり動くが、`print()` の見た目が変わり、
+次のフィールドが増える。
+
+- `method` — ブロッキング方式の名前
+- `n_raw` / `n_anon`
+- `reduction`（= `1 - kept_fraction`）
+- **`n_true_pairs` / `n_true_pairs_kept` / `recall`**
+
+さらに `recall < 1` のとき `warning()` を出すようになった。
+
+### なぜ変えたか
+
+`lsh_candidates()` は #18 の時点で「捨てた量」（`kept_fraction`,
+`n_anon_without_candidate`）は記録していたが、**捨てたものの中に正解ペアが
+何件あったか**は記録していなかった。この 2 つは違う。
+
+README が推奨していた `bands = 32` の設定を実測すると、削減率 96.6% の裏で
+**正解ペアの 11.5% を捨てていた**（recall 0.8850）。この数字は Issue #36 まで
+誰も見ていない。再識別率だけが静かに下がる。`docs/lessons-learned.md` §2 そのものである。
+
+### 数値は変わらない
+
+同じ候補集合が返るので、`score_*()` 以降の数値は一切変わらない。
+変わるのは `print(attr(x, "blocking"))` の表示と、警告が出るようになったことだけである。
+
+### 影響
+
+`recall < 1` のとき警告が出るため、`lsh_candidates()` をテスト内で呼んでいる箇所は
+`expect_warning()` か `suppressWarnings()` が要る（`test-setsim.R` の 2 箇所を更新した。
+取りこぼしそのものを検証しているケースは `expect_warning()`、
+バンド数を振って挙動を比べているケースは `suppressWarnings()`）。
