@@ -175,10 +175,12 @@ combine_scores <- function(scores, weights = NULL,
 }
 
 ## Ratio of weighted spreads above which combine_scores() warns. Calibrated on
-## the fixture recorded in docs/default-changes.md: up to 10x the unnormalised
-## sum matched the normalised one exactly in both directions; past it the
-## measured success rate fell away (10x 0.3900, 30x 0.2500, 100x 0.1350
-## against 0.4450 normalised).
+## the fixture recorded in docs/default-changes.md. When the dominant
+## component is the less informative one the measured success rate falls away
+## past this point (ratio 3: 0.4400, 10: 0.3900, 30: 0.2500, 100: 0.1350,
+## against 0.4450 normalised); when it is the more informative one there is no
+## loss at all up to ratio 10, so warning here does not fire on the harmless
+## direction.
 SCALE_DOMINATION_RATIO <- 10
 
 #' warn when one component's weighted spread dominates the sum
