@@ -43,3 +43,13 @@ a "reid_scores" table whose SCORE is [distribution_distance()]
 \description{
 The score layer behind [reid_by_dist()].
 }
+\examples{
+# each record carries a whole distribution, written as "A:B:C"
+raw  <- data.frame(ROW_NUMBER = 1:3,
+                   SPEND = c("1:2:3", "10:11:12", "20:21:22"))
+anon <- data.frame(ROW_NUMBER = 1:3,
+                   SPEND = c("1:2:4", "10:12:13", "19:21:23"))
+d <- join_raw_anon_data(raw, anon)
+score_dist(d, "SPEND")
+
+}

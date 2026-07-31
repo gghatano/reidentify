@@ -1,0 +1,35 @@
+## The maintainer's real name is not published; the handle is used as-is
+## (see Issue #77 and the Authors@R field in DESCRIPTION). Replace both here
+## and in DESCRIPTION if that ever changes -- they must not drift apart.
+
+version <- meta$Version
+if (is.null(version)) version <- "development version"
+
+citHeader(
+  "To cite the reidentify package in publications, please use:"
+)
+
+bibentry(
+  bibtype     = "Manual",
+  key         = "reidentify",
+  title       = "{reidentify}: Measure Re-Identification Risk in Anonymized Data",
+  author      = person(given = "@gg_hatano"),
+  year        = "2026",
+  note        = paste0("R package version ", version,
+                       ". Source: https://github.com/gghatano/reidentify"),
+  url         = "https://gghatano.github.io/reidentify/",
+  textVersion = paste0(
+    "@gg_hatano (2026). reidentify: Measure Re-Identification Risk in ",
+    "Anonymized Data. R package version ", version,
+    ". https://gghatano.github.io/reidentify/ ",
+    "(source: https://github.com/gghatano/reidentify)"
+  )
+)
+
+citFooter(
+  "A re-identification rate is only interpretable next to the conditions it ",
+  "was measured under. When quoting a figure produced by this package, ",
+  "please also state the attacker knowledge, the attributes used, the ",
+  "matching method, the number of tie-break seeds, and the random baseline ",
+  "it is being compared with."
+)

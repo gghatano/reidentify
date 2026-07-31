@@ -49,6 +49,18 @@ release looks about four times safer than it is (Issue #40, and
 *categorical* generalisation (千代田区 published as 東京都) cannot be
 detected structurally at all.
 }
+\examples{
+raw  <- data.frame(ROW_NUMBER = 1:3, NAME = c("aaa", "bbb", "ccc"))
+anon <- data.frame(ROW_NUMBER = 1:3, NAME = c("aax", "bbb", "ccd"))
+d <- join_raw_anon_data(raw, anon)
+score_char(d, "NAME")
+
+# a generalised ANON column is refused rather than scored (Issue #40)
+g_raw  <- data.frame(ROW_NUMBER = 1:3, AGE = c("31", "37", "46"))
+g_anon <- data.frame(ROW_NUMBER = 1:3, AGE = c("30s", "30s", "40s"))
+try(score_char(join_raw_anon_data(g_raw, g_anon), "AGE"))
+
+}
 \seealso{
 [score_containment()] for generalised columns.
 }

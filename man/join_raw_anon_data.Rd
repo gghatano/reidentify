@@ -24,3 +24,14 @@ a data frame: the cross join (every RAW row paired with every
 \description{
 create reid-format data from raw and anon data frame
 }
+\examples{
+raw  <- data.frame(ROW_NUMBER = 1:3, V = c(10, 20, 30))
+anon <- data.frame(ROW_NUMBER = 1:3, V = c(11, 19, 32))
+
+# every RAW row is paired with every ANON row: 3 x 3 = 9 candidate pairs.
+# This is the shape the score_*() / reid_by_*() functions expect.
+d <- join_raw_anon_data(raw, anon)
+dim(d)
+head(d, 3)
+
+}

@@ -1,12 +1,27 @@
 Package: reidentify
 Type: Package
-Title: Reidentify and check the safety of Anonymized data
-Version: 1.0.0.0
-Author: @gg_hatano
-Maintainer: @gg_hatano <adad0405+reidentify@gmail.com>
-Description: Check the safety of Anonymized data by estimating reid-attack success rate.
+Title: Measure Re-Identification Risk in Anonymized Data
+Version: 2.0.0
+Authors@R: person(given = "@gg_hatano", role = c("aut", "cre"),
+                  email = "adad0405+reidentify@gmail.com")
+Description: Estimates how reliably the records of an anonymized data set can
+    be linked back to the individuals in the original data. Per-attribute
+    scores are provided for categorical, numeric, set-valued and
+    spatio-temporal variables, combined across attributes, and turned into an
+    assignment by greedy or optimal ('Hungarian') matching; generalized values
+    are also checked for consistency with the original ones. Blocking keeps
+    large data tractable. Results are reported as a success rate next to a
+    random baseline, together with per-record risk, uniqueness and a
+    precision-recall curve, so that a measurement which has quietly stopped
+    working is less likely to read as a safe one.
 License: MIT + file LICENSE
+URL: https://gghatano.github.io/reidentify/,
+     https://github.com/gghatano/reidentify
+BugReports: https://github.com/gghatano/reidentify/issues
 Encoding: UTF-8
+Language: en-US
+Depends:
+  R (>= 4.1.0)
 Imports:
   clue,
   dplyr,

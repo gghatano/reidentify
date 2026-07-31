@@ -50,6 +50,19 @@ DISTANCE == 0 for one ANON record) is resolved, as for every other
 reid_by_*() function, by resolve_min_distance_ties()'s "first
 RAW_ROW_NUMBER encountered" rule.
 }
+\examples{
+# the published values are on a different scale, but the order survives,
+# and the order is enough to line the two tables back up
+raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+anon <- data.frame(ROW_NUMBER = 1:5, V = c(1.2, 2.5, 3.1, 4.4, 5.0))
+d <- join_raw_anon_data(raw, anon)
+reid_by_num_rank(d, "V")
+reid_result(reid_by_num_rank(d, "V"), method = "reid_by_num_rank")
+
+# the same attack written in the current three-layer API
+match_greedy(score_num_rank(d, "V"))
+
+}
 \seealso{
 [score_num_rank()] and [match_greedy()], the score and assignment
   layers this is a wrapper around.

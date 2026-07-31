@@ -6,6 +6,11 @@
 #' @return a tibble with columns ROW_NUMBER, ID, NUM, BIN, CHAR containing
 #'   `people` rows of randomly generated dummy master data.
 #'
+#' @examples
+#' # the values are drawn at random, so set a seed to get a fixed table
+#' set.seed(1)
+#' create_dummy_master_data(people = 5)
+#'
 #' @importFrom tibble tibble
 #' @importFrom dplyr %>%
 #' @importFrom stringi stri_rand_strings
@@ -271,6 +276,16 @@ dummy_qi_knowledge <- function(level = c("W", "M", "S"), ...) {
 #' @return a data frame: the cross join (every RAW row paired with every
 #'   ANON row) of `raw` and `anon`, with their column names prefixed by
 #'   `raw_header`/`anon_header` respectively.
+#'
+#' @examples
+#' raw  <- data.frame(ROW_NUMBER = 1:3, V = c(10, 20, 30))
+#' anon <- data.frame(ROW_NUMBER = 1:3, V = c(11, 19, 32))
+#'
+#' # every RAW row is paired with every ANON row: 3 x 3 = 9 candidate pairs.
+#' # This is the shape the score_*() / reid_by_*() functions expect.
+#' d <- join_raw_anon_data(raw, anon)
+#' dim(d)
+#' head(d, 3)
 #'
 #' @importFrom dplyr %>%
 #' @export

@@ -33,3 +33,14 @@ a character scalar of the form
 \description{
 craete text of reidentify result ( method: ******, success/trial : ***** / ******)
 }
+\examples{
+raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+anon <- data.frame(ROW_NUMBER = 1:5, V = c(11, 19, 33, 38, 52))
+d <- join_raw_anon_data(raw, anon)
+reid_result(reid_by_num(d, "V"), method = "reid_by_num")
+
+# it also accepts the assignment layer's output, whose columns already
+# carry the default names
+reid_result(match_greedy(score_num(d, "V")), method = "match_greedy")
+
+}

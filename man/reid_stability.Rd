@@ -38,3 +38,16 @@ A near-zero `sd` means the target column is effectively collision-free and
 the point estimate can be read directly; a large `sd` means the single-run
 number should not be quoted without it.
 }
+\examples{
+# every value is shared by two records, so which one the attack "wins"
+# is decided by the tie-break: a single run is one draw, not the answer
+raw <- data.frame(ROW_NUMBER = 1:6, V = c(1, 1, 2, 2, 3, 3))
+d <- join_raw_anon_data(raw, raw)
+reid_stability(reid_by_num, d, "V", seeds = 1:5)
+
+# a collision-free column gives sd 0: there the point estimate can be
+# quoted on its own
+u <- data.frame(ROW_NUMBER = 1:6, V = c(10, 20, 30, 40, 50, 60))
+reid_stability(reid_by_num, join_raw_anon_data(u, u), "V", seeds = 1:5)
+
+}

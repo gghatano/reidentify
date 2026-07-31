@@ -33,6 +33,19 @@ a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER, RAW,
 \description{
 reidentify by single num static column by using L2 norm
 }
+\examples{
+raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+anon <- data.frame(ROW_NUMBER = 1:5, V = c(11, 19, 33, 38, 52))
+d <- join_raw_anon_data(raw, anon)
+res <- reid_by_num(d, "V")
+res
+reid_result(res, method = "reid_by_num")
+
+# the same attack written in the current three-layer API, which reports a
+# per-record confidence and can be combined with other attributes
+match_greedy(score_num(d, "V"))
+
+}
 \seealso{
 [score_num()] and [match_greedy()], the score and assignment
   layers this is a wrapper around.
