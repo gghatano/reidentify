@@ -81,9 +81,81 @@ test_that("the random baseline is 1/n for an n x n cross join", {
 })
 
 test_that("the mode baseline names a single RAW record, so it can identify at most one", {
+  ## Issue #65: this used to assert `mode_rate %in% c(0, 1/6)`. Since the mode
+  ## baseline names one RAW record and each ANON record appears once, the value
+  ## can only ever be 0 or 1/n_anon -- the disjunction was the entire range, so
+  ## it asserted nothing. It accepted the value a broken implementation
+  ## produced: with sum() changed to prod() in R/evaluate.R, baseline_mode
+  ## becomes 0 and the old assertion still passed.
+  ##
+  ## Every value below is hand-computed from the fixture.
+
+  ## uniq3_tied3: ANON 1-3 each have one best candidate (RAW 1-3, one hit
+  ## apiece); ANON 4-6 each have three (RAW 4, 5, 6). RAW 4 is therefore among
+  ## the best 3 times, more than any other, so the mode names RAW 4. That is
+  ## right for exactly one of the six ANON records.
   e <- reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:5)
-  mode_rate <- e$baseline$rate[e$baseline$method == "mode"]
-  expect_true(mode_rate %in% c(0, 1 / 6))
+  expect_equal(e$baseline$rate[e$baseline$method == "mode"], 1 / 6)
+
+  ## all_tied: every RAW record is among the best twice, so the mode names the
+  ## first of them -- again right for exactly one record.
+  e2 <- reid_evaluate(score_num(make_all_tied(), "V"), seeds = 1:5)
+  expect_equal(e2$baseline$rate[e2$baseline$method == "mode"], 1 / 6)
+
+  ## a collision-free fixture: 1/n, not 1
+  for (n in c(4, 5, 20)) {
+    en <- reid_evaluate(score_num(make_unique(n), "V"), seeds = 1:5)
+    expect_equal(en$baseline$rate[en$baseline$method == "mode"], 1 / n)
+  }
+})
+
+test_that("the mode baseline is 0 when the record it names has no ANON counterpart", {
+  ## The other side of the old disjunction, pinned on its own fixture rather
+  ## than left as an alternative that any value could satisfy (Issue #65).
+  ## RAW 9 is the best candidate for all three ANON records, so the mode names
+  ## it -- and RAW 9 is nobody's true match, so the baseline identifies no one.
+  s <- new_reid_scores(raw_row_number  = c(9, 1, 9, 2, 9, 3),
+                       anon_row_number = c(1, 1, 2, 2, 3, 3),
+                       score           = c(0, 5, 0, 5, 0, 5))
+  e <- reid_evaluate(s, seeds = 1:5)
+  expect_equal(e$baseline$rate[e$baseline$method == "mode"], 0)
+  ## and the random baseline is unaffected: 2 candidates each, truth present
+  expect_equal(e$baseline$rate[e$baseline$method == "random"], 1 / 2)
+})
+
+test_that("the mode baseline reads a similarity score in the right direction", {
+  ## Same table twice, tagged the two different ways. On the similarity scale
+  ## RAW 9 (score 100) is the best candidate everywhere and the baseline is 0;
+  ## read as a distance it would be the *worst*, the mode would name RAW 1, and
+  ## the baseline would be 1/3. A sign error here inflates the number the
+  ## measured rate has to beat, which makes a real attack look less effective.
+  pairs <- list(raw_row_number  = c(9, 1, 9, 2, 9, 3),
+                anon_row_number = c(1, 1, 2, 2, 3, 3),
+                score           = c(100, 1, 100, 1, 100, 1))
+  mode_rate <- function(score_type) {
+    s <- do.call(new_reid_scores, c(pairs, list(score_type = score_type)))
+    e <- reid_evaluate(s, seeds = 1:5)
+    e$baseline$rate[e$baseline$method == "mode"]
+  }
+  expect_equal(mode_rate("similarity"), 0)
+  expect_equal(mode_rate("distance"), 1 / 3)
+})
+
+test_that("the random baseline scores 0 for an ANON record whose true match was never offered", {
+  ## Blocking can drop the true pair. Guessing uniformly among the candidates
+  ## can then never be right for that record, and the baseline has to say so --
+  ## if it averaged 1/N_CANDIDATES regardless, it would report 1/2 here and
+  ## every attack would look weaker than it is (Issue #65).
+  ##
+  ## ANON 1 is offered RAW 2 and 3 (its true match, RAW 1, is missing) -> 0
+  ## ANON 2 is offered RAW 2 and 3 -> 1/2
+  ## ANON 3 is offered RAW 3 and 4 -> 1/2
+  s <- new_reid_scores(raw_row_number  = c(2, 3, 2, 3, 3, 4),
+                       anon_row_number = c(1, 1, 2, 2, 3, 3),
+                       score           = c(1, 2, 1, 2, 1, 2))
+  e <- reid_evaluate(s, seeds = 1:5)
+  expect_equal(e$baseline$rate[e$baseline$method == "random"], 1 / 3)
+  expect_equal(e$n_true_missing, 1)
 })
 
 test_that("lift is the exact success rate over the random baseline, and a real attack beats 1", {

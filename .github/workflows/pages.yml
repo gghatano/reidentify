@@ -1,18 +1,31 @@
-name: Deploy site to GitHub Pages
+name: Site
 
+# 公開ページ (site/) の検査とデプロイ。
+#
+# なぜパスフィルタを付けないか (#63):
+#   もとは paths: ['site/**', '.github/workflows/pages.yml'] だった。つまり
+#   **site/ が変わったときしか動かず、実装が変わってもページは再検査されな
+#   かった**。ページは「自動テスト N 件」のようにパッケージの状態を語る数字を
+#   載せているので、それを陳腐化させるのは実装側の変更である。#47 / #48 で
+#   直した陳腐化が 2 コミット後に再発したのはこのためで、隣の R-CMD-check.yml
+#   が「列挙し忘れた 1 つの変更で検査が静かに飛ぶ方が高くつく」と書いている
+#   原則が、ここだけ破られていた。
+#
+# verify ジョブは pull_request でも走る (デプロイはしない)。ページの数字が
+# 実測と合わないまま master に入ることを防ぐのが目的で、base R しか使わない
+# ので数十秒で終わる。
+#
+# 実行して得るしかない数字 (テスト件数) は verify では照合できないので、
+# R-CMD-check.yml の "source-tree tests" ジョブが --tests= 付きで同じ
+# スクリプトを呼び、site/index.html の値と突き合わせる。
 on:
   push:
     branches: [master]
-    paths:
-      - 'site/**'
-      - '.github/workflows/pages.yml'
+  pull_request:
   workflow_dispatch:
 
-# GITHUB_TOKEN に Pages へのデプロイ権限を与える
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # 進行中のデプロイは中断しない (公開途中の状態を避ける)
 concurrency:
@@ -20,8 +33,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
+    name: Quoted figures
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      # base R だけで動く。パッケージの依存は入れない。
+      - name: Verify quoted figures
+        run: Rscript docs/verify-quoted-numbers.R .
+
+  deploy:
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    name: Deploy
+    # GITHUB_TOKEN に Pages へのデプロイ権限を与えるのはこのジョブだけ
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

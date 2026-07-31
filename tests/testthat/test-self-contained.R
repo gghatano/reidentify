@@ -238,6 +238,31 @@ test_that("the subprocess loaded the copy under test, not some other install (Is
   expect_equal(normalizePath(loaded, winslash = "/", mustWork = FALSE), lib)
 })
 
+test_that("a run that is supposed to see the working tree actually sees it (Issue #65)", {
+  ## The #39 guard -- installing the working tree into a library of our own --
+  ## only exists on the source-tree branch. Under `R CMD check` there is no
+  ## source tree, so that branch is skipped, and CI ran nothing else: a
+  ## `stop("POISON")` at the top of it left `R CMD check` at Status: OK. The
+  ## guard against #39 was dead code in CI, which is the only place it was
+  ## being relied on.
+  ##
+  ## docs/run-source-tests.R is the run that is meant to take that branch, and
+  ## it sets this variable. Then "no working tree" stops being a silent
+  ## fall-through and becomes a failure. Without the variable the expectation
+  ## is the honest one: either branch is legitimate.
+  required <- identical(Sys.getenv("REIDENTIFY_REQUIRE_SOURCE_TREE"), "1")
+  src <- package_source_dir()
+
+  if (required) {
+    expect_false(is.null(src))
+    expect_true(file.exists(file.path(src, "DESCRIPTION")))
+    expect_true(dir.exists(file.path(src, "R")))
+  } else {
+    expect_true(is.null(src) ||
+                  file.exists(file.path(src, "DESCRIPTION")))
+  }
+})
+
 test_that("verified_library() holds the working tree when there is one, and the check library otherwise", {
   src <- package_source_dir()
   lib <- verified_library()
