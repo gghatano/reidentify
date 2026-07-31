@@ -21,7 +21,7 @@
 ##
 ## Run with:
 ##   Rscript docs/verify-quoted-numbers.R .              # offline checks
-##   Rscript docs/verify-quoted-numbers.R . --tests=2227 # + the test count
+##   Rscript docs/verify-quoted-numbers.R . --tests=2311 # + the test count
 ## ---------------------------------------------------------------------------
 
 args     <- commandArgs(trailingOnly = TRUE)
@@ -37,6 +37,17 @@ fail <- function(...) {
   cat("FAIL  ", ..., "\n", sep = "")
 }
 ok <- function(...) cat("ok    ", ..., "\n", sep = "")
+
+## "not in the future" needs a day of slack: CI runs with TZ=UTC and the dates
+## in these files are written in the author's local time. A date stamped in
+## JST is UTC's tomorrow for nine hours a day, and the first CI run of this
+## script failed for exactly that reason -- a check about staleness has no
+## business being sensitive to which side of midnight UTC is on. A whole day
+## of slack still catches what this is for: a date that was never true.
+not_future <- function(d) {
+  !is.na(d) && !is.na(as.Date(d, optional = TRUE)) &&
+    as.Date(d) <= Sys.Date() + 1L
+}
 
 read_utf8 <- function(...) readLines(file.path(pkg_root, ...), warn = FALSE,
                                      encoding = "UTF-8")
@@ -98,8 +109,9 @@ if (is.null(site_closed)) {
 site_upd <- figure(site, "updated")
 if (is.null(site_upd) || is.na(as.Date(site_upd, optional = TRUE))) {
   fail("site/index.html: footer is missing a data-figure=\"updated\" date")
-} else if (as.Date(site_upd) > Sys.Date()) {
-  fail("site/index.html: 最終更新 ", site_upd, " is in the future")
+} else if (!not_future(site_upd)) {
+  fail("site/index.html: 最終更新 ", site_upd, " is in the future (today is ",
+       format(Sys.Date()), ")")
 } else {
   ok("site/index.html updated  : ", site_upd)
 }
@@ -134,19 +146,19 @@ if (length(hit) != 1L) {
     if (!length(m)) NA_character_ else gsub("`", "", sub(paste0(k, "="), "", m))
   }
   commit <- field("commit"); date <- field("date"); ex_q <- field("exports")
+  before <- n_bad
   if (is.na(commit) || !grepl("^[0-9a-f]{7,40}$", commit))
     fail("reid-method-candidates.md 照合基準: commit= must be a hex sha, got <",
          commit, ">")
-  if (is.na(date) || is.na(as.Date(date, optional = TRUE)) ||
-      as.Date(date) > Sys.Date())
-    fail("reid-method-candidates.md 照合基準: date= must be a past date, got <",
-         date, ">")
+  if (!not_future(date))
+    fail("reid-method-candidates.md 照合基準: date= must not be in the future, ",
+         "got <", date, "> (today is ", format(Sys.Date()), ")")
   if (is.na(as_num(ex_q)) || !identical(as_num(ex_q), exports))
     fail("reid-method-candidates.md 照合基準 says exports=", ex_q,
          ", NAMESPACE has ", exports,
          ".\n      re-audit the catalogue against the current tree, ",
          "then update commit=/date=/exports=")
-  else
+  if (identical(n_bad, before))
     ok("reid-method-candidates   : exports=", exports, " commit=", commit,
        " date=", date)
 }
