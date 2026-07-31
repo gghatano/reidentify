@@ -45,3 +45,13 @@ and orders it lexicographically, so a generalised or categorical column used
 to come back as a full set of plausible rank gaps with no error at all --
 the same silent under-report as [score_char()] (Issue #40).
 }
+\examples{
+# the published values are on a different scale, but the order survives,
+# and the order is enough: every rank gap on the diagonal is 0
+raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+anon <- data.frame(ROW_NUMBER = 1:5, V = c(1.2, 2.5, 3.1, 4.4, 5.0))
+d <- join_raw_anon_data(raw, anon)
+score_num_rank(d, "V")
+match_greedy(score_num_rank(d, "V"))
+
+}

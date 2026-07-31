@@ -183,6 +183,18 @@ resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
 #' @seealso [score_num()] and [match_greedy()], the score and assignment
 #'   layers this is a wrapper around.
 #'
+#' @examples
+#' raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+#' anon <- data.frame(ROW_NUMBER = 1:5, V = c(11, 19, 33, 38, 52))
+#' d <- join_raw_anon_data(raw, anon)
+#' res <- reid_by_num(d, "V")
+#' res
+#' reid_result(res, method = "reid_by_num")
+#'
+#' # the same attack written in the current three-layer API, which reports a
+#' # per-record confidence and can be combined with other attributes
+#' match_greedy(score_num(d, "V"))
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
@@ -217,6 +229,16 @@ reid_by_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed = 
 #'   where `trial` is the number of rows in `dat_reid_result` and
 #'   `success` is the number of TRUE values in its `result` column;
 #'   `success` is always <= `trial`.
+#'
+#' @examples
+#' raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+#' anon <- data.frame(ROW_NUMBER = 1:5, V = c(11, 19, 33, 38, 52))
+#' d <- join_raw_anon_data(raw, anon)
+#' reid_result(reid_by_num(d, "V"), method = "reid_by_num")
+#'
+#' # it also accepts the assignment layer's output, whose columns already
+#' # carry the default names
+#' reid_result(match_greedy(score_num(d, "V")), method = "match_greedy")
 #'
 #' @importFrom magrittr %>%
 #' @export
@@ -283,6 +305,15 @@ reid_result <- function(dat_reid_result,
 #' @seealso [score_char()] and [match_greedy()], the score and assignment
 #'   layers this is a wrapper around.
 #'
+#' @examples
+#' raw  <- data.frame(ROW_NUMBER = 1:4, NAME = c("aaa", "bbb", "ccc", "ddd"))
+#' anon <- data.frame(ROW_NUMBER = 1:4, NAME = c("aax", "bbb", "ccd", "ddd"))
+#' d <- join_raw_anon_data(raw, anon)
+#' reid_result(reid_by_char(d, "NAME"), method = "reid_by_char")
+#'
+#' # the same attack written in the current three-layer API
+#' match_greedy(score_char(d, "NAME"))
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
@@ -339,6 +370,18 @@ reid_by_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", seed =
 #'
 #' @seealso [score_dist()] and [match_greedy()], the score and assignment
 #'   layers this is a wrapper around.
+#'
+#' @examples
+#' # each record carries a whole distribution, written as "A:B:C"
+#' raw  <- data.frame(ROW_NUMBER = 1:3,
+#'                    SPEND = c("1:2:3", "10:11:12", "20:21:22"))
+#' anon <- data.frame(ROW_NUMBER = 1:3,
+#'                    SPEND = c("1:2:4", "10:12:13", "19:21:23"))
+#' d <- join_raw_anon_data(raw, anon)
+#' reid_result(reid_by_dist(d, "SPEND"), method = "reid_by_dist")
+#'
+#' # the same attack written in the current three-layer API
+#' match_greedy(score_dist(d, "SPEND"))
 #'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
@@ -706,6 +749,18 @@ distribution_distance <- function(x, y, split = ":", n_quantiles = 10) {
 #' @seealso [score_num_rank()] and [match_greedy()], the score and assignment
 #'   layers this is a wrapper around.
 #'
+#' @examples
+#' # the published values are on a different scale, but the order survives,
+#' # and the order is enough to line the two tables back up
+#' raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+#' anon <- data.frame(ROW_NUMBER = 1:5, V = c(1.2, 2.5, 3.1, 4.4, 5.0))
+#' d <- join_raw_anon_data(raw, anon)
+#' reid_by_num_rank(d, "V")
+#' reid_result(reid_by_num_rank(d, "V"), method = "reid_by_num_rank")
+#'
+#' # the same attack written in the current three-layer API
+#' match_greedy(score_num_rank(d, "V"))
+#'
 #' @importFrom dplyr group_by
 #' @importFrom dplyr ungroup
 #' @importFrom dplyr filter
@@ -770,6 +825,18 @@ reid_by_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER", se
 #' @return an object of class "reid_stability": a list with `per_seed` (a
 #'   data frame of seed / success / trial / rate), and the summary fields
 #'   `mean`, `sd`, `min`, `max`, `trial` and `n_seeds`
+#'
+#' @examples
+#' # every value is shared by two records, so which one the attack "wins"
+#' # is decided by the tie-break: a single run is one draw, not the answer
+#' raw <- data.frame(ROW_NUMBER = 1:6, V = c(1, 1, 2, 2, 3, 3))
+#' d <- join_raw_anon_data(raw, raw)
+#' reid_stability(reid_by_num, d, "V", seeds = 1:5)
+#'
+#' # a collision-free column gives sd 0: there the point estimate can be
+#' # quoted on its own
+#' u <- data.frame(ROW_NUMBER = 1:6, V = c(10, 20, 30, 40, 50, 60))
+#' reid_stability(reid_by_num, join_raw_anon_data(u, u), "V", seeds = 1:5)
 #'
 #' @importFrom stats sd
 #' @export

@@ -30,3 +30,13 @@ a "reid_scores" table: one row per (RAW, ANON) candidate pair with
 \description{
 The score layer behind [reid_by_num()].
 }
+\examples{
+raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+anon <- data.frame(ROW_NUMBER = 1:5, V = c(11, 19, 33, 38, 52))
+d <- join_raw_anon_data(raw, anon)
+score_num(d, "V")
+
+# the score layer only ranks candidates; the assignment layer picks one
+match_greedy(score_num(d, "V"))
+
+}

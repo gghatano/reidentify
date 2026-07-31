@@ -17,3 +17,9 @@ a tibble with columns ROW_NUMBER, ID, NUM, BIN, CHAR containing
 \description{
 create dummy master data
 }
+\examples{
+# the values are drawn at random, so set a seed to get a fixed table
+set.seed(1)
+create_dummy_master_data(people = 5)
+
+}

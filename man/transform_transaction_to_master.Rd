@@ -73,3 +73,23 @@ The column *order* is unchanged: statistic-major
 `summarise_all()` produced for the multi-column case.
 }
 
+\examples{
+tran <- data.frame(
+  ROW_NUMBER = 1:6,
+  ID         = c("a", "a", "a", "b", "b", "b"),
+  SEX        = c("M", "M", "M", "F", "F", "F"),
+  AMOUNT     = c(100, 200, 300, 10, 20, 30)
+)
+m <- transform_transaction_to_master(tran, STATIC_CHAR = "SEX",
+                                     DYNAMIC_NUM = "AMOUNT")
+m
+
+# the aggregate columns are named <column>_<statistic> whatever the number
+# of columns given (Issue #26), so downstream code can hard-code them
+names(m)
+
+# AMOUNT_DIST round-trips through score_dist() / reid_by_dist() as long as
+# `collapse` and `split` agree
+m$AMOUNT_DIST
+
+}

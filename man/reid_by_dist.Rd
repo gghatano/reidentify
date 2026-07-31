@@ -50,6 +50,19 @@ a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
 \description{
 reidentify by distribution column (list A, B, C is expressed by "A:B:C")
 }
+\examples{
+# each record carries a whole distribution, written as "A:B:C"
+raw  <- data.frame(ROW_NUMBER = 1:3,
+                   SPEND = c("1:2:3", "10:11:12", "20:21:22"))
+anon <- data.frame(ROW_NUMBER = 1:3,
+                   SPEND = c("1:2:4", "10:12:13", "19:21:23"))
+d <- join_raw_anon_data(raw, anon)
+reid_result(reid_by_dist(d, "SPEND"), method = "reid_by_dist")
+
+# the same attack written in the current three-layer API
+match_greedy(score_dist(d, "SPEND"))
+
+}
 \seealso{
 [score_dist()] and [match_greedy()], the score and assignment
   layers this is a wrapper around.

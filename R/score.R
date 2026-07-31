@@ -238,6 +238,15 @@ as_reid_output <- function(x) {
 #'   columns RAW_ROW_NUMBER, ANON_ROW_NUMBER and SCORE, where SCORE is
 #'   `abs(RAW - ANON)` (a distance: smaller is a better match).
 #'
+#' @examples
+#' raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+#' anon <- data.frame(ROW_NUMBER = 1:5, V = c(11, 19, 33, 38, 52))
+#' d <- join_raw_anon_data(raw, anon)
+#' score_num(d, "V")
+#'
+#' # the score layer only ranks candidates; the assignment layer picks one
+#' match_greedy(score_num(d, "V"))
+#'
 #' @export
 score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                       .fn_name = "score_num") {
@@ -292,6 +301,17 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @seealso [score_containment()] for generalised columns.
 #'
+#' @examples
+#' raw  <- data.frame(ROW_NUMBER = 1:3, NAME = c("aaa", "bbb", "ccc"))
+#' anon <- data.frame(ROW_NUMBER = 1:3, NAME = c("aax", "bbb", "ccd"))
+#' d <- join_raw_anon_data(raw, anon)
+#' score_char(d, "NAME")
+#'
+#' # a generalised ANON column is refused rather than scored (Issue #40)
+#' g_raw  <- data.frame(ROW_NUMBER = 1:3, AGE = c("31", "37", "46"))
+#' g_anon <- data.frame(ROW_NUMBER = 1:3, AGE = c("30s", "30s", "40s"))
+#' try(score_char(join_raw_anon_data(g_raw, g_anon), "AGE"))
+#'
 #' @importFrom utils adist
 #' @export
 score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
@@ -335,6 +355,15 @@ score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #' @return a "reid_scores" table whose SCORE is [distribution_distance()]
 #'   between the RAW and ANON distributions (a distance: smaller is a better
 #'   match).
+#'
+#' @examples
+#' # each record carries a whole distribution, written as "A:B:C"
+#' raw  <- data.frame(ROW_NUMBER = 1:3,
+#'                    SPEND = c("1:2:3", "10:11:12", "20:21:22"))
+#' anon <- data.frame(ROW_NUMBER = 1:3,
+#'                    SPEND = c("1:2:4", "10:12:13", "19:21:23"))
+#' d <- join_raw_anon_data(raw, anon)
+#' score_dist(d, "SPEND")
 #'
 #' @export
 score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
@@ -380,6 +409,15 @@ score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #' @return a "reid_scores" table whose SCORE is the absolute difference
 #'   between the ANON-side and RAW-side ranks of `target` (a distance:
 #'   smaller is a better match).
+#'
+#' @examples
+#' # the published values are on a different scale, but the order survives,
+#' # and the order is enough: every rank gap on the diagonal is 0
+#' raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+#' anon <- data.frame(ROW_NUMBER = 1:5, V = c(1.2, 2.5, 3.1, 4.4, 5.0))
+#' d <- join_raw_anon_data(raw, anon)
+#' score_num_rank(d, "V")
+#' match_greedy(score_num_rank(d, "V"))
 #'
 #' @export
 score_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",

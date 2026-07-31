@@ -47,6 +47,16 @@ a data frame with columns RAW_ROW_NUMBER, ANON_ROW_NUMBER,
 \description{
 reidentify by character static column
 }
+\examples{
+raw  <- data.frame(ROW_NUMBER = 1:4, NAME = c("aaa", "bbb", "ccc", "ddd"))
+anon <- data.frame(ROW_NUMBER = 1:4, NAME = c("aax", "bbb", "ccd", "ddd"))
+d <- join_raw_anon_data(raw, anon)
+reid_result(reid_by_char(d, "NAME"), method = "reid_by_char")
+
+# the same attack written in the current three-layer API
+match_greedy(score_char(d, "NAME"))
+
+}
 \seealso{
 [score_char()] and [match_greedy()], the score and assignment
   layers this is a wrapper around.
