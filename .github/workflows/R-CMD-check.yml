@@ -121,6 +121,12 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      # vignette (rmarkdown::html_vignette) のビルドに pandoc が要る (#75)。
+      # ubuntu-latest のイメージには元から入っているが、それは
+      # "checking top-level files" が README.md を読むための偶然の前提だった。
+      # vignette が入った以上、無いとビルドそのものが落ちるので明示する。
+      - uses: r-lib/actions/setup-pandoc@v2
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgload, any::rcmdcheck
@@ -133,6 +139,16 @@ jobs:
           # pkgload は 48e2f82 で Suggests に入っており、その理由はもう無い。
           # 実測 (R 4.6.1): --as-cran --no-manual で Status: OK。
           args: 'c("--no-manual", "--as-cran")'
+          # vignette をビルドさせる (#75)。この入力の既定は
+          # c("--no-manual", "--no-build-vignettes") で、vignettes/ に .Rmd が
+          # あるのに inst/doc が空の tarball ができる。実測 (R 4.6.1,
+          # --as-cran): 既定のままだと WARNING 2 件で落ちる --
+          #   "Files in the 'vignettes' directory but no files in 'inst/doc'"
+          #   "Package vignette without corresponding single PDF/HTML"
+          # --no-build-vignettes を外すと Status: OK。
+          # (--no-build-vignettes でも "re-building of vignette outputs" は
+          #  走るのでコードは実行される。落ちるのは成果物が無いことの方。)
+          build_args: 'c("--no-manual")'
           # NOTE でも落とす (#67)。リポジトリが掲げ、site/index.html が
           # 「エラー・警告・注意ともに 0」と書いている基準は NOTE 0 である。
           # "warning" のままでは、掲げた基準を CI が強制していない状態になる。
