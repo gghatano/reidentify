@@ -192,7 +192,12 @@ test_that("score_by_knowledge() rejects a non-knowledge object", {
 
 test_that("success rate increases strictly with knowledge on generalised data (W < M < S)", {
   j <- make_generalized_join()
-  curve <- do.call(reid_knowledge_curve, c(list(j, seeds = 1:20), qi_args))
+  ## FINGERPRINT alone identifies everyone, so at the S level the equal-weight
+  ## combination measures less than its own best axis and the #59 check warns.
+  ## That is a true positive about equal weighting; this test is about the
+  ## ordering of the levels.
+  curve <- suppressWarnings(
+    do.call(reid_knowledge_curve, c(list(j, seeds = 1:20), qi_args)))
 
   expect_equal(curve$level, c("W", "M", "S"))
   expect_lt(curve$success_analytic[1], curve$success_analytic[2])

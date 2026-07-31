@@ -165,6 +165,38 @@ normalize_one_score <- function(s, method, arg = "scores") {
 #' surprising, and therefore far more identifying, than the same disagreement
 #' along a direction the population is spread out over anyway.
 #'
+#' WHEN THAT ARGUMENT FAILS (Issue #59). Up-weighting the low-variance
+#' directions is only right if the release did not *also* perturb the data
+#' along them. It is the ratio of the release's perturbation to the population
+#' spread **in the whitened directions** that decides the outcome, and strong
+#' correlation makes some of those directions narrow -- so the metric is at its
+#' most fragile in exactly the situation it is recommended for.
+#'
+#' Measured on a 3-column fixture (A, B correlated at `rho`; C independent;
+#' `success_analytic` over 200 records, the full sweep is in
+#' `docs/default-changes.md`):
+#'
+#' \tabular{lrrrr}{
+#'   perturbation \tab rho \tab kappa(S) \tab weighted \tab mahalanobis \cr
+#'   isotropic \tab 0.90 \tab 26.7 \tab 0.9600 \tab 0.9200 \cr
+#'   isotropic \tab 0.99 \tab 273.4 \tab 0.9350 \tab 0.5600 \cr
+#'   isotropic \tab 0.999 \tab 2755.6 \tab 0.8850 \tab 0.2100 \cr
+#'   follows S \tab 0.99 \tab 273.4 \tab 0.8900 \tab 0.9800 \cr
+#'   follows S \tab 0.999 \tab 2755.6 \tab 0.8400 \tab 0.9800
+#' }
+#'
+#' The same covariance, the same condition number, opposite conclusions: with
+#' an isotropic perturbation the whitened attack is 4.2x weaker than a plain
+#' weighted sum, and with a perturbation that follows the population covariance
+#' it is 1.2x stronger. **A high condition number therefore says the answer is
+#' fragile, not that it is wrong.** `score_mahalanobis()` warns above 100 and
+#' tells you to compare against `method = "weighted"`; do that before quoting
+#' either number.
+#'
+#' Raising `ridge` is not a fix, only a retreat: at `ridge = 1` both regimes
+#' land on the weighted sum's own figure (0.8950 / 0.8650), which is to say the
+#' metric has stopped doing anything. That is why the default is left at 1e-6.
+#'
 #' The covariance is estimated from *distinct records*, deduplicated by row
 #' number, not from the candidate pairs: a cross join repeats every record once
 #' per candidate, and estimating from the repeated rows would silently weight
@@ -175,11 +207,18 @@ normalize_one_score <- function(s, method, arg = "scores") {
 #'   RAW_/ANON_ prefixing done by [join_raw_anon_data()]
 #' @param cov_from which side to estimate the covariance from: `"raw"`
 #'   (default -- the attacker's own reference population), `"anon"`, or
-#'   `"pooled"` (the distinct records of both sides stacked).
+#'   `"pooled"` (the distinct records of both sides stacked). The default is a
+#'   threat-model choice, not a tuning knob: a real attacker whitens with the
+#'   population they hold. `"anon"` folds the release's own perturbation into
+#'   the covariance and so is less fragile when \eqn{S} is ill-conditioned
+#'   (measured 0.3350 against 0.2100 at kappa 2756), but it is still far below
+#'   the weighted sum there, so it is a diagnostic rather than a rescue.
 #' @param ridge non-negative shrinkage applied to the diagonal of the
 #'   covariance matrix, as a multiple of its mean diagonal entry (default
 #'   1e-6). Needed because redundant columns -- exactly the case Mahalanobis
-#'   exists for -- make \eqn{S} ill-conditioned or singular.
+#'   exists for -- make \eqn{S} ill-conditioned or singular. It cannot repair
+#'   an ill-conditioned result: a ridge large enough to matter turns the
+#'   metric into the weighted sum it was supposed to improve on.
 #' @param squared return the squared distance instead of the distance
 #'   (default FALSE). The two give identical rankings; the square root is the
 #'   default because it shares the units of the underlying columns.
@@ -191,7 +230,9 @@ normalize_one_score <- function(s, method, arg = "scores") {
 #' set.seed(1)
 #' n <- 30
 #' a <- rnorm(n)
-#' raw <- data.frame(ROW_NUMBER = 1:n, A = a, B = 2 * a + rnorm(n, sd = 0.1))
+#' ## correlated, but not so nearly-collinear that the whitening becomes
+#' ## fragile -- see the condition-number discussion above
+#' raw <- data.frame(ROW_NUMBER = 1:n, A = a, B = 2 * a + rnorm(n, sd = 1))
 #' anon <- raw
 #' anon$A <- round(anon$A, 1)
 #' anon$B <- round(anon$B, 1)
@@ -285,6 +326,8 @@ score_mahalanobis <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   cov_mat <- stats::cov(ref[, keep, drop = FALSE])
   cov_mat <- cov_mat + diag(ridge * mean(diag(cov_mat)), nrow(cov_mat))
 
+  warn_ill_conditioned_cov(cov_mat, targets[keep], cov_from, ridge, .fn_name)
+
   inv <- tryCatch(
     solve(cov_mat),
     error = function(e) {
@@ -308,6 +351,53 @@ score_mahalanobis <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
     anon_row_number = anon_key,
     score = if (isTRUE(squared)) quad else sqrt(quad)
   )
+}
+
+## Condition number of the (ridged) covariance above which score_mahalanobis()
+## calls the result fragile. Calibrated in docs/default-changes.md: with an
+## isotropic release perturbation the loss against a weighted sum is under 10%
+## up to kappa 54 and then grows (136: 1.33x, 273: 1.67x, 2756: 4.21x).
+MAHALANOBIS_CONDITION_LIMIT <- 100
+
+#' warn when whitening rests on a nearly-singular covariance
+#'
+#' @param cov_mat the covariance matrix, ridge already applied
+#' @param targets names of the columns it was estimated from
+#' @param cov_from which side it came from
+#' @param ridge the ridge that was applied
+#' @param fn_name calling function, for the message
+#'
+#' @return NULL, invisibly; called for the warning
+#'
+#' @keywords internal
+warn_ill_conditioned_cov <- function(cov_mat, targets, cov_from, ridge,
+                                     fn_name = "score_mahalanobis") {
+  if (nrow(cov_mat) < 2) {
+    return(invisible(NULL))
+  }
+  cond <- tryCatch(kappa(cov_mat, exact = TRUE), error = function(e) Inf)
+  if (is.finite(cond) && cond <= MAHALANOBIS_CONDITION_LIMIT) {
+    return(invisible(NULL))
+  }
+
+  warning(
+    fn_name, "(): the ", cov_from, " covariance of (",
+    paste(targets, collapse = ", "), ") is ill-conditioned (condition number ",
+    format(cond, digits = 4), ", ridge = ", ridge,
+    "). It is invertible, so nothing fails, but S^-1 magnifies the direction ",
+    "the population barely varies in, and the result is then decided by how ",
+    "the release perturbed the data rather than by how identifying the ",
+    "columns are. Measured on a 3-column fixture, above this limit the ",
+    "whitened attack ran from 1.7x to 4.2x WEAKER than the plain weighted sum ",
+    "when the release's perturbation was isotropic, and 1.1x to 1.2x STRONGER ",
+    "when it followed the population covariance -- opposite conclusions from ",
+    "the same condition numbers. Compare ",
+    "against method = \"weighted\" before quoting this number; ",
+    "cov_from = \"anon\" and a larger `ridge` both pull it back towards the ",
+    "weighted sum. See docs/default-changes.md.",
+    call. = FALSE
+  )
+  invisible(NULL)
 }
 
 #' expand a column-to-score-type specification
@@ -975,5 +1065,60 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   out <- combine_scores(normalize_scores(parts, method = normalize),
                         weights = part_weights)
   attr(out, "axes") <- report
+  warn_combination_weaker_than_best_axis(out, report, alpha, .fn_name)
   out
+}
+
+#' warn when combining attributes measures *less* risk than one of them alone
+#'
+#' "The attacker knows more, so the reported risk went down" is not a finding,
+#' it is a broken measurement: every axis the combination uses is available on
+#' its own, so an attacker would simply use the better one. #35 catches the
+#' version of this caused by an uninformative axis; #59 found a second cause,
+#' a whitening that is dominated by the release's perturbation, which single
+#' axis screening cannot see because it scores each column in isolation.
+#'
+#' @param combined the combined score table
+#' @param report the per-axis report from [axis_informativeness()], or NULL
+#'   when screening was switched off
+#' @param alpha significance level, only used to reuse the same statistic
+#' @param fn_name calling function, for the message
+#'
+#' @return NULL, invisibly; called for the warning
+#'
+#' @keywords internal
+warn_combination_weaker_than_best_axis <- function(combined, report, alpha,
+                                                   fn_name) {
+  if (is.null(report) || !nrow(report) || all(is.na(report$success))) {
+    return(invisible(NULL))
+  }
+  ## Only when the screen found nothing. An axis that failed screening has
+  ## already been reported, with the same remedy attached; saying it twice in
+  ## different words trains the reader to skip both. This check exists for the
+  ## case the screen is structurally blind to -- every column informative on
+  ## its own, and the combination still worse than one of them.
+  if (!all(report$informative %in% TRUE)) {
+    return(invisible(NULL))
+  }
+  best <- which.max(report$success)
+  best_success <- report$success[best]
+
+  got <- one_axis_informativeness(combined, "combined", alpha)$success
+  if (is.na(got) || is.na(best_success) || got >= best_success) {
+    return(invisible(NULL))
+  }
+
+  warning(
+    fn_name, "(): the combination measures LESS risk (", format(got, digits = 4),
+    ") than `", report$axis[best], "` measures on its own (",
+    format(best_success, digits = 4),
+    "). An attacker holding the columns you declared also holds that one, so ",
+    "the combined figure understates the risk and must not be reported as the ",
+    "result. Look at attr(x, \"axes\") for the per-axis numbers, then use ",
+    "`weights` to stop the weaker axes outvoting the stronger one, or switch ",
+    "`method` -- a whitened metric can lose to a plain weighted sum when the ",
+    "covariance is ill-conditioned (Issue #59).",
+    call. = FALSE
+  )
+  invisible(NULL)
 }

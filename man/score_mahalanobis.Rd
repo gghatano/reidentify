@@ -25,12 +25,19 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 
 \item{cov_from}{which side to estimate the covariance from: `"raw"`
 (default -- the attacker's own reference population), `"anon"`, or
-`"pooled"` (the distinct records of both sides stacked).}
+`"pooled"` (the distinct records of both sides stacked). The default is a
+threat-model choice, not a tuning knob: a real attacker whitens with the
+population they hold. `"anon"` folds the release's own perturbation into
+the covariance and so is less fragile when \eqn{S} is ill-conditioned
+(measured 0.3350 against 0.2100 at kappa 2756), but it is still far below
+the weighted sum there, so it is a diagnostic rather than a rescue.}
 
 \item{ridge}{non-negative shrinkage applied to the diagonal of the
 covariance matrix, as a multiple of its mean diagonal entry (default
 1e-6). Needed because redundant columns -- exactly the case Mahalanobis
-exists for -- make \eqn{S} ill-conditioned or singular.}
+exists for -- make \eqn{S} ill-conditioned or singular. It cannot repair
+an ill-conditioned result: a ridge large enough to matter turns the
+metric into the weighted sum it was supposed to improve on.}
 
 \item{squared}{return the squared distance instead of the distance
 (default FALSE). The two give identical rankings; the square root is the
@@ -63,6 +70,38 @@ varies -- a small disagreement along such a direction is far more
 surprising, and therefore far more identifying, than the same disagreement
 along a direction the population is spread out over anyway.
 
+WHEN THAT ARGUMENT FAILS (Issue #59). Up-weighting the low-variance
+directions is only right if the release did not *also* perturb the data
+along them. It is the ratio of the release's perturbation to the population
+spread **in the whitened directions** that decides the outcome, and strong
+correlation makes some of those directions narrow -- so the metric is at its
+most fragile in exactly the situation it is recommended for.
+
+Measured on a 3-column fixture (A, B correlated at `rho`; C independent;
+`success_analytic` over 200 records, the full sweep is in
+`docs/default-changes.md`):
+
+\tabular{lrrrr}{
+  perturbation \tab rho \tab kappa(S) \tab weighted \tab mahalanobis \cr
+  isotropic \tab 0.90 \tab 26.7 \tab 0.9600 \tab 0.9200 \cr
+  isotropic \tab 0.99 \tab 273.4 \tab 0.9350 \tab 0.5600 \cr
+  isotropic \tab 0.999 \tab 2755.6 \tab 0.8850 \tab 0.2100 \cr
+  follows S \tab 0.99 \tab 273.4 \tab 0.8900 \tab 0.9800 \cr
+  follows S \tab 0.999 \tab 2755.6 \tab 0.8400 \tab 0.9800
+}
+
+The same covariance, the same condition number, opposite conclusions: with
+an isotropic perturbation the whitened attack is 4.2x weaker than a plain
+weighted sum, and with a perturbation that follows the population covariance
+it is 1.2x stronger. **A high condition number therefore says the answer is
+fragile, not that it is wrong.** `score_mahalanobis()` warns above 100 and
+tells you to compare against `method = "weighted"`; do that before quoting
+either number.
+
+Raising `ridge` is not a fix, only a retreat: at `ridge = 1` both regimes
+land on the weighted sum's own figure (0.8950 / 0.8650), which is to say the
+metric has stopped doing anything. That is why the default is left at 1e-6.
+
 The covariance is estimated from *distinct records*, deduplicated by row
 number, not from the candidate pairs: a cross join repeats every record once
 per candidate, and estimating from the repeated rows would silently weight
@@ -72,7 +111,9 @@ each record by how many candidates it happens to have.
 set.seed(1)
 n <- 30
 a <- rnorm(n)
-raw <- data.frame(ROW_NUMBER = 1:n, A = a, B = 2 * a + rnorm(n, sd = 0.1))
+## correlated, but not so nearly-collinear that the whitening becomes
+## fragile -- see the condition-number discussion above
+raw <- data.frame(ROW_NUMBER = 1:n, A = a, B = 2 * a + rnorm(n, sd = 1))
 anon <- raw
 anon$A <- round(anon$A, 1)
 anon$B <- round(anon$B, 1)
