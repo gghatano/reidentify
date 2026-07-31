@@ -312,7 +312,10 @@ test_that("reid_evaluate() works on a combined score and on every score_*() func
     score_char(d, "CHAR_STATIC"),
     score_dist(d, "NUM_DYNAMIC_DIST"),
     score_num_rank(d, "NUM_DYNAMIC_MEAN"),
-    combine_scores(list(score_num(d, "BIN_MEAN"), score_num(d, "NUM_DYNAMIC_MEAN")))
+    ## The two columns are on different scales on purpose; this test is about
+    ## reid_evaluate(), not about the scale check (#57).
+    combine_scores(list(score_num(d, "BIN_MEAN"), score_num(d, "NUM_DYNAMIC_MEAN")),
+                   scale_check = "none")
   )) {
     e <- reid_evaluate(s, seeds = 1:5)
     expect_s3_class(e, "reid_evaluation")

@@ -471,7 +471,13 @@ test_that("normalisation is what makes columns on different scales combinable", 
   j <- join_raw_anon_data(raw, anon)
   spec <- c(SMALL = "num", MEDIUM = "num", LARGE = "num")
 
-  none <- reid_evaluate(score_multi(j, spec, normalize = "none"), seeds = 1:5)$success_analytic
+  ## Without normalisation the widest column dominates, and #57 made
+  ## combine_scores() say so instead of doing it silently.
+  expect_warning(
+    unnormalised <- score_multi(j, spec, normalize = "none"),
+    regexp = "very different scales"
+  )
+  none <- reid_evaluate(unnormalised, seeds = 1:5)$success_analytic
   scaled <- vapply(
     c("range", "zscore", "rank"),
     function(m) reid_evaluate(score_multi(j, spec, normalize = m), seeds = 1:5)$success_analytic,
@@ -555,7 +561,9 @@ test_that("score_by_knowledge() accepts the normalisations #14 added", {
   k <- dummy_qi_knowledge("M")
 
   for (m in c("range", "zscore", "rank", "none")) {
-    s <- score_by_knowledge(j, k, normalize = m)
+    ## normalize = "none" trips the #57 scale check by construction; this test
+    ## is about the argument being accepted at all.
+    s <- suppressWarnings(score_by_knowledge(j, k, normalize = m))
     expect_equal(nrow(s), nrow(j), info = m)
     expect_false(anyNA(s$SCORE), info = m)
   }
@@ -596,8 +604,10 @@ test_that("W < M < S stays strictly increasing under every normalisation", {
 
   ## and without any normalisation it is *not* strictly increasing -- the
   ## measurement that made #13 add the stopgap in the first place
-  flat <- do.call(reid_knowledge_curve,
-                  c(list(j, seeds = 1:5, normalize = "none"), qi_args))
+  flat <- suppressWarnings(
+    do.call(reid_knowledge_curve,
+            c(list(j, seeds = 1:5, normalize = "none"), qi_args))
+  )
   expect_false(all(diff(flat$success_analytic) > 0))
 })
 
