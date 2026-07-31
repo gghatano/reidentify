@@ -161,7 +161,7 @@ validate_tie_tolerance <- function(tolerance, fn_name) {
 #'
 #' @keywords internal
 validate_unique_candidate_pairs <- function(scores, fn_name) {
-  key <- paste(scores$ANON_ROW_NUMBER, scores$RAW_ROW_NUMBER, sep = "\r")
+  key <- candidate_pair_key(scores$ANON_ROW_NUMBER, scores$RAW_ROW_NUMBER)
   if (anyDuplicated(key) > 0) {
     dup <- duplicated(key)
     first <- which(dup)[1]

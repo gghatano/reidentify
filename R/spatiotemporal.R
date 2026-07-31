@@ -240,11 +240,26 @@ spatiotemporal_unicity <- function(dat, id = "ID", place = "PLACE",
       tr <- block$time_resolution[1]
       sr <- block$space_resolution[1]
 
-      point <- paste(
-        coarsen_place(dat[[place]], sr),
-        coarsen_time(dat[[time]], tr),
-        sep = "\r"
-      )
+      ## A (place, time) point is built with reid_value_key(), the package's
+      ## single answer to "are these two things the same" (Issues #70, #73).
+      ## The earlier form pasted the two coarsened vectors directly. A
+      ## separator inside the user's place column never reached it --
+      ## coarsen_place() returns codes -- but coarsen_time() returns a *double*,
+      ## and paste() prints a double to 15 significant digits. Microseconds
+      ## since the epoch, which is what a Postgres timestamp holds, are about
+      ## 1.75e15: five distinct instants there all printed as "1.75e+15" and
+      ## collapsed onto one point, while remaining five distinct numbers.
+      ## Collapsed points enlarge every anonymity set, so the reported unicity
+      ## falls -- the safe-looking direction docs/lessons-learned.md section 2
+      ## says a safety tool must never take quietly. Measured on that fixture
+      ## before the change: 1 point instead of 5, unicity 0 instead of 1.
+      ## reid_class_codes() compares the values rather than their printed form,
+      ## so the resolution of the clock no longer decides whether two moments
+      ## are told apart.
+      point <- reid_value_key(list(
+        reid_class_codes(coarsen_place(dat[[place]], sr)),
+        reid_class_codes(coarsen_time(dat[[time]], tr))
+      ))
       point_levels <- unique(point)
       point_code <- match(point, point_levels)
       n_points <- length(point_levels)
