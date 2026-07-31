@@ -1216,9 +1216,8 @@ recall が 1 を下回れば警告します。
 | [`docs/lessons-learned.md`](docs/lessons-learned.md) | 調査・修正・統合作業から得た知見 |
 | [`docs/verify-readme-examples.R`](docs/verify-readme-examples.R) | このページのコード例を通し実行し、`#>` の出力と関数の網羅を機械照合する（[実行ログ](docs/verify-readme-examples-log.txt)） |
 | [`docs/investigation/`](docs/investigation/) | 調査ログと実測値、実装比較ベンチマーク（各手法の検証スクリプトと実行ログ） |
-| `reidentify.pdf` | roxygen 生成のリファレンスマニュアル |
 
-関数ごとの詳細は R から参照できます。
+リファレンスマニュアルの正本は `man/*.Rd` です。関数ごとの詳細は R から参照できます。
 
 ```r
 ?reid_evaluate
