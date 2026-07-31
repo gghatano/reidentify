@@ -42,8 +42,8 @@ J = 0.2)}
 }
 \value{
 a data frame in raw_anon form holding a *subset* of the pairs
-  [join_raw_anon_data()] would produce, carrying a `blocking` attribute
-  describing what was dropped.
+  [join_raw_anon_data()] would produce, carrying a `blocking` attribute (a
+  [print()]able "reid_blocking" record; see [block_candidates()]).
 }
 \description{
 A drop-in replacement for [join_raw_anon_data()] for a large set-valued
@@ -60,10 +60,11 @@ be reidentified and the reported success rate falls. That is precisely the
 failure direction a safety-checking tool must not take quietly
 (docs/lessons-learned.md section 2), so this function is opt-in, never used
 by any other function in the package, and records what it discarded in the
-`blocking` attribute of its result (`n_pairs_full`, `n_pairs_kept`,
-`kept_fraction`, `n_anon_without_candidate`). Use it to make a large
-assessment feasible, then confirm the conclusion on the full join for a
-subsample -- and read the resulting rate as a lower bound.
+`blocking` attribute of its result -- including the **recall**, the fraction
+of true pairs it kept, which it measures exactly against the shared
+`row_number` (Issue #36). It warns when that recall is below 1. Use it to
+make a large assessment feasible, then confirm the conclusion on the full
+join for a subsample -- and read the resulting rate as a lower bound.
 }
 \examples{
 raw <- data.frame(
@@ -74,4 +75,7 @@ raw <- data.frame(
 blocked <- lsh_candidates(raw, raw, "ITEMS", n_hash = 32, bands = 8)
 attr(blocked, "blocking")
 
+}
+\seealso{
+[block_candidates()] for deterministic blocking on a key column.
 }

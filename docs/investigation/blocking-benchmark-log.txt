@@ -1,0 +1,114 @@
+
+==========================================================================
+1. recall-1.0 deterministic blocking vs the full cross join
+==========================================================================
+The block key must be among the attributes the attacker scores on;
+otherwise blocking is itself evidence and changes the measurement.
+
+  pairs  full 160,000 | blocked 2,406  (1.50% kept)
+  recall 1.0000
+  success_analytic  full 0.8950 | blocked 0.8950
+  max_risk          full 1.0000 | blocked 1.0000
+  top-1 hit rate    full 0.8950 | blocked 0.8950
+  baseline random   full 0.0025 | blocked 0.2000
+
+  And the same block key with a score that does NOT use it:
+  success_analytic  full 0.1183 | blocked 0.8950   <- blocking added information the score did not have
+
+==========================================================================
+2. reduction and recall by block key
+==========================================================================
+key                  pairs kept     kept %     recall no cand.
+ZIP                       2,406       1.50     1.0000        0
+ZIP + SEX                 1,402       0.88     1.0000        0
+AGE (exact)               2,733       1.71     0.3825        8
+AGE decade               26,535      16.58     0.8900        8
+ZIP | AGE decade         28,275      17.67     1.0000        0
+
+  AGE was perturbed by +/-2 in ANON, so an exact-AGE block loses true
+  pairs. The union pass buys them back at the cost of more pairs.
+
+  What a recall < 1 block does to the reported rate:
+  success_analytic  full 0.8950 | AGE-blocked 0.3788
+
+  and this is what the user sees, without asking for it:
+
+reid evaluation: 392 ANON x 400 RAW record(s), 2733 candidate pair(s)
+  candidate set  : BLOCKED -- 1.743% of the full 156800-pair join kept
+    true RAW record absent from the candidates of 239/392 ANON record(s)
+    -> the success rate below is a LOWER bound. ANON records that were left
+       with no candidate at all are not counted here at all.
+  success rate   : 0.3788 exact | simulated mean 0.3791 sd 0.0027 range [0.3750, 0.3827] over 10 seeds
+  baseline       : random 0.0585 | mode 0.0026   (lift vs random: 6.48x)
+  top-k hit rate : k=1 0.3788  k=5 0.3903  k=10 0.3903
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 2.6458 : attack 4/392 (1.0%)  precision 0.2500  recall 0.0026
+    conf >= 2.3966 : attack 5/392 (1.3%)  precision 0.4000  recall 0.0051
+    conf >= 2.2361 : attack 8/392 (2.0%)  precision 0.3750  recall 0.0077
+    conf >= 2.0000 : attack 20/392 (5.1%)  precision 0.3000  recall 0.0153
+    conf >= 1.9365 : attack 21/392 (5.4%)  precision 0.2857  recall 0.0153
+    ... 120 more threshold(s)
+
+==========================================================================
+3. scaling: full cross join vs deterministic blocking
+==========================================================================
+      n     full pairs     full s    full MB  blocked pairs  blocked s blocked MB    recall
+    500        250,000       0.27       26.8          2,982       0.00        0.4    1.0000
+   1000      1,000,000       1.32      107.0          6,164       0.00        0.8    1.0000
+   2000      4,000,000       6.41      427.6         12,120       0.01        1.7    1.0000
+   4000     16,000,000      28.00     1709.7         23,790       0.01        3.3    1.0000
+   8000              -          -          -         47,796       0.03        6.6    1.0000
+  16000              -          -          -         95,918       0.11       13.1    1.0000
+  32000              -          -          -        192,480       0.39       26.3    1.0000
+
+  growth exponent (log-log slope of pairs against n):
+    full join pairs : 2.00
+    blocked pairs   : 1.00
+    full join time  : 2.24
+    blocked time    : 1.40
+    full join MB    : 2.00
+    blocked MB      : 0.99
+
+  end-to-end at n = 32,000 (blocked candidates -> score -> evaluate):
+    elapsed 49.92 s
+reid evaluation: 32000 ANON x 32000 RAW record(s), 192480 candidate pair(s)
+  candidate set  : BLOCKED -- 0.0188% of the full 1024000000-pair join kept
+    true RAW record absent from the candidates of 0/32000 ANON record(s) (recall 1.0 on the records shown)
+  success rate   : 0.8949 exact | simulated mean 0.8951 sd 0.0004 range [0.8947, 0.8956] over 5 seeds
+  baseline       : random 0.1987 | mode 0.0000   (lift vs random: 4.50x)
+  top-k hit rate : k=1 0.8949  k=5 1.0000  k=10 1.0000
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= Inf : attack 212/32000 (0.7%)  precision 1.0000  recall 0.0066
+    conf >= 2.5106 : attack 213/32000 (0.7%)  precision 1.0000  recall 0.0067
+    conf >= 2.4998 : attack 214/32000 (0.7%)  precision 1.0000  recall 0.0067
+    conf >= 2.4958 : attack 215/32000 (0.7%)  precision 1.0000  recall 0.0067
+    conf >= 2.4852 : attack 216/32000 (0.7%)  precision 1.0000  recall 0.0067
+    ... 27146 more threshold(s)
+
+  The full join of that problem would be 1,024,000,000 pairs.
+
+==========================================================================
+4. top-k pruning of a score table
+==========================================================================
+     k     pairs kept     kept %     recall   success_analytic
+     -        160,000     100.00     1.0000             0.8950
+     1            432       0.27     0.9350             0.8950
+     2            850       0.53     0.9950             0.8950
+     5          2,216       1.38     1.0000             0.8950
+    10          4,245       2.65     1.0000             0.8950
+    50         20,867      13.04     1.0000             0.8950
+
+  top-k prunes the table but not the work that built it: the score has
+  to exist before it can be ranked. It is a second stage, not a first.
+
+==========================================================================
+5. LSH blocking now reports recall too
+==========================================================================
+  bands   8 :        1 pair(s) kept (  0.00%)  recall 0.0025
+  bands  16 :       71 pair(s) kept (  0.04%)  recall 0.0775
+  bands  32 :    4,140 pair(s) kept (  2.59%)  recall 0.8800
+  bands  64 :   72,450 pair(s) kept ( 45.28%)  recall 1.0000
+
+done.

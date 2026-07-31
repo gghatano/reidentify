@@ -194,9 +194,24 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' alter the risk. Pass `confidence = "tie"` to reproduce old numbers. See
 #' `docs/default-changes.md`.
 #'
+#' @section Blocked candidate sets:
+#'
+#' A full cross join has exactly `n_anon * n_raw` rows. Anything smaller was
+#' filtered -- by [block_candidates()], [lsh_candidates()],
+#' [top_k_candidates()] or by hand -- and a filtered candidate set can only
+#' lower the measured rate, never raise it. That is checked here from the score
+#' table itself rather than from an attribute the caller has to remember to
+#' pass on, and reported as `blocked` / `candidate_coverage` /
+#' `n_true_missing`, which the print method shows above the success rate
+#' (Issue #36).
+#'
 #' @return an object of class "reid_evaluation": a list with
 #'   \describe{
 #'     \item{n_anon, n_raw, n_pairs}{size of the problem}
+#'     \item{n_pairs_full, candidate_coverage, blocked, n_true_missing}{whether
+#'       the candidate set is the full cross join, what fraction of it is
+#'       present, and for how many ANON records the true RAW record is not a
+#'       candidate at all}
 #'     \item{confidence}{which confidence measure the sweep thresholded on}
 #'     \item{success_analytic}{exact expected single-guess success rate}
 #'     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -331,11 +346,25 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   per_record <- per_record[order(-per_record$RISK, per_record$ANON_ROW_NUMBER), , drop = FALSE]
   rownames(per_record) <- NULL
 
+  ## ---- is this a full cross join, or a blocked candidate set? -------------
+  ## Read off the score table itself rather than from an attribute a caller
+  ## would have to remember to pass: a blocked candidate set that is *not*
+  ## flagged reports a rate biased downwards, and a low number is the one
+  ## nobody questions (docs/lessons-learned.md section 2, Issue #36). A full
+  ## join has exactly n_anon * n_raw rows, so anything smaller was filtered --
+  ## by lsh_candidates(), block_candidates(), top_k_candidates() or by hand.
+  n_pairs_full <- as.numeric(n_anon) * as.numeric(n_raw)
+  n_true_missing <- sum(is.na(per_anon$TRUE_RANK))
+
   structure(
     list(
       n_anon = n_anon,
       n_raw = n_raw,
       n_pairs = nrow(scores),
+      n_pairs_full = n_pairs_full,
+      candidate_coverage = if (n_pairs_full > 0) nrow(scores) / n_pairs_full else NA_real_,
+      n_true_missing = n_true_missing,
+      blocked = nrow(scores) < n_pairs_full,
       confidence = confidence,
       success_analytic = success_analytic,
       success_mean = mean(per_seed$rate),
@@ -372,6 +401,25 @@ print.reid_evaluation <- function(x, ...) {
     "reid evaluation: %d ANON x %d RAW record(s), %d candidate pair(s)\n",
     x$n_anon, x$n_raw, x$n_pairs
   ))
+  ## Only printed when the candidate set is incomplete, so the ordinary
+  ## full-join output is unchanged -- but when it is incomplete, it is printed
+  ## before the success rate, not after it (Issue #36).
+  if (isTRUE(x$blocked)) {
+    cat(sprintf(
+      "  candidate set  : BLOCKED -- %.4g%% of the full %.0f-pair join kept\n",
+      100 * x$candidate_coverage, x$n_pairs_full
+    ))
+    cat(sprintf(
+      "    true RAW record absent from the candidates of %d/%d ANON record(s)%s\n",
+      x$n_true_missing, x$n_anon,
+      if (x$n_true_missing > 0) "" else " (recall 1.0 on the records shown)"
+    ))
+    if (x$n_true_missing > 0) {
+      cat("    -> the success rate below is a LOWER bound. ANON records that ",
+          "were left\n       with no candidate at all are not counted here at ",
+          "all.\n", sep = "")
+    }
+  }
   cat(sprintf(
     "  success rate   : %.4f exact | simulated mean %.4f sd %.4f range [%.4f, %.4f] over %d seeds\n",
     x$success_analytic, x$success_mean, x$success_sd,
