@@ -4,7 +4,13 @@
 \alias{apply_confidence}
 \title{apply a confidence measure and a confidence threshold to an assignment}
 \usage{
-apply_confidence(out, scores, confidence, min_confidence)
+apply_confidence(
+  out,
+  scores,
+  confidence,
+  min_confidence,
+  tolerance = reid_tie_tolerance()
+)
 }
 \arguments{
 \item{out}{an assignment table (ANON_ROW_NUMBER, RAW_ROW_NUMBER,
@@ -15,6 +21,8 @@ CONFIDENCE, RESULT)}
 \item{confidence}{`"tie"` or `"margin"`}
 
 \item{min_confidence}{records scoring below this decline to guess}
+
+\item{tolerance}{relative tie tolerance, see [reid_confidence()]}
 }
 \value{
 `out` with CONFIDENCE replaced and sub-threshold rows declined

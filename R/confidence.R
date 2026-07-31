@@ -119,6 +119,14 @@
 #' @param scores a score table (see [score_num()])
 #' @param method `"margin"` (default since Issue #44) or `"tie"` (the
 #'   default up to and including Issue #16)
+#' @param tolerance relative tolerance for deciding that two candidate scores
+#'   are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Without it
+#'   `TIE_SIZE` and `MARGIN` are not invariant to a change of units: on a
+#'   200-record fixture, expressing the same values in 1/10 units left 198 of
+#'   200 records with a `MARGIN` below 1e-9 -- non-zero only as an artefact of
+#'   binary representation -- and turned 108 genuine two-way ties into unique
+#'   wins. Pass `tolerance = 0` for the exact `==` comparison used before #61;
+#'   see `docs/default-changes.md`.
 #'
 #' @return a data frame with one row per ANON record, ordered by
 #'   ANON_ROW_NUMBER, with columns ANON_ROW_NUMBER, N_CANDIDATES, BEST_SCORE,
@@ -138,9 +146,15 @@
 #'
 #' @importFrom stats sd
 #' @export
-reid_confidence <- function(scores, method = c("margin", "tie")) {
+reid_confidence <- function(scores, method = c("margin", "tie"),
+                            tolerance = reid_tie_tolerance()) {
   method <- match.arg(method)
   score_type <- validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "reid_confidence")
+  ## TIE_SIZE counts rows and SD_SCORE is taken over rows, so a candidate pair
+  ## listed twice corrupts both -- the same defect, on the same contract, as
+  ## Issue #60 in match_greedy() / reid_evaluate().
+  validate_unique_candidate_pairs(scores, "reid_confidence")
 
   value <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
   if (anyNA(value)) {
@@ -151,7 +165,13 @@ reid_confidence <- function(scores, method = c("margin", "tie")) {
 
   anon <- scores$ANON_ROW_NUMBER
   levels_anon <- sort(unique(anon))
-  groups <- split(value, factor(anon, levels = levels_anon))
+  raw_groups <- split(value, factor(anon, levels = levels_anon))
+
+  ## Issue #61: near-equal candidate scores are collapsed onto their group
+  ## minimum before any tie test, so TIE_SIZE, SECOND_SCORE and MARGIN do not
+  ## depend on the units the data happens to be expressed in.
+  ## snap_tied_values() preserves min(), so BEST_SCORE is untouched.
+  groups <- lapply(raw_groups, snap_tied_values, tolerance = tolerance)
 
   n_candidates <- lengths(groups)
   best <- vapply(groups, min, numeric(1))
@@ -170,7 +190,11 @@ reid_confidence <- function(scores, method = c("margin", "tie")) {
     if (length(v) < 2) NA_real_ else sort(v, partial = 2L)[2L]
   }, numeric(1))
 
-  sd_score <- vapply(groups, function(v) {
+  ## SD_SCORE is the spread of the candidate scores, not a tie test, so it is
+  ## taken on the values as given. (The two differ by less than the tolerance
+  ## by construction; using the raw values keeps the column meaning exactly
+  ## what its name says.)
+  sd_score <- vapply(raw_groups, function(v) {
     if (length(v) < 2) 0 else stats::sd(v)
   }, numeric(1))
 
@@ -219,18 +243,20 @@ reid_confidence <- function(scores, method = c("margin", "tie")) {
 #' @param scores the score table the assignment came from
 #' @param confidence `"tie"` or `"margin"`
 #' @param min_confidence records scoring below this decline to guess
+#' @param tolerance relative tie tolerance, see [reid_confidence()]
 #'
 #' @return `out` with CONFIDENCE replaced and sub-threshold rows declined
 #'
 #' @keywords internal
-apply_confidence <- function(out, scores, confidence, min_confidence) {
+apply_confidence <- function(out, scores, confidence, min_confidence,
+                             tolerance = reid_tie_tolerance()) {
   if (!is.numeric(min_confidence) || length(min_confidence) != 1 ||
       is.na(min_confidence)) {
     stop("`min_confidence` must be a single number.", call. = FALSE)
   }
 
   if (identical(confidence, "margin")) {
-    conf <- reid_confidence(scores, method = "margin")
+    conf <- reid_confidence(scores, method = "margin", tolerance = tolerance)
     out$CONFIDENCE <- conf$CONFIDENCE[match(out$ANON_ROW_NUMBER,
                                             conf$ANON_ROW_NUMBER)]
   }

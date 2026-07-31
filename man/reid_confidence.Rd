@@ -4,13 +4,26 @@
 \alias{reid_confidence}
 \title{per-ANON-record confidence in the best-scoring candidate}
 \usage{
-reid_confidence(scores, method = c("margin", "tie"))
+reid_confidence(
+  scores,
+  method = c("margin", "tie"),
+  tolerance = reid_tie_tolerance()
+)
 }
 \arguments{
 \item{scores}{a score table (see [score_num()])}
 
 \item{method}{`"margin"` (default since Issue #44) or `"tie"` (the
 default up to and including Issue #16)}
+
+\item{tolerance}{relative tolerance for deciding that two candidate scores
+are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Without it
+`TIE_SIZE` and `MARGIN` are not invariant to a change of units: on a
+200-record fixture, expressing the same values in 1/10 units left 198 of
+200 records with a `MARGIN` below 1e-9 -- non-zero only as an artefact of
+binary representation -- and turned 108 genuine two-way ties into unique
+wins. Pass `tolerance = 0` for the exact `==` comparison used before #61;
+see `docs/default-changes.md`.}
 }
 \value{
 a data frame with one row per ANON record, ordered by

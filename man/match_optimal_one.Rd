@@ -4,7 +4,15 @@
 \alias{match_optimal_one}
 \title{solve one linear assignment sub-problem}
 \usage{
-match_optimal_one(raw, anon, value, sampling_rate, dummy_cost, solve_fn)
+match_optimal_one(
+  raw,
+  anon,
+  value,
+  sampling_rate,
+  dummy_cost,
+  solve_fn,
+  tolerance = reid_tie_tolerance()
+)
 }
 \arguments{
 \item{raw}{RAW record identifiers of this block's candidate pairs}
@@ -19,6 +27,9 @@ minimised scale}
 \item{dummy_cost}{see [match_optimal()]}
 
 \item{solve_fn}{a solver function from [reid_lsap_solvers()]}
+
+\item{tolerance}{relative tie tolerance for the CONFIDENCE count only, see
+[match_optimal()]}
 }
 \value{
 a data frame of ANON_ROW_NUMBER, RAW_ROW_NUMBER, CONFIDENCE, RESULT

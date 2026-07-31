@@ -8,7 +8,8 @@ match_greedy(
   scores,
   seed = 0L,
   confidence = c("margin", "tie"),
-  min_confidence = 0
+  min_confidence = 0,
+  tolerance = reid_tie_tolerance()
 )
 }
 \arguments{
@@ -32,6 +33,13 @@ CONFIDENCE falls below this (default 0, i.e. always guess). A declined
 record keeps its row but is reported with `RAW_ROW_NUMBER = NA` and
 `RESULT = FALSE`, so the trial count is unchanged and the reported rate
 cannot be inflated by simply attacking less.}
+
+\item{tolerance}{relative tolerance for deciding that two candidate scores
+are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Scores agreeing
+to about the first 8 significant digits are treated as indistinguishable,
+so re-expressing the same data in different units does not turn a tie into
+a strict ordering. Pass `tolerance = 0` for the exact `==` comparison used
+before #61; see `docs/default-changes.md`.}
 }
 \value{
 a data frame with exactly one row per ANON record, ordered by
@@ -50,7 +58,9 @@ same RAW record may be claimed by several ANON records -- that is what
 Ties are broken uniformly at random via [resolve_min_distance_ties()], so a
 record that is genuinely indistinguishable from `k` others is credited with
 a `1/k` chance rather than being deterministically awarded to whichever
-candidate happened to sort first (Issue #3).
+candidate happened to sort first (Issue #3). Two scores count as tied when
+they agree to within `tolerance` **relatively**, not only when they are
+bit-identical; see `tolerance` below and `docs/default-changes.md`.
 
 By default `CONFIDENCE` is the **eccentricity** (`confidence = "margin"`):
 how far ahead of the runner-up the winner is, in units of the spread of
