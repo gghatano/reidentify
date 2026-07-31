@@ -23,6 +23,11 @@ do_figures  <- "--check-figures" %in% args
 pos         <- setdiff(args, "--check-figures")
 pkg_root    <- normalizePath(if (length(pos)) pos[1] else ".", winslash = "/")
 
+## This run is the one that is supposed to see the working tree, so tests that
+## take a different branch when they cannot see it must fail here rather than
+## quietly pass (#65). test-self-contained.R reads this.
+Sys.setenv(REIDENTIFY_REQUIRE_SOURCE_TREE = "1")
+
 suppressMessages(pkgload::load_all(pkg_root, quiet = TRUE))
 
 res <- as.data.frame(testthat::test_dir(
