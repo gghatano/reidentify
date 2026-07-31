@@ -199,7 +199,9 @@ test_that("Mahalanobis distance is invariant under an invertible linear map of t
   ## thousands of yen, nor on whether two attributes are stored as (x, y) or
   ## as (x + y, x - y).
   j <- simple_join()
-  base <- score_mahalanobis(j, c("A", "B"), ridge = 0)$SCORE
+  ## ridge = 0 on a correlated pair is ill-conditioned by construction, so the
+  ## #59 warning fires throughout. This test is about the invariance.
+  base <- suppressWarnings(score_mahalanobis(j, c("A", "B"), ridge = 0)$SCORE)
 
   transform_join <- function(m) {
     raw <- j[!duplicated(j$RAW_ROW_NUMBER), c("RAW_ROW_NUMBER", "RAW_A", "RAW_B")]
@@ -216,13 +218,14 @@ test_that("Mahalanobis distance is invariant under an invertible linear map of t
   }
 
   ## pure rescaling of one coordinate
-  scaled <- score_mahalanobis(transform_join(diag(c(100, 1))), c("A", "B"), ridge = 0)
+  scaled <- suppressWarnings(
+    score_mahalanobis(transform_join(diag(c(100, 1))), c("A", "B"), ridge = 0))
   expect_equal(scaled$SCORE, base)
 
   ## a shear that mixes the two coordinates
-  sheared <- score_mahalanobis(
+  sheared <- suppressWarnings(score_mahalanobis(
     transform_join(matrix(c(1, 0.7, -0.4, 2), nrow = 2)), c("A", "B"), ridge = 0
-  )
+  ))
   expect_equal(sheared$SCORE, base)
 })
 
@@ -255,9 +258,14 @@ test_that("cov_from selects which population defines the metric", {
   anon <- data.frame(ROW_NUMBER = 1:n, A = raw$A * 10 + 1, B = raw$B / 10)
   j <- join_raw_anon_data(raw, anon)
 
-  from_raw <- score_mahalanobis(j, c("A", "B"), cov_from = "raw", ridge = 0)$SCORE
-  from_anon <- score_mahalanobis(j, c("A", "B"), cov_from = "anon", ridge = 0)$SCORE
-  pooled <- score_mahalanobis(j, c("A", "B"), cov_from = "pooled", ridge = 0)$SCORE
+  ## ridge = 0 leaves these ill-conditioned; the #59 warning is the correct
+  ## reading of the fixture and is not what this test is about.
+  from_raw <- suppressWarnings(
+    score_mahalanobis(j, c("A", "B"), cov_from = "raw", ridge = 0)$SCORE)
+  from_anon <- suppressWarnings(
+    score_mahalanobis(j, c("A", "B"), cov_from = "anon", ridge = 0)$SCORE)
+  pooled <- suppressWarnings(
+    score_mahalanobis(j, c("A", "B"), cov_from = "pooled", ridge = 0)$SCORE)
 
   expect_false(isTRUE(all.equal(from_raw, from_anon)))
   expect_false(isTRUE(all.equal(from_raw, pooled)))
@@ -326,8 +334,10 @@ test_that("ridge keeps an exactly collinear pair invertible", {
   anon$B <- 2 * anon$A
   j <- join_raw_anon_data(raw, anon)
 
-  expect_error(score_mahalanobis(j, c("A", "B"), ridge = 0))
-  got <- score_mahalanobis(j, c("A", "B"), ridge = 1e-6)
+  ## B = 2A exactly, so the #59 condition-number warning is the correct
+  ## reading of this fixture; what is under test is that ridge keeps it usable.
+  expect_error(suppressWarnings(score_mahalanobis(j, c("A", "B"), ridge = 0)))
+  got <- suppressWarnings(score_mahalanobis(j, c("A", "B"), ridge = 1e-6))
   expect_true(all(is.finite(got$SCORE)))
   expect_true(all(got$SCORE >= 0))
 })
@@ -471,7 +481,13 @@ test_that("normalisation is what makes columns on different scales combinable", 
   j <- join_raw_anon_data(raw, anon)
   spec <- c(SMALL = "num", MEDIUM = "num", LARGE = "num")
 
-  none <- reid_evaluate(score_multi(j, spec, normalize = "none"), seeds = 1:5)$success_analytic
+  ## Without normalisation the widest column dominates, and #57 made
+  ## combine_scores() say so instead of doing it silently.
+  expect_warning(
+    unnormalised <- score_multi(j, spec, normalize = "none"),
+    regexp = "very different scales"
+  )
+  none <- reid_evaluate(unnormalised, seeds = 1:5)$success_analytic
   scaled <- vapply(
     c("range", "zscore", "rank"),
     function(m) reid_evaluate(score_multi(j, spec, normalize = m), seeds = 1:5)$success_analytic,
@@ -494,13 +510,32 @@ test_that("on correlated attributes Mahalanobis beats the plain weighted sum", {
   deltas <- vapply(1:5, function(s) {
     j <- redundant_join(seed = s)
     w <- reid_evaluate(score_multi(j, spec), seeds = 1:5)$success_analytic
-    m <- reid_evaluate(score_multi(j, spec, method = "mahalanobis"),
-                       seeds = 1:5)$success_analytic
+    ## The #59 condition-number warning fires on every seed here; the test
+    ## below is about precisely that.
+    m <- reid_evaluate(
+      suppressWarnings(score_multi(j, spec, method = "mahalanobis")),
+      seeds = 1:5)$success_analytic
     m - w
   }, numeric(1))
 
   expect_true(all(deltas > 0))
   expect_gt(mean(deltas), 0.1)
+})
+
+test_that("the #59 condition-number warning marks fragility, not a wrong answer", {
+  ## The fixture above is ill-conditioned AND Mahalanobis wins on it. Reading
+  ## the warning as "this number is too low" would be wrong here, so the
+  ## message says the result is fragile and tells the caller to compare
+  ## against method = "weighted" -- which is what the test above does.
+  spec <- c(A = "num", B = "num", C = "num")
+  j <- redundant_join(seed = 1)
+
+  expect_warning(m <- score_multi(j, spec, method = "mahalanobis"),
+                 regexp = "ill-conditioned")
+
+  w_rate <- reid_evaluate(score_multi(j, spec), seeds = 1:5)$success_analytic
+  m_rate <- reid_evaluate(m, seeds = 1:5)$success_analytic
+  expect_gt(m_rate, w_rate)
 })
 
 test_that("Mahalanobis does not hurt when the attributes are in fact independent", {
@@ -555,7 +590,9 @@ test_that("score_by_knowledge() accepts the normalisations #14 added", {
   k <- dummy_qi_knowledge("M")
 
   for (m in c("range", "zscore", "rank", "none")) {
-    s <- score_by_knowledge(j, k, normalize = m)
+    ## normalize = "none" trips the #57 scale check by construction; this test
+    ## is about the argument being accepted at all.
+    s <- suppressWarnings(score_by_knowledge(j, k, normalize = m))
     expect_equal(nrow(s), nrow(j), info = m)
     expect_false(anyNA(s$SCORE), info = m)
   }
@@ -589,15 +626,22 @@ test_that("W < M < S stays strictly increasing under every normalisation", {
   )
 
   for (m in c("range", "zscore", "rank")) {
-    curve <- do.call(reid_knowledge_curve,
-                     c(list(j, seeds = 1:5, normalize = m), qi_args))
+    ## FINGERPRINT alone identifies everyone, so at the S level the equal-weight
+    ## combination is below its own best axis and the #59 check says so. That
+    ## is a true positive about equal weighting; this test is about the
+    ## ordering of the levels.
+    curve <- suppressWarnings(
+      do.call(reid_knowledge_curve,
+              c(list(j, seeds = 1:5, normalize = m), qi_args)))
     expect_true(all(diff(curve$success_analytic) > 0), info = m)
   }
 
   ## and without any normalisation it is *not* strictly increasing -- the
   ## measurement that made #13 add the stopgap in the first place
-  flat <- do.call(reid_knowledge_curve,
-                  c(list(j, seeds = 1:5, normalize = "none"), qi_args))
+  flat <- suppressWarnings(
+    do.call(reid_knowledge_curve,
+            c(list(j, seeds = 1:5, normalize = "none"), qi_args))
+  )
   expect_false(all(diff(flat$success_analytic) > 0))
 })
 
@@ -610,4 +654,160 @@ test_that("the knowledge model can be attacked with the Mahalanobis metric too",
   expect_s3_class(s, "reid_scores")
   expect_equal(nrow(s), nrow(j))
   expect_false(isTRUE(all.equal(s$SCORE, score_by_knowledge(j, k)$SCORE)))
+})
+
+## ---------------------------------------------------------------------------
+## #59: whitening is fragile exactly where it is recommended
+## ---------------------------------------------------------------------------
+
+## Same shape as redundant_join(), but the release perturbs every column
+## independently instead of along the latent direction. That one change flips
+## Mahalanobis from the best metric on this data to the worst.
+redundant_join_iso <- function(n = 120, noise = 0.5, seed = 1) {
+  set.seed(seed)
+  latent <- rnorm(n)
+  raw <- data.frame(
+    ROW_NUMBER = seq_len(n),
+    A = latent + rnorm(n, sd = 0.05),
+    B = 3 * latent + rnorm(n, sd = 0.15),
+    C = rnorm(n)
+  )
+  anon <- data.frame(
+    ROW_NUMBER = seq_len(n),
+    A = raw$A + rnorm(n, sd = noise),
+    B = raw$B + rnorm(n, sd = noise),
+    C = raw$C + rnorm(n, sd = noise)
+  )
+  join_raw_anon_data(raw, anon)
+}
+
+test_that("score_mahalanobis() warns on an ill-conditioned covariance", {
+  j <- redundant_join_iso()
+  expect_warning(score_mahalanobis(j, c("A", "B", "C")),
+                 regexp = "ill-conditioned")
+
+  w <- tryCatch(score_mahalanobis(j, c("A", "B", "C")), warning = conditionMessage)
+  expect_match(w, "condition number")
+  ## the message must not tell the reader which way the error goes: it does
+  ## not know, and claiming a direction is what makes #59 hard to spot
+  expect_match(w, "WEAKER")
+  expect_match(w, "STRONGER")
+})
+
+test_that("a well-conditioned covariance does not warn", {
+  set.seed(59)
+  n <- 80
+  raw <- data.frame(ROW_NUMBER = seq_len(n), A = rnorm(n), B = rnorm(n),
+                    C = rnorm(n))
+  anon <- raw
+  for (cn in c("A", "B", "C")) anon[[cn]] <- anon[[cn]] + rnorm(n, sd = 0.3)
+  j <- join_raw_anon_data(raw, anon)
+
+  expect_silent(score_mahalanobis(j, c("A", "B", "C")))
+})
+
+test_that("a single column is never called ill-conditioned", {
+  ## kappa() of a 1x1 matrix is 1 by definition; the check must not invent a
+  ## warning for a metric that is doing nothing but rescaling.
+  set.seed(59)
+  raw <- data.frame(ROW_NUMBER = 1:20, A = rnorm(20))
+  j <- join_raw_anon_data(raw, raw)
+  expect_silent(score_mahalanobis(j, "A"))
+})
+
+test_that("under an isotropic release, whitening loses to the weighted sum", {
+  ## The measurement behind #59, on the repository's own generator with the
+  ## perturbation made isotropic. The metric README recommends for correlated
+  ## columns is the weaker attack here -- the direction a safety tool must not
+  ## take quietly.
+  spec <- c(A = "num", B = "num", C = "num")
+  j <- redundant_join_iso()
+
+  w <- reid_evaluate(score_multi(j, spec), seeds = 1:5)$success_analytic
+  m <- reid_evaluate(suppressWarnings(score_multi(j, spec, method = "mahalanobis")),
+                     seeds = 1:5)$success_analytic
+
+  expect_lt(m, w)
+  ## ... and the caller is told, rather than left with a plausible-looking
+  ## smaller number. Both checks fire here, so the warnings are collected
+  ## rather than matched one at a time.
+  msgs <- character(0)
+  withCallingHandlers(
+    score_multi(j, spec, method = "mahalanobis"),
+    warning = function(x) {
+      msgs <<- c(msgs, conditionMessage(x))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_true(any(grepl("ill-conditioned", msgs)))
+})
+
+test_that("score_multi() warns when the combination measures less than one axis alone", {
+  ## Single-axis screening cannot see this: every column is informative on its
+  ## own, so #35's screen passes and the combined number still understates.
+  spec <- c(A = "num", B = "num", C = "num")
+  j <- redundant_join_iso()
+
+  report <- axis_informativeness(list(
+    A = score_num(j, "A"), B = score_num(j, "B"), C = score_num(j, "C")))
+  expect_true(all(report$informative))
+
+  msgs <- character(0)
+  s <- withCallingHandlers(
+    score_multi(j, spec, method = "mahalanobis"),
+    warning = function(w) {
+      msgs <<- c(msgs, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_true(any(grepl("measures LESS risk", msgs)))
+  expect_true(any(grepl("ill-conditioned", msgs)))
+})
+
+test_that("a combination that is at least as good as every axis stays quiet", {
+  spec <- c(A = "num", B = "num", C = "num")
+  j <- redundant_join()
+  ## the aligned-perturbation fixture: Mahalanobis wins, so only the
+  ## conditioning warning is allowed to fire
+  msgs <- character(0)
+  withCallingHandlers(
+    score_multi(j, spec, method = "mahalanobis"),
+    warning = function(w) {
+      msgs <<- c(msgs, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_false(any(grepl("measures LESS risk", msgs)))
+})
+
+test_that("the combination check keeps quiet when screening already spoke", {
+  ## Two warnings about the same fixture in different words trains the reader
+  ## to skip both, so the #59 check defers to #35's screen.
+  set.seed(59)
+  n <- 60
+  raw <- data.frame(ROW_NUMBER = seq_len(n), SIGNAL = seq_len(n),
+                    N1 = rnorm(n), N2 = rnorm(n), N3 = rnorm(n))
+  anon <- raw
+  anon$SIGNAL <- anon$SIGNAL + rnorm(n, sd = 3)
+  ## redrawn, so the three noise columns carry nothing about identity
+  for (cn in c("N1", "N2", "N3")) anon[[cn]] <- rnorm(n)
+  j <- join_raw_anon_data(raw, anon)
+
+  ## the combination really is worse than SIGNAL alone here (0.0333 vs 0.2167)
+  spec <- c(SIGNAL = "num", N1 = "num", N2 = "num", N3 = "num")
+  combined <- suppressWarnings(score_multi(j, spec, screen = "none"))
+  expect_lt(reid_evaluate(combined, seeds = 1:5)$success_analytic,
+            reid_evaluate(score_num(j, "SIGNAL"), seeds = 1:5)$success_analytic)
+
+  ## ... and #35's screen is what reports it, exactly once
+  msgs <- character(0)
+  withCallingHandlers(
+    score_multi(j, spec),
+    warning = function(w) {
+      msgs <<- c(msgs, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_true(any(grepl("no signal", msgs)))
+  expect_false(any(grepl("measures LESS risk", msgs)))
 })

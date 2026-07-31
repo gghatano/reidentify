@@ -234,6 +234,9 @@ score_idf_match <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   })
 
   ## No normalisation: combine_scores() sums the raw columns, which is the
-  ## whole point of an IDF block.
-  combine_scores(parts)
+  ## whole point of an IDF block. The scale gap between columns is the
+  ## evidence here -- a column of rare values legitimately outweighs a column
+  ## of common ones -- so the scale-domination warning is switched off rather
+  ## than fired on the intended behaviour.
+  combine_scores(parts, scale_check = "none")
 }
