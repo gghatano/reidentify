@@ -140,8 +140,48 @@ unicity_key <- function(dat, columns, tolerance = reid_tie_tolerance()) {
     if (is.double(v)) {
       v <- snap_tied_values(v, tolerance)
     }
-    match(v, unique(v))
+    reid_class_codes(v)
   })
+  reid_value_key(codes)
+}
+
+#' equivalence-class codes for one column of values
+#'
+#' The first half of the key construction described in [unicity_key()]: turns
+#' a vector into small integers that are equal exactly when the values are.
+#' Kept separate so that every caller that needs "do these two rows agree"
+#' answers it the same way, rather than each one reinventing a `paste()`.
+#'
+#' @param v a vector
+#'
+#' @return an integer vector of the same length
+#'
+#' @keywords internal
+reid_class_codes <- function(v) {
+  match(v, unique(v))
+}
+
+#' join per-column codes into one key per row
+#'
+#' The second half of [unicity_key()], and the package's single answer to "are
+#' these two rows the same". Splitting it out is not tidiness: the obvious
+#' `paste(col1, col2, sep = "\\r")` was written out longhand in three more
+#' places (Issue #70), and every one of them could be made to collide by a
+#' value that contains the separator -- `c("x", "x\\ry")` against
+#' `c("y\\rz", "z")` gives `"x\\ry\\rz"` twice. Codes cannot: their decimal
+#' representation is digits only, so the separator cannot occur inside one and
+#' the join is injective.
+#'
+#' @param codes a list of integer vectors of equal length, as from
+#'   [reid_class_codes()]
+#'
+#' @return a character vector with one key per element
+#'
+#' @keywords internal
+reid_value_key <- function(codes) {
+  if (length(codes) == 0) {
+    stop("reid_value_key(): need at least one column of codes.", call. = FALSE)
+  }
   do.call(paste, c(codes, list(sep = "\r")))
 }
 
