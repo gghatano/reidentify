@@ -1,0 +1,60 @@
+== sweep: how collinear A and B are, vs the noise the release adds ==
+eps_sd   noise   cor(A,B) | weighted  mahalanobis      ratio |  A alone  C alone
+0.5      1.0       0.9998 |   0.6250       0.0500     12.50x |   0.1100   0.1000
+0.5      2.0       0.9998 |   0.3450       0.0200     17.25x |   0.0500   0.0450
+0.5      5.0       0.9998 |   0.1050       0.0100     10.50x |   0.0100   0.0250
+1.0      1.0       0.9991 |   0.6200       0.1150      5.39x |   0.1100   0.1000
+1.0      2.0       0.9991 |   0.3300       0.0250     13.20x |   0.0500   0.0450
+1.0      5.0       0.9991 |   0.1000       0.0100     10.00x |   0.0100   0.0250
+3.0      1.0       0.9922 |   0.6900       0.2950      2.34x |   0.1100   0.1000
+3.0      2.0       0.9922 |   0.3800       0.1150      3.30x |   0.0500   0.0450
+3.0      5.0       0.9922 |   0.1250       0.0250      5.00x |   0.0100   0.0250
+10.0     1.0       0.9245 |   0.8450       0.7000      1.21x |   0.1100   0.1000
+10.0     2.0       0.9245 |   0.4850       0.3700      1.31x |   0.0500   0.0450
+10.0     5.0       0.9245 |   0.1350       0.0850      1.59x |   0.0100   0.0250
+30.0     1.0       0.6459 |   0.9150       0.8650      1.06x |   0.1100   0.1000
+30.0     2.0       0.6459 |   0.6750       0.6200      1.09x |   0.0500   0.0450
+30.0     5.0       0.6459 |   0.2150       0.2000      1.07x |   0.0100   0.0250
+
+== does `ridge` rescue it? (the only knob the docs offer) ==
+  ridge = 1e-06     mahalanobis 0.0250
+  ridge = 0.001     mahalanobis 0.0650
+  ridge = 0.01      mahalanobis 0.1600
+  ridge = 0.1       mahalanobis 0.2800
+  ridge = 1         mahalanobis 0.3000
+  ridge = 10        mahalanobis 0.3050
+  (weighted, for comparison)  0.3300
+
+== does anything warn / does axis screening notice? ==
+  warnings: NONE
+axis informativeness (3 axis/axes, alpha = 0.05)
+  A                    success 0.0500  baseline 0.0050  lift  10.00x  rank 0.084  z  20.51  p = 0.0000  informative
+  B                    success 0.0550  baseline 0.0050  lift  11.00x  rank 0.077  z  20.86  p = 0.0000  informative
+  C                    success 0.0450  baseline 0.0050  lift   9.00x  rank 0.108  z  19.34  p = 0.0000  informative
+  (screening scores each column ALONE, so a metric that only fails when
+    the columns are combined is invisible to it.)
+
+== bare score_mahalanobis(), i.e. the README's own call shape ==
+  score_mahalanobis(A, B)      0.0250
+  score_multi weighted(A, B)   0.0900
+  score_num(A) alone           0.0500
+  score_num(B) alone           0.0550
+
+== cov_from = 'anon' / 'pooled' instead of the default 'raw' ==
+  cov_from = raw      0.0250
+  cov_from = anon     0.1850
+  cov_from = pooled   0.1750
+
+== printed evaluation of the mahalanobis result (looks plausible) ==
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.0250 exact | simulated mean 0.0250 sd 0.0000 range [0.0250, 0.0250] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 5.00x)
+  top-k hit rate : k=1 0.0250  k=5 0.1200  k=10 0.2050
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 1.3006 : attack 1/200 (0.5%)  precision 0.0000  recall 0.0000
+    conf >= 1.2624 : attack 2/200 (1.0%)  precision 0.0000  recall 0.0000
+    conf >= 1.0359 : attack 3/200 (1.5%)  precision 0.0000  recall 0.0000
+    conf >= 1.0318 : attack 4/200 (2.0%)  precision 0.0000  recall 0.0000
+    conf >= 1.0306 : attack 5/200 (2.5%)  precision 0.0000  recall 0.0000
+    ... 195 more threshold(s)

@@ -1,0 +1,37 @@
+== score_char() vs score_containment() as the generalised share grows ==
+  share   0.0%  score_char    0.2400  score_containment 0.2400  (SILENT; under-reports 1.00x)
+  share   5.0%  score_char    0.2277  score_containment 0.2287  (SILENT; under-reports 1.00x)
+  share  10.0%  score_char    0.2175  score_containment 0.2191  (SILENT; under-reports 1.01x)
+  share  15.0%  score_char    0.2118  score_containment 0.2113  (SILENT; under-reports 1.00x)
+  share  19.0%  score_char    0.1924  score_containment 0.1943  (SILENT; under-reports 1.01x)
+  share  20.0%  score_char   STOPPED   score_containment 0.1895  (detector fired)
+  share  25.0%  score_char   STOPPED   score_containment 0.1848  (detector fired)
+  share  50.0%  score_char   STOPPED   score_containment 0.1415  (detector fired)
+  share 100.0%  score_char   STOPPED   score_containment 0.0250  (detector fired)
+
+== the same, for score_num_rank() (also documented as protected) ==
+  share  10.0%  score_num_rank STOPPED
+  share  15.0%  score_num_rank STOPPED
+  share  30.0%  score_num_rank STOPPED
+
+== full printed evaluation at share = 15% (nothing looks wrong) ==
+--- score_char (what a user gets with no error) ---
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.2073 exact | simulated mean 0.2087 sd 0.0274 range [0.1450, 0.2600] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 41.46x)
+  top-k hit rate : k=1 0.2073  k=5 0.7582  k=10 0.8738
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 2.1685 : attack 1/200 (0.5%)  precision 1.0000  recall 0.0050
+    conf >= 2.0993 : attack 3/200 (1.5%)  precision 1.0000  recall 0.0150
+    conf >= 0.0000 : attack 200/200 (100.0%)  precision 0.2073  recall 0.2073
+
+--- score_containment (the correct method) ---
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.2087 exact | simulated mean 0.2013 sd 0.0251 range [0.1550, 0.2500] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 41.74x)
+  top-k hit rate : k=1 0.2087  k=5 0.7652  k=10 0.8877
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 14.1421 : attack 3/200 (1.5%)  precision 1.0000  recall 0.0150
+    conf >= 0.0000 : attack 200/200 (100.0%)  precision 0.2087  recall 0.2087

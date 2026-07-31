@@ -1,0 +1,20 @@
+
+warn-even-when-lossless    tests: *** SURVIVED ***        readme-harness: *** SURVIVED (exit 0) ***
+  warn_blocking_loss(): recall < 1 -> recall <= 1, so a LOSSLESS block warns too
+  ==== 34 R block(s) run, 4 skipped; 45 output unit(s) compared, 0 mismatching ====
+
+topk-group-offsets         tests: *** SURVIVED ***        readme-harness: *** SURVIVED (exit 0) ***
+  top_k_candidates(): head(runs, -1L) -> tail(runs, -1L) (group start offsets)
+  ==== 34 R block(s) run, 4 skipped; 45 output unit(s) compared, 0 mismatching ====
+
+no-candidate-count-wrong   tests: KILLED test-blocking.R(1)  readme-harness: KILLED (exit 1)
+  n_anon_without_candidate: drop the unique() so duplicates are counted
+  ==== 34 R block(s) run, 4 skipped; 45 output unit(s) compared, 2 mismatching ====
+
+mode-baseline-broken       tests: *** SURVIVED ***        readme-harness: KILLED (exit 1)
+  reid_evaluate(): baseline_mode computed with prod() instead of sum()
+  ==== 34 R block(s) run, 4 skipped; 45 output unit(s) compared, 7 mismatching ====
+
+partial-nonnumeric-silent  tests: *** SURVIVED ***        readme-harness: *** SURVIVED (exit 0) ***
+  split_collapsed(): any(bad) -> all(bad); a partly-unparseable column returns NA instead of stopping
+  ==== 34 R block(s) run, 4 skipped; 45 output unit(s) compared, 0 mismatching ====

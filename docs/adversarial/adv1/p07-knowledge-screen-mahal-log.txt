@@ -1,0 +1,47 @@
+###### (a) reid_knowledge_curve() on a noised release ######
+--- default normalize = "range", screen = "warn" ---
+  level n_visible success_analytic lift max_risk
+1     W         1            0.200   40        1
+2     M         6            0.770  154        1
+3     S         7            0.795  159        1
+  monotone in knowledge? W<=M<=S : TRUE
+
+--- same, normalize = "rank" ---
+  level n_visible success_analytic
+1     W         1            0.200
+2     M         6            0.515
+3     S         7            0.510
+
+--- same, normalize = "none" (what plain combine_scores() does) ---
+  level n_visible success_analytic
+1     W         1            0.200
+2     M         6            0.035
+3     S         7            0.035
+
+###### (b) screen = "drop" vs "none" ######
+  screen = none    success 0.7700  axes kept: (not screened)
+  screen = warn    success 0.7700  axes kept: AGE,ZIP,SEX,VISIT_COUNT,SPEND_MEAN,SPEND_DIST
+  screen = drop    success 0.7700  axes kept: AGE,ZIP,SEX,VISIT_COUNT,SPEND_MEAN,SPEND_DIST
+  axis report:
+axis informativeness (6 axis/axes, alpha = 0.05)
+  AGE                  success 0.1127  baseline 0.0050  lift  22.54x  rank 0.048  z  22.27  p = 0.0000  informative
+  ZIP                  success 0.2000  baseline 0.0050  lift  40.00x  rank 0.017  z  29.66  p = 0.0000  informative
+  SEX                  success 0.0100  baseline 0.0050  lift   2.00x  rank 0.253  z  14.14  p = 0.0000  informative
+  VISIT_COUNT          success 0.0050  baseline 0.0050  lift   1.00x  rank 0.424  z   3.86  p = 0.0001  informative
+  SPEND_MEAN           success 0.0050  baseline 0.0050  lift   1.00x  rank 0.335  z   8.20  p = 0.0000  informative
+  SPEND_DIST           success 0.0300  baseline 0.0050  lift   6.00x  rank 0.237  z  13.03  p = 0.0000  informative
+
+###### (c) method = "mahalanobis" vs "weighted" ######
+  numeric columns only, method = weighted      0.0800
+  numeric columns only, method = mahalanobis   0.0550
+  mixed columns,        method = weighted      0.7250
+  mixed columns,        method = mahalanobis   0.7250
+
+  README's correlated-column example, both ways:
+    score_mahalanobis(AGE, VISIT_COUNT)  0.0650
+    score_multi weighted(AGE,VISIT_COUNT) 0.0625
+
+###### (d) strongly correlated pair, which mahalanobis exists for ######
+  A,B (corr .998) + C, method = weighted      0.3300
+  A,B (corr .998) + C, method = mahalanobis   0.0250
+  C alone 0.0450 | A alone 0.0500

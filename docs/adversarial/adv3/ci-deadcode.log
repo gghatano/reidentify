@@ -1,0 +1,9 @@
+poisoned C:\Users\HATANO~1\AppData\Local\Temp\Rtmpaa38SV/ci-deadcode/reidentify/tests/testthat/test-self-contained.R at line 80 
+
+---- 1. what CI runs: R CMD build + R CMD check --no-manual ----
+build status: OK 
+R CMD check exit status: 0 
+Status: OK 
+
+---- 2. what a developer runs: load_all() + test_dir() ----
+pass=11 fail=0 err=4 

@@ -1,0 +1,31 @@
+== SCORE scale of each axis (range) ==
+  s_age    min       0.0000  max      61.0000  sd      13.8361
+  s_zip    min       0.0000  max       2.0000  sd       0.5311
+  s_dist   min       0.0000  max   82810.0000  sd    7754.6616
+  s_cnt    min       0.0000  max      19.0000  sd       4.7051
+
+== single-axis success (analytic) ==
+        AGE         ZIP  SPEND_DIST VISIT_COUNT 
+     0.1127      0.2000      1.0000      0.1000 
+
+== combine_scores(), exactly as the README does it (no weights) ==
+  AGE+ZIP (README example)         0.4303
+  AGE+SPEND_DIST                   1.0000
+  ZIP+SPEND_DIST                   1.0000
+  AGE+ZIP+SPEND_DIST               1.0000
+  AGE+ZIP+VISIT_COUNT+SPEND_DIST   1.0000
+
+== the same combinations, but normalised first (the honest attack) ==
+  AGE+ZIP (README example)         0.8417  (normalize = rank)
+  AGE+SPEND_DIST                   0.7750  (normalize = rank)
+  ZIP+SPEND_DIST                   1.0000  (normalize = rank)
+  AGE+ZIP+SPEND_DIST               1.0000  (normalize = rank)
+  AGE+ZIP+VISIT_COUNT+SPEND_DIST   1.0000  (normalize = rank)
+  AGE+ZIP (README example)         0.8417  (normalize = range)
+  AGE+SPEND_DIST                   0.4850  (normalize = range)
+  ZIP+SPEND_DIST                   1.0000  (normalize = range)
+  AGE+ZIP+SPEND_DIST               0.9450  (normalize = range)
+  AGE+ZIP+VISIT_COUNT+SPEND_DIST   0.9950  (normalize = range)
+
+== score_multi() on the same columns (normalises by default) ==
+  score_multi AGE+ZIP+SPEND_DIST   0.9450

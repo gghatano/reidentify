@@ -1,0 +1,6 @@
+mutated dictionary: 歳 才 年 円 人 件 回 日 月 ％ zz1 zz2 
+RESULT pass=2102 fail=2 err=0
+              file
+ test-generalize.R
+                                                             test
+ only known units are stripped, so a code is not read as a number

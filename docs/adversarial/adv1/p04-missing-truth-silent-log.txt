@@ -1,0 +1,82 @@
+############ A. full overlap (the README case) ############
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.9200 exact | simulated mean 0.9203 sd 0.0068 range [0.9100, 0.9300] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 184.00x)
+  top-k hit rate : k=1 0.9200  k=5 1.0000  k=10 1.0000
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 1.0279 : attack 1/200 (0.5%)  precision 1.0000  recall 0.0050
+    conf >= 0.9199 : attack 2/200 (1.0%)  precision 1.0000  recall 0.0100
+    conf >= 0.9023 : attack 3/200 (1.5%)  precision 1.0000  recall 0.0150
+    conf >= 0.8970 : attack 4/200 (2.0%)  precision 1.0000  recall 0.0200
+    conf >= 0.8813 : attack 5/200 (2.5%)  precision 1.0000  recall 0.0250
+    ... 187 more threshold(s)
+
+  [object fields] blocked=FALSE  n_true_missing=0  coverage=1.0000
+
+############ B. attacker's RAW covers only 100 of the 200 published ############
+reid evaluation: 200 ANON x 100 RAW record(s), 20000 candidate pair(s)
+  success rate   : 0.4775 exact | simulated mean 0.4770 sd 0.0025 range [0.4750, 0.4800] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 95.50x)
+  top-k hit rate : k=1 0.4775  k=5 0.5000  k=10 0.5000
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 1.1524 : attack 1/200 (0.5%)  precision 0.0000  recall 0.0000
+    conf >= 1.0493 : attack 2/200 (1.0%)  precision 0.5000  recall 0.0050
+    conf >= 1.0154 : attack 3/200 (1.5%)  precision 0.6667  recall 0.0100
+    conf >= 0.9511 : attack 4/200 (2.0%)  precision 0.7500  recall 0.0150
+    conf >= 0.9294 : attack 5/200 (2.5%)  precision 0.8000  recall 0.0200
+    ... 185 more threshold(s)
+
+  [object fields] blocked=FALSE  n_true_missing=100  coverage=1.0000
+  -> n_true_missing is 100/200 but NOTHING above says so.
+  -> rate among the 100 answerable records: 0.9550
+
+############ C. same population, but blocked instead ############
+   (identical information loss; here the tool DOES warn)
+Warning message:
+block_candidates(): blocking discarded 122 of 200 true pair(s) (recall 0.39). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking"). 
+reid evaluation: 198 ANON x 191 RAW record(s), 768 candidate pair(s)
+  candidate set  : BLOCKED -- 2.031% of the full 37818-pair join kept
+    true RAW record absent from the candidates of 120/198 ANON record(s)
+    -> the success rate below is a LOWER bound. ANON records that were left
+       with no candidate at all are not counted here at all.
+  success rate   : 0.3838 exact | simulated mean 0.3833 sd 0.0049 range [0.3737, 0.3889] over 20 seeds
+  baseline       : random 0.1122 | mode 0.0051   (lift vs random: 3.42x)
+  top-k hit rate : k=1 0.3838  k=5 0.3939
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= Inf : attack 21/198 (10.6%)  precision 0.0952  recall 0.0101
+    conf >= 2.2361 : attack 23/198 (11.6%)  precision 0.1304  recall 0.0152
+    conf >= 2.0000 : attack 31/198 (15.7%)  precision 0.1613  recall 0.0253
+    conf >= 1.7321 : attack 41/198 (20.7%)  precision 0.1951  recall 0.0404
+    conf >= 1.6641 : attack 43/198 (21.7%)  precision 0.2093  recall 0.0455
+    ... 42 more threshold(s)
+
+############ D. ROW_NUMBER does not line up at all ############
+   (publication renumbered the rows: ANON ROW_NUMBER = 1001..1200)
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.0000 exact | simulated mean 0.0000 sd 0.0000 range [0.0000, 0.0000] over 20 seeds
+  baseline       : random 0.0000 | mode 0.0000
+  top-k hit rate : k=1 0.0000  k=5 0.0000  k=10 0.0000
+  max per-record risk: 0.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 1.0279 : attack 1/200 (0.5%)  precision 0.0000  recall 0.0000
+    conf >= 0.9199 : attack 2/200 (1.0%)  precision 0.0000  recall 0.0000
+    conf >= 0.9023 : attack 3/200 (1.5%)  precision 0.0000  recall 0.0000
+    conf >= 0.8970 : attack 4/200 (2.0%)  precision 0.0000  recall 0.0000
+    conf >= 0.8813 : attack 5/200 (2.5%)  precision 0.0000  recall 0.0000
+    ... 187 more threshold(s)
+
+  [object fields] blocked=FALSE  n_true_missing=200/200
+  -> reads as 'perfectly safe'. No error, no warning, no note.
+
+############ E. same for a whitespace difference on import ############
+  success_analytic = 0.0000   blocked=FALSE  n_true_missing=200/200
+
+############ F. what block_candidates() says about case D ############
+blocking (deterministic): 1,156 of 40,000 pair(s) kept (2.89% of the full 200 x 200 join)
+  recall       : not measurable (no RAW/ANON record shares a ROW_NUMBER)
+  ANON records with no candidate at all: 0
+  settings     : keys = ZIP
+  -> the blocking layer DOES say 'not measurable'. reid_evaluate() does not.

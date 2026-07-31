@@ -1,0 +1,30 @@
+6	KILLED	test-activity.R	10.1	R/activity.R	138	function swap	any	all
+22	KILLED	test-activity.R	8.1	R/activity.R	315	relational/logical	==	!=
+47	SURVIVED		213.9	R/blocking.R	61	relational/logical	>	>=
+64	KILLED	test-blocking.R	4.9	R/blocking.R	160	numeric+1	0	1
+75	SURVIVED		208.9	R/blocking.R	279	relational/logical	>	>=
+87	SURVIVED		215.7	R/blocking.R	309	relational/logical	||	&&
+100	SURVIVED		207.9	R/blocking.R	362	relational/logical	&&	||
+117	SURVIVED		204.7	R/blocking.R	466	function swap	head	tail
+127	SURVIVED		221.6	R/blocking.R	493	function swap	unique	identity
+138	KILLED	test-blocking.R	5.4	R/blocking.R	580	function swap	sum	prod
+166	KILLED	test-unicity.R	11.1	R/combine.R	55	relational/logical	==	!=
+178	KILLED	test-layers.R	60.1	R/combine.R	78	relational/logical	<	<=
+203	SURVIVED		226.6	R/confidence.R	153	function swap	sort	rev
+218	SURVIVED		230.1	R/confidence.R	183	relational/logical	<	<=
+237	SURVIVED		221.9	R/create_dummy_data.R	15	numeric+1	100	101
+256	SURVIVED		209.6	R/create_dummy_data.R	104	numeric+1	0	1
+267	SURVIVED		217.7	R/create_dummy_data.R	110	relational/logical	||	&&
+294	SURVIVED		227.9	R/create_dummy_data.R	213	function swap	ceiling	floor
+325	KILLED	test-evaluate.R	35.4	R/evaluate.R	61	relational/logical	==	!=
+342	SURVIVED		234.5	R/evaluate.R	238	numeric+1	5	6
+359	SURVIVED		236.1	R/evaluate.R	289	function swap	which.max	which.min
+371	KILLED	test-evaluate.R	11.9	R/evaluate.R	308	function swap	sort	rev
+383	KILLED	test-evaluate.R	31.5	R/evaluate.R	373	function swap	max	min
+403	SURVIVED		207.5	R/evaluate.R	346	bool flip	FALSE	TRUE
+424	KILLED	test-generalize.R	4.4	R/generalize.R	196	relational/logical	==	!=
+446	KILLED	test-generalize.R	4.3	R/generalize.R	236	numeric+1	2	3
+457	KILLED	test-generalize.R	4.4	R/generalize.R	287	relational/logical	<=	<
+467	KILLED	test-generalized-column-guard.R	80.2	R/generalize.R	400	relational/logical	&&	||
+481	KILLED	test-generalize.R	4.6	R/generalize.R	468	relational/logical	==	!=
+503	KILLED	test-generalize.R	3.9	R/generalize.R	648	relational/logical	==	!=

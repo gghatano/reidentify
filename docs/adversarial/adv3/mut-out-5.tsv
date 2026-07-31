@@ -1,0 +1,44 @@
+9	KILLED	test-activity.R	9.9	R/activity.R	170	function swap	sum	prod
+26	KILLED	test-activity.R	7.8	R/activity.R	315	function swap	min	max
+51	KILLED	test-blocking.R	4.3	R/blocking.R	96	relational/logical	<	<=
+66	KILLED	test-blocking.R	4.6	R/blocking.R	160	relational/logical	==	!=
+78	SURVIVED		216.3	R/blocking.R	287	relational/logical	||	&&
+89	SURVIVED		209.7	R/blocking.R	310	relational/logical	<	<=
+104	SURVIVED		216.3	R/blocking.R	370	relational/logical	>	>=
+119	KILLED	test-blocking.R	5.1	R/blocking.R	474	relational/logical	<=	<
+129	SURVIVED		201.3	R/blocking.R	499	function swap	unique	identity
+140	KILLED	test-blocking.R	4.6	R/blocking.R	581	relational/logical	==	!=
+169	KILLED	test-unicity.R	10.3	R/combine.R	64	function swap	unique	identity
+181	KILLED	test-unicity.R	10.3	R/combine.R	82	relational/logical	==	!=
+205	KILLED	test-confidence.R	1.6	R/confidence.R	157	numeric+1	1	2
+224	KILLED	test-confidence.R	4.9	R/confidence.R	227	relational/logical	||	&&
+240	KILLED	test-contract.R	1.1	R/create_dummy_data.R	23	numeric+1	1	2
+258	KILLED	test-contract.R	1.2	R/create_dummy_data.R	107	relational/logical	!=	==
+269	SURVIVED		209.9	R/create_dummy_data.R	110	relational/logical	<	<=
+302	SURVIVED		224.3	R/create_dummy_data.R	230	numeric+1	20	21
+328	KILLED	test-setsim.R	58	R/evaluate.R	64	function swap	sum	prod
+346	KILLED	test-evaluate.R	1.7	R/evaluate.R	247	relational/logical	>	>=
+361	KILLED	test-evaluate.R	30.9	R/evaluate.R	290	relational/logical	==	!=
+373	KILLED	test-evaluate.R	32	R/evaluate.R	310	relational/logical	>=	>
+386	KILLED	test-evaluate.R	32.2	R/evaluate.R	385	function swap	max	min
+406	KILLED	test-generalize.R	5.2	R/generalize.R	105	relational/logical	|	&
+427	KILLED	test-generalize.R	3.5	R/generalize.R	204	numeric+1	1	2
+449	KILLED	test-generalize.R	5.3	R/generalize.R	266	relational/logical	==	!=
+459	KILLED	test-generalize.R	5.6	R/generalize.R	294	relational/logical	|	&
+471	KILLED	test-generalize.R	5.4	R/generalize.R	449	numeric+1	0	1
+486	KILLED	test-generalize.R	5.4	R/generalize.R	476	relational/logical	!=	==
+507	SURVIVED		234.5	R/generalize.R	654	relational/logical	&	|
+517	SURVIVED		225.2	R/generalize.R	667	relational/logical	==	!=
+532	SURVIVED		209.3	R/generalize.R	763	function swap	unique	identity
+542	SURVIVED		215.7	R/generalize.R	861	relational/logical	||	&&
+553	KILLED	test-generalize.R	4.8	R/generalize.R	927	relational/logical	==	!=
+566	SURVIVED		220.8	R/generalize.R	995	relational/logical	||	&&
+577	KILLED	test-generalize.R	5.4	R/generalize.R	1052	relational/logical	||	&&
+588	KILLED	test-generalize.R	3.2	R/generalize.R	1129	relational/logical	==	!=
+602	SURVIVED		237	R/generalize.R	1304	function swap	unique	identity
+621	SURVIVED		247.2	R/generalize.R	214	bool flip	FALSE	TRUE
+658	SURVIVED		208.6	R/generalize.R	865	bool flip	FALSE	TRUE
+686	KILLED	test-idf.R	13.2	R/idf.R	184	relational/logical	!=	==
+701	KILLED	test-knowledge.R	1.1	R/knowledge.R	57	relational/logical	==	!=
+714	KILLED	test-knowledge.R	11.8	R/knowledge.R	88	function swap	floor	ceiling
+740	SURVIVED		206.3	R/match.R	312	relational/logical	||	&&

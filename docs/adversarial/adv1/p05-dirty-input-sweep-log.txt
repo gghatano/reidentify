@@ -1,0 +1,56 @@
+########## 1. NA in a numeric target ##########
+  reference (no NA): score_num AGE = 0.1369
+  score_num + reid_evaluate,  1 NA in ANON       ERROR   `scores$SCORE` contains NA; every candidate pair must have a score before it can be evalua
+  score_num + match_greedy,   1 NA in ANON       ERROR   resolve_min_distance_ties(): one or more ANON records were dropped because their DISTANCE 
+  reid_by_num,                1 NA in ANON       ERROR   resolve_min_distance_ties(): one or more ANON records were dropped because their DISTANCE 
+  score_multi(AGE,ZIP,SEX),   1 NA in ANON       ERROR   `scores[[1]]$SCORE` contains NA; a score cannot be normalised before it has a value for ev
+  score_num + reid_evaluate,  5 NA in ANON       ERROR   `scores$SCORE` contains NA; every candidate pair must have a score before it can be evalua
+  score_num + match_greedy,   5 NA in ANON       ERROR   resolve_min_distance_ties(): one or more ANON records were dropped because their DISTANCE 
+  reid_by_num,                5 NA in ANON       ERROR   resolve_min_distance_ties(): one or more ANON records were dropped because their DISTANCE 
+  score_multi(AGE,ZIP,SEX),   5 NA in ANON       ERROR   `scores[[1]]$SCORE` contains NA; a score cannot be normalised before it has a value for ev
+  score_num + reid_evaluate, 20 NA in ANON       ERROR   `scores$SCORE` contains NA; every candidate pair must have a score before it can be evalua
+  score_num + match_greedy,  20 NA in ANON       ERROR   resolve_min_distance_ties(): one or more ANON records were dropped because their DISTANCE 
+  reid_by_num,               20 NA in ANON       ERROR   resolve_min_distance_ties(): one or more ANON records were dropped because their DISTANCE 
+  score_multi(AGE,ZIP,SEX),  20 NA in ANON       ERROR   `scores[[1]]$SCORE` contains NA; a score cannot be normalised before it has a value for ev
+
+########## 2. Inf / NaN in a numeric target ##########
+  score_num AGE, one Inf    in ANON              0.1287   (silent)
+  score_multi,      one Inf    in ANON           ERROR   `scores$SCORE` contains NA; every candidate pair must have a score before it can be evalua
+  score_num AGE, one NaN    in ANON              ERROR   `scores$SCORE` contains NA; every candidate pair must have a score before it can be evalua
+  score_multi,      one NaN    in ANON           ERROR   `scores[[1]]$SCORE` contains NA; a score cannot be normalised before it has a value for ev
+  score_num AGE, one 1e308  in ANON              0.1287   (silent)
+  score_multi,      one 1e308  in ANON           0.8253   (silent)
+
+########## 3. duplicated ROW_NUMBER ##########
+  ANON has one duplicated ROW_NUMBER (score_num) 0.1283   (silent)
+  ANON has one duplicated ROW_NUMBER (multi)     ERROR   `scores[[1]]` contains duplicated (ANON_ROW_NUMBER, RAW_ROW_NUMBER) pairs; a score table m
+  RAW has one duplicated ROW_NUMBER (score_num)  0.1328   (silent)
+  ANON ROW_NUMBER collapsed 120 -> 60            0.0111   (silent)
+
+########## 4. factor / character type mixing ##########
+  score_char ZIP with ANON as factor             0.2000   (silent)
+  ROW_NUMBER as factor on ANON side              0.1369   (silent)
+  ROW_NUMBER as character on ANON side           0.1369   (silent)
+
+########## 5. suppression: empty strings / masks ##########
+  reference: score_char ZIP = 0.2000
+  40/120 ZIP suppressed as ''           (char)   0.1376   (silent)
+  40/120 ZIP suppressed as ''           (idf)    0.1376   (silent)
+  40/120 ZIP suppressed as '*'          (char)   ERROR   score_char(): column "ZIP" is generalised on the ANON side (33.3% of its published values 
+  40/120 ZIP suppressed as '*'          (idf)    0.1376   (silent)
+  40/120 ZIP suppressed as '****'       (char)   ERROR   score_char(): column "ZIP" is generalised on the ANON side (33.3% of its published values 
+  40/120 ZIP suppressed as '****'       (idf)    0.1376   (silent)
+  40/120 ZIP suppressed as 'SUPPRESSED' (char)   0.1376   (silent)
+  40/120 ZIP suppressed as 'SUPPRESSED' (idf)    0.1376   (silent)
+
+########## 6. NA in unicity ##########
+  unicity_fraction(raw, AGE+ZIP)          = 0.9167
+  ... with 40/120 ZIP = NA (suppressed)   = 0.7917
+  ... with 40/120 ZIP = "" (suppressed)   = 0.7917
+
+########## 7. numeric column handed to score_char ##########
+  score_num  AGE (correct)                       0.1369   (silent)
+  score_char AGE (misuse, no error?)             0.1397   (silent)
+  score_num  SPEND_MEAN (correct)                0.8500   (silent)
+  score_char SPEND_MEAN (misuse)                 0.8500   (silent)
+  score_idf  AGE (misuse)                        0.1375   (silent)

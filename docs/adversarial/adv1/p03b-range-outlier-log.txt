@@ -1,0 +1,34 @@
+=== attacker knows AGE + SEX (SEX is weak, AGE carries the attack) ===
+  clean                                      range(DEFAULT) 0.2019 | rank 0.2019 | zscore 0.2019 | ratio 1.00x
+  AGE=999 sentinel, both sides               range(DEFAULT) 0.2069 | rank 0.2069 | zscore 0.2069 | ratio 1.00x
+  AGE=999 sentinel, ANON only                range(DEFAULT) 0.2019 | rank 0.2019 | zscore 0.2019 | ratio 1.00x
+  AGE=9999 sentinel, ANON only               range(DEFAULT) 0.2019 | rank 0.2019 | zscore 0.2019 | ratio 1.00x
+
+=== attacker knows AGE + SEX + VISIT_COUNT ===
+  clean                                      range(DEFAULT) 0.8350 | rank 0.8350 | zscore 0.8350 | ratio 1.00x
+  AGE=999 sentinel, ANON only                range(DEFAULT) 0.8300 | rank 0.8300 | zscore 0.8300 | ratio 1.00x
+  AGE=9999 sentinel, ANON only               range(DEFAULT) 0.8300 | rank 0.8300 | zscore 0.8300 | ratio 1.00x
+
+=== AGE alone, for reference ===
+  clean          AGE alone 0.1127 | SEX alone 0.0100
+  sent999_anon   AGE alone 0.1127 | SEX alone 0.0100
+
+=== does anything warn? (default screen = warn) ===
+  no warning raised
+axis informativeness (2 axis/axes, alpha = 0.05)
+  AGE                  success 0.1127  baseline 0.0050  lift  22.54x  rank 0.050  z  22.18  p = 0.0000  informative
+  SEX                  success 0.0100  baseline 0.0050  lift   2.00x  rank 0.253  z  14.14  p = 0.0000  informative
+
+=== printed evaluation of the under-reporting default ===
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.2019 exact | simulated mean 0.2037 sd 0.0226 range [0.1650, 0.2500] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 40.39x)
+  top-k hit rate : k=1 0.2019  k=5 0.5307  k=10 0.9183
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 0.0004 : attack 1/200 (0.5%)  precision 0.0000  recall 0.0000
+    conf >= 0.0004 : attack 2/200 (1.0%)  precision 0.0000  recall 0.0000
+    conf >= 0.0004 : attack 4/200 (2.0%)  precision 0.2500  recall 0.0050
+    conf >= 0.0002 : attack 6/200 (3.0%)  precision 0.3333  recall 0.0100
+    conf >= 0.0002 : attack 7/200 (3.5%)  precision 0.4286  recall 0.0150
+    ... 35 more threshold(s)

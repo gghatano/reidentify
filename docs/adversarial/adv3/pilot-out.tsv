@@ -1,0 +1,8 @@
+1	KILLED	test-activity.R	2.3	R/activity.R	59	numeric+1	1	2
+2	SURVIVED		123.5	R/activity.R	60	function swap	any	all
+3	SURVIVED		204.3	R/activity.R	62	numeric+1	1	2
+4	SURVIVED		210.9	R/activity.R	86	numeric+1	1	2
+5	SURVIVED		212.8	R/activity.R	129	numeric+1	1	2
+6	KILLED	test-activity.R	9	R/activity.R	138	function swap	any	all
+7	KILLED	test-activity.R	8.8	R/activity.R	138	relational/logical	<	<=
+8	KILLED	test-activity.R	8.8	R/activity.R	138	numeric+1	0	1

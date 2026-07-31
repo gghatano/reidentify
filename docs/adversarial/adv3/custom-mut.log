@@ -1,0 +1,24 @@
+
+drop-screen-warn-warning         KILLED
+  R/multiattr.R: delete the screen='warn' warning() entirely
+  -> killed by  failing assertions: 14  test-activity.R(1) test-knowledge.R(5) test-axis-screening.R(6) test-multiattr.R(2)
+
+screen-never-fires               KILLED
+  R/multiattr.R: apply_axis_screen() treats every axis as informative
+  -> killed by  failing assertions: 31  test-activity.R(1) test-knowledge.R(5) test-axis-screening.R(23) test-multiattr.R(2)
+
+blocking-recall-never-warns      KILLED
+  R/blocking.R: warn_blocking_loss() never warns
+  -> killed by  failing assertions: 3  test-setsim.R(1) test-blocking.R(2)
+
+recall-1-instead-of-NA           KILLED
+  R/blocking.R: recall = 1 when there is no ground truth (the exact thing the comment forbids)
+  -> killed by  failing assertions: 1  test-blocking.R(1)
+
+kept-fraction-1-instead-of-NA    *** SURVIVED ***
+  R/blocking.R: kept_fraction/reduction get numbers instead of NA on an empty pair set
+  -> no test failed  failing assertions: 0  
+
+split-not-literal                KILLED
+  R/activity.R: strsplit(fixed = TRUE) -> fixed = FALSE (regex split)
+  -> killed by  failing assertions: 7  test-setsim.R(5) test-activity.R(2)

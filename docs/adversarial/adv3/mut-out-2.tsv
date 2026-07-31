@@ -1,0 +1,28 @@
+2	SURVIVED		213.4	R/activity.R	60	function swap	any	all
+19	KILLED	test-activity.R	3.2	R/activity.R	256	relational/logical	==	!=
+45	SURVIVED		208.7	R/blocking.R	55	numeric+1	0	1
+63	SURVIVED		217.6	R/blocking.R	160	numeric+1	0	1
+74	SURVIVED		210.8	R/blocking.R	279	relational/logical	&&	||
+86	KILLED	test-blocking.R	2.7	R/blocking.R	309	relational/logical	!=	==
+98	SURVIVED		205.4	R/blocking.R	362	relational/logical	>	>=
+115	KILLED	test-blocking.R	5.1	R/blocking.R	441	relational/logical	<	<=
+126	SURVIVED		227.7	R/blocking.R	492	function swap	unique	identity
+137	SURVIVED		229.5	R/blocking.R	575	relational/logical	&&	||
+164	KILLED	test-layers.R	67	R/combine.R	51	relational/logical	||	&&
+177	SURVIVED		237.5	R/combine.R	78	function swap	any	all
+202	SURVIVED		220.3	R/combine.R	111	bool flip	FALSE	TRUE
+216	KILLED	test-confidence.R	1.7	R/confidence.R	175	numeric+1	1	2
+234	SURVIVED		213.2	R/confidence.R	229	bool flip	FALSE	TRUE
+255	SURVIVED		220.8	R/create_dummy_data.R	104	relational/logical	<=	<
+266	KILLED	test-contract.R	1.4	R/create_dummy_data.R	110	numeric+1	1	2
+293	KILLED	test-unicity.R	14.3	R/create_dummy_data.R	213	function swap	max	min
+324	KILLED	test-evaluate.R	32.9	R/evaluate.R	59	relational/logical	==	!=
+341	KILLED	test-scoreboard.R	72.6	R/evaluate.R	238	numeric+1	1	2
+356	SURVIVED		231.8	R/evaluate.R	286	relational/logical	==	!=
+369	SURVIVED		241.8	R/evaluate.R	300	function swap	mean	median
+382	KILLED	test-evaluate.R	35	R/evaluate.R	372	function swap	min	max
+399	SURVIVED		212.1	R/evaluate.R	245	bool flip	FALSE	TRUE
+421	KILLED	test-generalize.R	4.5	R/generalize.R	182	numeric+1	2	3
+445	KILLED	test-generalize.R	4.3	R/generalize.R	236	relational/logical	==	!=
+456	KILLED	test-generalize.R	4.6	R/generalize.R	286	relational/logical	&	|
+466	KILLED	test-generalized-column-guard.R	75.5	R/generalize.R	398	relational/logical	&	|

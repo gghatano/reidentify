@@ -1,0 +1,33 @@
+12	SURVIVED		214	R/activity.R	248	function swap	sort	rev
+30	KILLED	test-activity.R	8.4	R/activity.R	52	bool flip	TRUE	FALSE
+56	KILLED	test-blocking.R	5.1	R/blocking.R	129	relational/logical	&&	||
+68	KILLED	test-blocking.R	4.6	R/blocking.R	271	relational/logical	||	&&
+80	SURVIVED		207.6	R/blocking.R	288	numeric+1	0	1
+92	KILLED	test-blocking.R	2.6	R/blocking.R	319	numeric+1	0	1
+108	SURVIVED		218.8	R/blocking.R	389	relational/logical	>	>=
+121	SURVIVED		209.9	R/blocking.R	481	function swap	unique	identity
+131	SURVIVED		203.3	R/blocking.R	540	relational/logical	&&	||
+143	SURVIVED		223	R/blocking.R	175	bool flip	FALSE	TRUE
+171	KILLED	test-layers.R	58.9	R/combine.R	64	numeric+1	1	2
+188	KILLED	test-unicity.R	12.9	R/combine.R	100	relational/logical	>	>=
+207	KILLED	test-confidence.R	5.4	R/confidence.R	159	relational/logical	==	!=
+226	KILLED	test-confidence.R	2.4	R/confidence.R	227	numeric+1	1	2
+243	SURVIVED		231.7	R/create_dummy_data.R	26	numeric+1	1	2
+260	SURVIVED		236.4	R/create_dummy_data.R	107	relational/logical	||	&&
+286	KILLED	test-knowledge.R	105	R/create_dummy_data.R	207	relational/logical	||	&&
+311	KILLED	test-spatiotemporal.R	76	R/create_dummy_data.R	144	bool flip	TRUE	FALSE
+330	KILLED	test-evaluate.R	32.2	R/evaluate.R	65	function swap	sum	prod
+349	KILLED	test-evaluate.R	30.5	R/evaluate.R	256	numeric+1	1	2
+363	SURVIVED		213.5	R/evaluate.R	294	function swap	unique	identity
+375	KILLED	test-evaluate.R	31.5	R/evaluate.R	312	function swap	sum	prod
+390	SURVIVED		220.9	R/evaluate.R	417	relational/logical	>	>=
+409	KILLED	test-generalize.R	2.6	R/generalize.R	154	relational/logical	==	!=
+432	KILLED	test-generalize.R	5.7	R/generalize.R	212	relational/logical	==	!=
+451	KILLED	test-generalize.R	5.7	R/generalize.R	281	relational/logical	&	|
+461	KILLED	test-generalize.R	5.5	R/generalize.R	294	relational/logical	==	!=
+473	KILLED	test-generalize.R	5.1	R/generalize.R	456	relational/logical	==	!=
+489	SURVIVED		236.3	R/generalize.R	480	relational/logical	>=	>
+509	SURVIVED		236.2	R/generalize.R	657	relational/logical	|	&
+520	SURVIVED		224.5	R/generalize.R	674	numeric+1	0	1
+534	KILLED	test-generalize.R	4.4	R/generalize.R	764	relational/logical	==	!=
+544	SURVIVED		205.9	R/generalize.R	861	function swap	any	all

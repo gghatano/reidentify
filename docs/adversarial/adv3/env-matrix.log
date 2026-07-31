@@ -1,0 +1,40 @@
+
+########## baseline ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## LC_COLLATE=C ##########
+LOCALE: C  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## LC_ALL=C ##########
+LOCALE: C  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## options(width=40) ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 40 
+RESULT pass=2104 fail=0 err=0 
+
+########## options(width=200) ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 200 
+RESULT pass=2104 fail=0 err=0 
+
+########## TZ=Pacific/Kiritimati ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## options(digits=15) ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## options(OutDec=',') ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## options(stringsAsFactors=TRUE) ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 
+
+########## warn=2 (warnings are errors) ##########
+LOCALE: Japanese_Japan.utf8  WIDTH: 80 
+RESULT pass=2104 fail=0 err=0 

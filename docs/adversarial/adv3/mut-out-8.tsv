@@ -1,0 +1,31 @@
+13	SURVIVED		216.3	R/activity.R	248	function swap	unique	identity
+33	SURVIVED		206.7	R/activity.R	136	bool flip	FALSE	TRUE
+57	SURVIVED		214.5	R/blocking.R	129	relational/logical	<	<=
+69	KILLED	test-blocking.R	5.1	R/blocking.R	278	relational/logical	||	&&
+81	KILLED	test-blocking.R	2.7	R/blocking.R	288	relational/logical	&&	||
+93	KILLED	test-blocking.R	4.3	R/blocking.R	327	relational/logical	==	!=
+111	SURVIVED		203	R/blocking.R	441	relational/logical	||	&&
+122	KILLED	test-blocking.R	4.9	R/blocking.R	487	function swap	sum	prod
+132	SURVIVED		203	R/blocking.R	541	function swap	all	any
+146	SURVIVED		223.2	R/blocking.R	282	bool flip	FALSE	TRUE
+172	SURVIVED		222.8	R/combine.R	66	function swap	unique	identity
+190	KILLED	test-layers.R	62.9	R/combine.R	105	relational/logical	||	&&
+209	SURVIVED		233.2	R/confidence.R	170	relational/logical	<	<=
+227	KILLED	test-confidence.R	5.1	R/confidence.R	227	relational/logical	||	&&
+244	SURVIVED		225.8	R/create_dummy_data.R	26	numeric+1	100	101
+261	KILLED	test-spatiotemporal.R	84.4	R/create_dummy_data.R	107	relational/logical	||	&&
+287	KILLED	test-unicity.R	10.4	R/create_dummy_data.R	207	relational/logical	!=	==
+320	SURVIVED		213.5	R/evaluate.R	50	function swap	sort	rev
+331	KILLED	test-evaluate.R	32.7	R/evaluate.R	65	relational/logical	==	!=
+350	KILLED	test-evaluate.R	31.6	R/evaluate.R	257	function swap	mean	median
+364	KILLED	test-evaluate.R	32	R/evaluate.R	295	relational/logical	>=	>
+377	KILLED	test-blocking.R	63.2	R/evaluate.R	357	function swap	sum	prod
+392	SURVIVED		228.8	R/evaluate.R	430	relational/logical	==	!=
+414	KILLED	test-generalize.R	5.9	R/generalize.R	160	relational/logical	==	!=
+436	KILLED	test-generalize.R	6.3	R/generalize.R	224	relational/logical	==	!=
+452	KILLED	test-generalize.R	6.6	R/generalize.R	281	relational/logical	==	!=
+462	KILLED	test-generalize.R	6.1	R/generalize.R	338	relational/logical	&	|
+475	SURVIVED		233.5	R/generalize.R	456	relational/logical	||	&&
+490	KILLED	test-generalize.R	5.6	R/generalize.R	485	relational/logical	==	!=
+510	SURVIVED		232.3	R/generalize.R	657	relational/logical	|	&
+521	SURVIVED		205	R/generalize.R	675	numeric+1	1	2

@@ -1,0 +1,1417 @@
+id	file	line	kind	tok	new
+1	R/activity.R	59	numeric+1	1	2
+2	R/activity.R	60	function swap	any	all
+3	R/activity.R	62	numeric+1	1	2
+4	R/activity.R	86	numeric+1	1	2
+5	R/activity.R	129	numeric+1	1	2
+6	R/activity.R	138	function swap	any	all
+7	R/activity.R	138	relational/logical	<	<=
+8	R/activity.R	138	numeric+1	0	1
+9	R/activity.R	170	function swap	sum	prod
+10	R/activity.R	171	relational/logical	>	>=
+11	R/activity.R	171	numeric+1	0	1
+12	R/activity.R	248	function swap	sort	rev
+13	R/activity.R	248	function swap	unique	identity
+14	R/activity.R	251	relational/logical	==	!=
+15	R/activity.R	251	numeric+1	0	1
+16	R/activity.R	251	relational/logical	||	&&
+17	R/activity.R	251	relational/logical	>	>=
+18	R/activity.R	251	numeric+1	0	1
+19	R/activity.R	256	relational/logical	==	!=
+20	R/activity.R	256	numeric+1	0	1
+21	R/activity.R	271	numeric+1	2	3
+22	R/activity.R	315	relational/logical	==	!=
+23	R/activity.R	315	numeric+1	0	1
+24	R/activity.R	315	numeric+1	0	1
+25	R/activity.R	315	function swap	max	min
+26	R/activity.R	315	function swap	min	max
+27	R/activity.R	315	numeric+1	1	2
+28	R/activity.R	46	bool flip	FALSE	TRUE
+29	R/activity.R	50	bool flip	FALSE	TRUE
+30	R/activity.R	52	bool flip	TRUE	FALSE
+31	R/activity.R	64	bool flip	FALSE	TRUE
+32	R/activity.R	132	bool flip	FALSE	TRUE
+33	R/activity.R	136	bool flip	FALSE	TRUE
+34	R/activity.R	140	bool flip	FALSE	TRUE
+35	R/activity.R	178	bool flip	TRUE	FALSE
+36	R/activity.R	227	bool flip	TRUE	FALSE
+37	R/activity.R	253	bool flip	FALSE	TRUE
+38	R/activity.R	258	bool flip	FALSE	TRUE
+39	R/activity.R	265	bool flip	FALSE	TRUE
+40	R/activity.R	266	bool flip	FALSE	TRUE
+41	R/activity.R	314	bool flip	TRUE	FALSE
+42	R/blocking.R	54	relational/logical	>	>=
+43	R/blocking.R	54	numeric+1	0	1
+44	R/blocking.R	55	relational/logical	>	>=
+45	R/blocking.R	55	numeric+1	0	1
+46	R/blocking.R	55	numeric+1	1	2
+47	R/blocking.R	61	relational/logical	>	>=
+48	R/blocking.R	61	numeric+1	0	1
+49	R/blocking.R	83	numeric+1	100	101
+50	R/blocking.R	96	relational/logical	&&	||
+51	R/blocking.R	96	relational/logical	<	<=
+52	R/blocking.R	96	numeric+1	1	2
+53	R/blocking.R	107	relational/logical	>	>=
+54	R/blocking.R	107	numeric+1	0	1
+55	R/blocking.R	111	numeric+1	1	2
+56	R/blocking.R	129	relational/logical	&&	||
+57	R/blocking.R	129	relational/logical	<	<=
+58	R/blocking.R	129	numeric+1	1	2
+59	R/blocking.R	133	numeric+1	4	5
+60	R/blocking.R	157	numeric+1	0	1
+61	R/blocking.R	158	function swap	sum	prod
+62	R/blocking.R	160	relational/logical	==	!=
+63	R/blocking.R	160	numeric+1	0	1
+64	R/blocking.R	160	numeric+1	0	1
+65	R/blocking.R	160	function swap	sum	prod
+66	R/blocking.R	160	relational/logical	==	!=
+67	R/blocking.R	269	numeric+1	1e7	10000001
+68	R/blocking.R	271	relational/logical	||	&&
+69	R/blocking.R	278	relational/logical	||	&&
+70	R/blocking.R	278	relational/logical	==	!=
+71	R/blocking.R	278	numeric+1	0	1
+72	R/blocking.R	278	relational/logical	||	&&
+73	R/blocking.R	279	function swap	all	any
+74	R/blocking.R	279	relational/logical	&&	||
+75	R/blocking.R	279	relational/logical	>	>=
+76	R/blocking.R	279	numeric+1	0	1
+77	R/blocking.R	279	numeric+1	1	2
+78	R/blocking.R	287	relational/logical	||	&&
+79	R/blocking.R	288	relational/logical	>	>=
+80	R/blocking.R	288	numeric+1	0	1
+81	R/blocking.R	288	relational/logical	&&	||
+82	R/blocking.R	298	function swap	unique	identity
+83	R/blocking.R	304	relational/logical	>	>=
+84	R/blocking.R	304	numeric+1	0	1
+85	R/blocking.R	309	relational/logical	||	&&
+86	R/blocking.R	309	relational/logical	!=	==
+87	R/blocking.R	309	relational/logical	||	&&
+88	R/blocking.R	309	relational/logical	||	&&
+89	R/blocking.R	310	relational/logical	<	<=
+90	R/blocking.R	310	numeric+1	1	2
+91	R/blocking.R	318	numeric+1	0	1
+92	R/blocking.R	319	numeric+1	0	1
+93	R/blocking.R	327	relational/logical	==	!=
+94	R/blocking.R	327	numeric+1	0	1
+95	R/blocking.R	334	function swap	sum	prod
+96	R/blocking.R	336	numeric+1	1	2
+97	R/blocking.R	337	relational/logical	>	>=
+98	R/blocking.R	362	relational/logical	>	>=
+99	R/blocking.R	362	numeric+1	0	1
+100	R/blocking.R	362	relational/logical	&&	||
+101	R/blocking.R	362	relational/logical	>	>=
+102	R/blocking.R	362	numeric+1	1	2
+103	R/blocking.R	365	numeric+1	1	2
+104	R/blocking.R	370	relational/logical	>	>=
+105	R/blocking.R	370	numeric+1	0	1
+106	R/blocking.R	386	function swap	unique	identity
+107	R/blocking.R	388	numeric+1	1	2
+108	R/blocking.R	389	relational/logical	>	>=
+109	R/blocking.R	389	numeric+1	0	1
+110	R/blocking.R	437	numeric+1	10	11
+111	R/blocking.R	441	relational/logical	||	&&
+112	R/blocking.R	441	relational/logical	!=	==
+113	R/blocking.R	441	relational/logical	||	&&
+114	R/blocking.R	441	relational/logical	||	&&
+115	R/blocking.R	441	relational/logical	<	<=
+116	R/blocking.R	441	numeric+1	1	2
+117	R/blocking.R	466	function swap	head	tail
+118	R/blocking.R	470	relational/logical	<=	<
+119	R/blocking.R	474	relational/logical	<=	<
+120	R/blocking.R	477	function swap	sort	rev
+121	R/blocking.R	481	function swap	unique	identity
+122	R/blocking.R	487	function swap	sum	prod
+123	R/blocking.R	487	relational/logical	==	!=
+124	R/blocking.R	488	function swap	sum	prod
+125	R/blocking.R	488	relational/logical	==	!=
+126	R/blocking.R	492	function swap	unique	identity
+127	R/blocking.R	493	function swap	unique	identity
+128	R/blocking.R	498	function swap	unique	identity
+129	R/blocking.R	499	function swap	unique	identity
+130	R/blocking.R	540	function swap	all	any
+131	R/blocking.R	540	relational/logical	&&	||
+132	R/blocking.R	541	function swap	all	any
+133	R/blocking.R	545	function swap	all	any
+134	R/blocking.R	552	function swap	unique	identity
+135	R/blocking.R	561	function swap	unique	identity
+136	R/blocking.R	572	numeric+1	0	1
+137	R/blocking.R	575	relational/logical	&&	||
+138	R/blocking.R	580	function swap	sum	prod
+139	R/blocking.R	581	function swap	sum	prod
+140	R/blocking.R	581	relational/logical	==	!=
+141	R/blocking.R	583	function swap	unique	identity
+142	R/blocking.R	136	bool flip	FALSE	TRUE
+143	R/blocking.R	175	bool flip	FALSE	TRUE
+144	R/blocking.R	176	bool flip	FALSE	TRUE
+145	R/blocking.R	273	bool flip	FALSE	TRUE
+146	R/blocking.R	282	bool flip	FALSE	TRUE
+147	R/blocking.R	290	bool flip	FALSE	TRUE
+148	R/blocking.R	295	bool flip	FALSE	TRUE
+149	R/blocking.R	298	bool flip	FALSE	TRUE
+150	R/blocking.R	306	bool flip	FALSE	TRUE
+151	R/blocking.R	312	bool flip	FALSE	TRUE
+152	R/blocking.R	339	bool flip	FALSE	TRUE
+153	R/blocking.R	341	bool flip	FALSE	TRUE
+154	R/blocking.R	343	bool flip	FALSE	TRUE
+155	R/blocking.R	358	bool flip	FALSE	TRUE
+156	R/blocking.R	359	bool flip	FALSE	TRUE
+157	R/blocking.R	443	bool flip	FALSE	TRUE
+158	R/blocking.R	449	bool flip	FALSE	TRUE
+159	R/blocking.R	478	bool flip	FALSE	TRUE
+160	R/blocking.R	535	bool flip	FALSE	TRUE
+161	R/blocking.R	548	bool flip	FALSE	TRUE
+162	R/blocking.R	556	bool flip	FALSE	TRUE
+163	R/blocking.R	565	bool flip	FALSE	TRUE
+164	R/combine.R	51	relational/logical	||	&&
+165	R/combine.R	53	numeric+1	1	2
+166	R/combine.R	55	relational/logical	==	!=
+167	R/combine.R	55	numeric+1	0	1
+168	R/combine.R	62	numeric+1	1	2
+169	R/combine.R	64	function swap	unique	identity
+170	R/combine.R	64	relational/logical	>	>=
+171	R/combine.R	64	numeric+1	1	2
+172	R/combine.R	66	function swap	unique	identity
+173	R/combine.R	72	numeric+1	1	2
+174	R/combine.R	74	relational/logical	||	&&
+175	R/combine.R	74	relational/logical	!=	==
+176	R/combine.R	78	relational/logical	||	&&
+177	R/combine.R	78	function swap	any	all
+178	R/combine.R	78	relational/logical	<	<=
+179	R/combine.R	78	numeric+1	0	1
+180	R/combine.R	82	function swap	all	any
+181	R/combine.R	82	relational/logical	==	!=
+182	R/combine.R	82	numeric+1	0	1
+183	R/combine.R	87	numeric+1	1	2
+184	R/combine.R	89	relational/logical	>	>=
+185	R/combine.R	89	numeric+1	0	1
+186	R/combine.R	95	numeric+1	1	2
+187	R/combine.R	97	numeric+1	1	2
+188	R/combine.R	100	relational/logical	>	>=
+189	R/combine.R	100	numeric+1	0	1
+190	R/combine.R	105	relational/logical	||	&&
+191	R/combine.R	105	relational/logical	!=	==
+192	R/combine.R	108	function swap	sum	prod
+193	R/combine.R	120	numeric+1	1	2
+194	R/combine.R	53	bool flip	FALSE	TRUE
+195	R/combine.R	56	bool flip	FALSE	TRUE
+196	R/combine.R	68	bool flip	FALSE	TRUE
+197	R/combine.R	76	bool flip	FALSE	TRUE
+198	R/combine.R	80	bool flip	FALSE	TRUE
+199	R/combine.R	84	bool flip	FALSE	TRUE
+200	R/combine.R	92	bool flip	FALSE	TRUE
+201	R/combine.R	102	bool flip	FALSE	TRUE
+202	R/combine.R	111	bool flip	FALSE	TRUE
+203	R/confidence.R	153	function swap	sort	rev
+204	R/confidence.R	153	function swap	unique	identity
+205	R/confidence.R	157	numeric+1	1	2
+206	R/confidence.R	159	function swap	sum	prod
+207	R/confidence.R	159	relational/logical	==	!=
+208	R/confidence.R	160	numeric+1	1	2
+209	R/confidence.R	170	relational/logical	<	<=
+210	R/confidence.R	170	numeric+1	2	3
+211	R/confidence.R	170	function swap	sort	rev
+212	R/confidence.R	171	numeric+1	1	2
+213	R/confidence.R	174	relational/logical	<	<=
+214	R/confidence.R	174	numeric+1	2	3
+215	R/confidence.R	174	numeric+1	0	1
+216	R/confidence.R	175	numeric+1	1	2
+217	R/confidence.R	180	numeric+1	0	1
+218	R/confidence.R	183	relational/logical	<	<=
+219	R/confidence.R	183	numeric+1	2	3
+220	R/confidence.R	184	relational/logical	>	>=
+221	R/confidence.R	184	numeric+1	0	1
+222	R/confidence.R	184	numeric+1	0	1
+223	R/confidence.R	199	numeric+1	1	2
+224	R/confidence.R	227	relational/logical	||	&&
+225	R/confidence.R	227	relational/logical	!=	==
+226	R/confidence.R	227	numeric+1	1	2
+227	R/confidence.R	227	relational/logical	||	&&
+228	R/confidence.R	238	relational/logical	>	>=
+229	R/confidence.R	238	numeric+1	0	1
+230	R/confidence.R	239	relational/logical	<	<=
+231	R/confidence.R	246	function swap	all	any
+232	R/confidence.R	149	bool flip	FALSE	TRUE
+233	R/confidence.R	201	bool flip	FALSE	TRUE
+234	R/confidence.R	229	bool flip	FALSE	TRUE
+235	R/confidence.R	241	bool flip	FALSE	TRUE
+236	R/confidence.R	252	bool flip	FALSE	TRUE
+237	R/create_dummy_data.R	15	numeric+1	100	101
+238	R/create_dummy_data.R	19	relational/logical	<	<=
+239	R/create_dummy_data.R	19	numeric+1	1	2
+240	R/create_dummy_data.R	23	numeric+1	1	2
+241	R/create_dummy_data.R	24	numeric+1	10000	10001
+242	R/create_dummy_data.R	26	numeric+1	0	1
+243	R/create_dummy_data.R	26	numeric+1	1	2
+244	R/create_dummy_data.R	26	numeric+1	100	101
+245	R/create_dummy_data.R	26	numeric+1	20	21
+246	R/create_dummy_data.R	26	numeric+1	20	21
+247	R/create_dummy_data.R	26	numeric+1	1	2
+248	R/create_dummy_data.R	27	numeric+1	2	3
+249	R/create_dummy_data.R	93	numeric+1	100	101
+250	R/create_dummy_data.R	93	numeric+1	2	3
+251	R/create_dummy_data.R	95	numeric+1	50	51
+252	R/create_dummy_data.R	95	numeric+1	30	31
+253	R/create_dummy_data.R	102	relational/logical	<	<=
+254	R/create_dummy_data.R	102	numeric+1	1	2
+255	R/create_dummy_data.R	104	relational/logical	<=	<
+256	R/create_dummy_data.R	104	numeric+1	0	1
+257	R/create_dummy_data.R	107	relational/logical	||	&&
+258	R/create_dummy_data.R	107	relational/logical	!=	==
+259	R/create_dummy_data.R	107	numeric+1	1	2
+260	R/create_dummy_data.R	107	relational/logical	||	&&
+261	R/create_dummy_data.R	107	relational/logical	||	&&
+262	R/create_dummy_data.R	107	relational/logical	<	<=
+263	R/create_dummy_data.R	107	numeric+1	1	2
+264	R/create_dummy_data.R	110	relational/logical	||	&&
+265	R/create_dummy_data.R	110	relational/logical	!=	==
+266	R/create_dummy_data.R	110	numeric+1	1	2
+267	R/create_dummy_data.R	110	relational/logical	||	&&
+268	R/create_dummy_data.R	110	relational/logical	||	&&
+269	R/create_dummy_data.R	110	relational/logical	<	<=
+270	R/create_dummy_data.R	110	numeric+1	1	2
+271	R/create_dummy_data.R	117	numeric+1	1	2
+272	R/create_dummy_data.R	118	numeric+1	1	2
+273	R/create_dummy_data.R	119	numeric+1	10	11
+274	R/create_dummy_data.R	121	numeric+1	0	1
+275	R/create_dummy_data.R	121	numeric+1	1	2
+276	R/create_dummy_data.R	121	numeric+1	100	101
+277	R/create_dummy_data.R	121	numeric+1	20	21
+278	R/create_dummy_data.R	121	numeric+1	20	21
+279	R/create_dummy_data.R	121	numeric+1	1	2
+280	R/create_dummy_data.R	122	numeric+1	2	3
+281	R/create_dummy_data.R	144	numeric+1	3	4
+282	R/create_dummy_data.R	144	numeric+1	2	3
+283	R/create_dummy_data.R	144	numeric+1	1	2
+284	R/create_dummy_data.R	155	numeric+1	2	3
+285	R/create_dummy_data.R	206	numeric+1	100	101
+286	R/create_dummy_data.R	207	relational/logical	||	&&
+287	R/create_dummy_data.R	207	relational/logical	!=	==
+288	R/create_dummy_data.R	207	numeric+1	1	2
+289	R/create_dummy_data.R	207	relational/logical	||	&&
+290	R/create_dummy_data.R	207	relational/logical	||	&&
+291	R/create_dummy_data.R	207	relational/logical	<	<=
+292	R/create_dummy_data.R	207	numeric+1	1	2
+293	R/create_dummy_data.R	213	function swap	max	min
+294	R/create_dummy_data.R	213	function swap	ceiling	floor
+295	R/create_dummy_data.R	213	numeric+1	5	6
+296	R/create_dummy_data.R	218	numeric+1	0	1
+297	R/create_dummy_data.R	218	numeric+1	100	101
+298	R/create_dummy_data.R	219	numeric+1	1	2
+299	R/create_dummy_data.R	223	function swap	mean	median
+300	R/create_dummy_data.R	223	numeric+1	1	2
+301	R/create_dummy_data.R	224	numeric+1	1	2
+302	R/create_dummy_data.R	230	numeric+1	20	21
+303	R/create_dummy_data.R	230	numeric+1	79	80
+304	R/create_dummy_data.R	281	relational/logical	!=	==
+305	R/create_dummy_data.R	281	numeric+1	2	3
+306	R/create_dummy_data.R	26	bool flip	TRUE	FALSE
+307	R/create_dummy_data.R	94	bool flip	FALSE	TRUE
+308	R/create_dummy_data.R	118	bool flip	TRUE	FALSE
+309	R/create_dummy_data.R	121	bool flip	TRUE	FALSE
+310	R/create_dummy_data.R	140	bool flip	TRUE	FALSE
+311	R/create_dummy_data.R	144	bool flip	TRUE	FALSE
+312	R/create_dummy_data.R	145	bool flip	TRUE	FALSE
+313	R/create_dummy_data.R	154	bool flip	TRUE	FALSE
+314	R/create_dummy_data.R	215	bool flip	TRUE	FALSE
+315	R/create_dummy_data.R	222	bool flip	TRUE	FALSE
+316	R/create_dummy_data.R	230	bool flip	TRUE	FALSE
+317	R/create_dummy_data.R	231	bool flip	TRUE	FALSE
+318	R/create_dummy_data.R	232	bool flip	TRUE	FALSE
+319	R/create_dummy_data.R	290	bool flip	TRUE	FALSE
+320	R/evaluate.R	50	function swap	sort	rev
+321	R/evaluate.R	50	function swap	unique	identity
+322	R/evaluate.R	58	function swap	min	max
+323	R/evaluate.R	59	function swap	sum	prod
+324	R/evaluate.R	59	relational/logical	==	!=
+325	R/evaluate.R	61	relational/logical	==	!=
+326	R/evaluate.R	62	function swap	any	all
+327	R/evaluate.R	63	numeric+1	1	2
+328	R/evaluate.R	64	function swap	sum	prod
+329	R/evaluate.R	64	relational/logical	<	<=
+330	R/evaluate.R	65	function swap	sum	prod
+331	R/evaluate.R	65	relational/logical	==	!=
+332	R/evaluate.R	67	numeric+1	1	2
+333	R/evaluate.R	80	numeric+1	1	2
+334	R/evaluate.R	132	numeric+1	0	1
+335	R/evaluate.R	134	relational/logical	>=	>
+336	R/evaluate.R	134	numeric+1	0	1
+337	R/evaluate.R	135	relational/logical	<=	<
+338	R/evaluate.R	135	numeric+1	1	2
+339	R/evaluate.R	238	numeric+1	1	2
+340	R/evaluate.R	238	numeric+1	20	21
+341	R/evaluate.R	238	numeric+1	1	2
+342	R/evaluate.R	238	numeric+1	5	6
+343	R/evaluate.R	238	numeric+1	10	11
+344	R/evaluate.R	243	relational/logical	<	<=
+345	R/evaluate.R	243	numeric+1	2	3
+346	R/evaluate.R	247	relational/logical	>	>=
+347	R/evaluate.R	247	numeric+1	0	1
+348	R/evaluate.R	253	function swap	unique	identity
+349	R/evaluate.R	256	numeric+1	1	2
+350	R/evaluate.R	257	function swap	mean	median
+351	R/evaluate.R	262	function swap	sum	prod
+352	R/evaluate.R	271	function swap	mean	median
+353	R/evaluate.R	271	numeric+1	1	2
+354	R/evaluate.R	271	numeric+1	0	1
+355	R/evaluate.R	282	relational/logical	==	!=
+356	R/evaluate.R	286	relational/logical	==	!=
+357	R/evaluate.R	286	numeric+1	0	1
+358	R/evaluate.R	287	numeric+1	0	1
+359	R/evaluate.R	289	function swap	which.max	which.min
+360	R/evaluate.R	290	function swap	sum	prod
+361	R/evaluate.R	290	relational/logical	==	!=
+362	R/evaluate.R	294	function swap	sort	rev
+363	R/evaluate.R	294	function swap	unique	identity
+364	R/evaluate.R	295	relational/logical	>=	>
+365	R/evaluate.R	295	numeric+1	1	2
+366	R/evaluate.R	295	relational/logical	&	|
+367	R/evaluate.R	295	relational/logical	<=	<
+368	R/evaluate.R	295	function swap	max	min
+369	R/evaluate.R	300	function swap	mean	median
+370	R/evaluate.R	301	numeric+1	1	2
+371	R/evaluate.R	308	function swap	sort	rev
+372	R/evaluate.R	308	function swap	unique	identity
+373	R/evaluate.R	310	relational/logical	>=	>
+374	R/evaluate.R	311	function swap	sum	prod
+375	R/evaluate.R	312	function swap	sum	prod
+376	R/evaluate.R	326	numeric+1	0	1
+377	R/evaluate.R	357	function swap	sum	prod
+378	R/evaluate.R	365	relational/logical	>	>=
+379	R/evaluate.R	365	numeric+1	0	1
+380	R/evaluate.R	367	relational/logical	<	<=
+381	R/evaluate.R	370	function swap	mean	median
+382	R/evaluate.R	372	function swap	min	max
+383	R/evaluate.R	373	function swap	max	min
+384	R/evaluate.R	381	relational/logical	>	>=
+385	R/evaluate.R	381	numeric+1	0	1
+386	R/evaluate.R	385	function swap	max	min
+387	R/evaluate.R	410	numeric+1	100	101
+388	R/evaluate.R	415	relational/logical	>	>=
+389	R/evaluate.R	415	numeric+1	0	1
+390	R/evaluate.R	417	relational/logical	>	>=
+391	R/evaluate.R	417	numeric+1	0	1
+392	R/evaluate.R	430	relational/logical	==	!=
+393	R/evaluate.R	431	relational/logical	==	!=
+394	R/evaluate.R	448	function swap	head	tail
+395	R/evaluate.R	453	numeric+1	100	101
+396	R/evaluate.R	456	relational/logical	>	>=
+397	R/evaluate.R	45	bool flip	FALSE	TRUE
+398	R/evaluate.R	85	bool flip	FALSE	TRUE
+399	R/evaluate.R	245	bool flip	FALSE	TRUE
+400	R/evaluate.R	248	bool flip	FALSE	TRUE
+401	R/evaluate.R	308	bool flip	TRUE	FALSE
+402	R/evaluate.R	344	bool flip	FALSE	TRUE
+403	R/evaluate.R	346	bool flip	FALSE	TRUE
+404	R/evaluate.R	379	bool flip	FALSE	TRUE
+405	R/generalize.R	92	numeric+1	1	2
+406	R/generalize.R	105	relational/logical	|	&
+407	R/generalize.R	105	relational/logical	|	&
+408	R/generalize.R	153	numeric+1	1	2
+409	R/generalize.R	154	relational/logical	==	!=
+410	R/generalize.R	154	numeric+1	5	6
+411	R/generalize.R	155	numeric+1	3	4
+412	R/generalize.R	156	numeric+1	4	5
+413	R/generalize.R	160	numeric+1	2	3
+414	R/generalize.R	160	relational/logical	==	!=
+415	R/generalize.R	161	numeric+1	5	6
+416	R/generalize.R	161	relational/logical	==	!=
+417	R/generalize.R	169	relational/logical	&&	||
+418	R/generalize.R	180	numeric+1	1	2
+419	R/generalize.R	181	relational/logical	==	!=
+420	R/generalize.R	181	numeric+1	3	4
+421	R/generalize.R	182	numeric+1	2	3
+422	R/generalize.R	183	numeric+1	10	11
+423	R/generalize.R	195	numeric+1	1	2
+424	R/generalize.R	196	relational/logical	==	!=
+425	R/generalize.R	196	numeric+1	3	4
+426	R/generalize.R	197	numeric+1	2	3
+427	R/generalize.R	204	numeric+1	1	2
+428	R/generalize.R	205	relational/logical	==	!=
+429	R/generalize.R	205	numeric+1	3	4
+430	R/generalize.R	206	numeric+1	2	3
+431	R/generalize.R	211	numeric+1	1	2
+432	R/generalize.R	212	relational/logical	==	!=
+433	R/generalize.R	212	numeric+1	3	4
+434	R/generalize.R	213	numeric+1	2	3
+435	R/generalize.R	223	numeric+1	1	2
+436	R/generalize.R	224	relational/logical	==	!=
+437	R/generalize.R	224	numeric+1	3	4
+438	R/generalize.R	225	numeric+1	2	3
+439	R/generalize.R	225	numeric+1	3	4
+440	R/generalize.R	230	numeric+1	1	2
+441	R/generalize.R	231	relational/logical	==	!=
+442	R/generalize.R	231	numeric+1	2	3
+443	R/generalize.R	232	numeric+1	2	3
+444	R/generalize.R	235	numeric+1	1	2
+445	R/generalize.R	236	relational/logical	==	!=
+446	R/generalize.R	236	numeric+1	2	3
+447	R/generalize.R	237	numeric+1	2	3
+448	R/generalize.R	266	relational/logical	&	|
+449	R/generalize.R	266	relational/logical	==	!=
+450	R/generalize.R	270	relational/logical	&	|
+451	R/generalize.R	281	relational/logical	&	|
+452	R/generalize.R	281	relational/logical	==	!=
+453	R/generalize.R	285	relational/logical	&	|
+454	R/generalize.R	286	relational/logical	>=	>
+455	R/generalize.R	286	relational/logical	>	>=
+456	R/generalize.R	286	relational/logical	&	|
+457	R/generalize.R	287	relational/logical	<=	<
+458	R/generalize.R	287	relational/logical	<	<=
+459	R/generalize.R	294	relational/logical	|	&
+460	R/generalize.R	294	relational/logical	&	|
+461	R/generalize.R	294	relational/logical	==	!=
+462	R/generalize.R	338	relational/logical	&	|
+463	R/generalize.R	383	function swap	any	all
+464	R/generalize.R	390	function swap	unique	identity
+465	R/generalize.R	395	relational/logical	&	|
+466	R/generalize.R	398	relational/logical	&	|
+467	R/generalize.R	400	relational/logical	&&	||
+468	R/generalize.R	400	relational/logical	<	<=
+469	R/generalize.R	425	numeric+1	0.2	1.2
+470	R/generalize.R	449	numeric+1	0	1
+471	R/generalize.R	449	numeric+1	0	1
+472	R/generalize.R	455	function swap	unique	identity
+473	R/generalize.R	456	relational/logical	==	!=
+474	R/generalize.R	456	numeric+1	0	1
+475	R/generalize.R	456	relational/logical	||	&&
+476	R/generalize.R	456	relational/logical	==	!=
+477	R/generalize.R	456	numeric+1	0	1
+478	R/generalize.R	460	function swap	unique	identity
+479	R/generalize.R	462	function swap	mean	median
+480	R/generalize.R	463	relational/logical	<	<=
+481	R/generalize.R	468	relational/logical	==	!=
+482	R/generalize.R	468	numeric+1	0	1
+483	R/generalize.R	472	numeric+1	0	1
+484	R/generalize.R	473	numeric+1	0	1
+485	R/generalize.R	476	relational/logical	&	|
+486	R/generalize.R	476	relational/logical	!=	==
+487	R/generalize.R	477	function swap	any	all
+488	R/generalize.R	478	numeric+1	1	2
+489	R/generalize.R	480	relational/logical	>=	>
+490	R/generalize.R	485	relational/logical	==	!=
+491	R/generalize.R	485	numeric+1	0	1
+492	R/generalize.R	528	relational/logical	==	!=
+493	R/generalize.R	528	numeric+1	0	1
+494	R/generalize.R	534	numeric+1	100	101
+495	R/generalize.R	534	numeric+1	1	2
+496	R/generalize.R	534	numeric+1	1	2
+497	R/generalize.R	581	relational/logical	==	!=
+498	R/generalize.R	581	numeric+1	0	1
+499	R/generalize.R	639	relational/logical	>	>=
+500	R/generalize.R	639	numeric+1	0	1
+501	R/generalize.R	647	relational/logical	==	!=
+502	R/generalize.R	647	numeric+1	1	2
+503	R/generalize.R	648	relational/logical	==	!=
+504	R/generalize.R	648	numeric+1	1	2
+505	R/generalize.R	649	relational/logical	==	!=
+506	R/generalize.R	649	numeric+1	1	2
+507	R/generalize.R	654	relational/logical	&	|
+508	R/generalize.R	654	relational/logical	&	|
+509	R/generalize.R	657	relational/logical	|	&
+510	R/generalize.R	657	relational/logical	|	&
+511	R/generalize.R	657	relational/logical	|	&
+512	R/generalize.R	658	relational/logical	|	&
+513	R/generalize.R	658	relational/logical	|	&
+514	R/generalize.R	659	function swap	any	all
+515	R/generalize.R	666	function swap	any	all
+516	R/generalize.R	666	relational/logical	==	!=
+517	R/generalize.R	667	relational/logical	==	!=
+518	R/generalize.R	667	numeric+1	1	2
+519	R/generalize.R	674	relational/logical	>	>=
+520	R/generalize.R	674	numeric+1	0	1
+521	R/generalize.R	675	numeric+1	1	2
+522	R/generalize.R	704	function swap	unique	identity
+523	R/generalize.R	710	numeric+1	0	1
+524	R/generalize.R	713	numeric+1	0	1
+525	R/generalize.R	717	relational/logical	>	>=
+526	R/generalize.R	717	numeric+1	0	1
+527	R/generalize.R	719	relational/logical	>	>=
+528	R/generalize.R	721	numeric+1	1	2
+529	R/generalize.R	724	function swap	unique	identity
+530	R/generalize.R	736	numeric+1	1	2
+531	R/generalize.R	756	function swap	unique	identity
+532	R/generalize.R	763	function swap	unique	identity
+533	R/generalize.R	764	function swap	max	min
+534	R/generalize.R	764	relational/logical	==	!=
+535	R/generalize.R	765	relational/logical	>	>=
+536	R/generalize.R	821	relational/logical	||	&&
+537	R/generalize.R	821	relational/logical	!=	==
+538	R/generalize.R	821	relational/logical	||	&&
+539	R/generalize.R	821	relational/logical	||	&&
+540	R/generalize.R	829	relational/logical	==	!=
+541	R/generalize.R	834	relational/logical	==	!=
+542	R/generalize.R	861	relational/logical	||	&&
+543	R/generalize.R	861	relational/logical	||	&&
+544	R/generalize.R	861	function swap	any	all
+545	R/generalize.R	872	relational/logical	||	&&
+546	R/generalize.R	878	numeric+1	1	2
+547	R/generalize.R	896	relational/logical	||	&&
+548	R/generalize.R	906	relational/logical	||	&&
+549	R/generalize.R	906	relational/logical	==	!=
+550	R/generalize.R	906	numeric+1	0	1
+551	R/generalize.R	925	function swap	unique	identity
+552	R/generalize.R	926	function swap	unique	identity
+553	R/generalize.R	927	relational/logical	==	!=
+554	R/generalize.R	928	function swap	unique	identity
+555	R/generalize.R	928	function swap	unique	identity
+556	R/generalize.R	930	function swap	max	min
+557	R/generalize.R	931	function swap	head	tail
+558	R/generalize.R	931	numeric+1	5	6
+559	R/generalize.R	947	numeric+1	0	1
+560	R/generalize.R	951	numeric+1	0	1
+561	R/generalize.R	954	numeric+1	0	1
+562	R/generalize.R	988	numeric+1	1	2
+563	R/generalize.R	995	relational/logical	||	&&
+564	R/generalize.R	995	relational/logical	!=	==
+565	R/generalize.R	995	relational/logical	||	&&
+566	R/generalize.R	995	relational/logical	||	&&
+567	R/generalize.R	995	relational/logical	<	<=
+568	R/generalize.R	995	numeric+1	0	1
+569	R/generalize.R	1000	relational/logical	==	!=
+570	R/generalize.R	1001	relational/logical	==	!=
+571	R/generalize.R	1001	numeric+1	0	1
+572	R/generalize.R	1003	function swap	unique	identity
+573	R/generalize.R	1016	function swap	any	all
+574	R/generalize.R	1019	relational/logical	&	|
+575	R/generalize.R	1021	relational/logical	|	&
+576	R/generalize.R	1052	relational/logical	||	&&
+577	R/generalize.R	1052	relational/logical	||	&&
+578	R/generalize.R	1052	function swap	any	all
+579	R/generalize.R	1057	relational/logical	>	>=
+580	R/generalize.R	1057	numeric+1	0	1
+581	R/generalize.R	1062	relational/logical	>	>=
+582	R/generalize.R	1062	numeric+1	0	1
+583	R/generalize.R	1088	function swap	unique	identity
+584	R/generalize.R	1089	function swap	unique	identity
+585	R/generalize.R	1102	function swap	all	any
+586	R/generalize.R	1105	relational/logical	|	&
+587	R/generalize.R	1129	relational/logical	||	&&
+588	R/generalize.R	1129	relational/logical	==	!=
+589	R/generalize.R	1129	numeric+1	0	1
+590	R/generalize.R	1129	relational/logical	||	&&
+591	R/generalize.R	1133	relational/logical	&&	||
+592	R/generalize.R	1158	relational/logical	==	!=
+593	R/generalize.R	1159	numeric+1	1	2
+594	R/generalize.R	1160	numeric+1	1	2
+595	R/generalize.R	1229	numeric+1	1	2
+596	R/generalize.R	1229	numeric+1	1	2
+597	R/generalize.R	1229	numeric+1	1	2
+598	R/generalize.R	1250	function swap	unique	identity
+599	R/generalize.R	1250	numeric+1	1	2
+600	R/generalize.R	1254	function swap	unique	identity
+601	R/generalize.R	1255	numeric+1	0	1
+602	R/generalize.R	1304	function swap	unique	identity
+603	R/generalize.R	1304	numeric+1	1	2
+604	R/generalize.R	1305	relational/logical	&	|
+605	R/generalize.R	1305	relational/logical	==	!=
+606	R/generalize.R	1306	numeric+1	1	2
+607	R/generalize.R	1310	function swap	unique	identity
+608	R/generalize.R	1310	function swap	unique	identity
+609	R/generalize.R	1316	relational/logical	>	>=
+610	R/generalize.R	1316	numeric+1	0	1
+611	R/generalize.R	1316	numeric+1	1	2
+612	R/generalize.R	167	bool flip	TRUE	FALSE
+613	R/generalize.R	183	bool flip	TRUE	FALSE
+614	R/generalize.R	183	bool flip	FALSE	TRUE
+615	R/generalize.R	189	bool flip	TRUE	FALSE
+616	R/generalize.R	189	bool flip	TRUE	FALSE
+617	R/generalize.R	198	bool flip	TRUE	FALSE
+618	R/generalize.R	198	bool flip	FALSE	TRUE
+619	R/generalize.R	207	bool flip	FALSE	TRUE
+620	R/generalize.R	207	bool flip	TRUE	FALSE
+621	R/generalize.R	214	bool flip	FALSE	TRUE
+622	R/generalize.R	214	bool flip	FALSE	TRUE
+623	R/generalize.R	226	bool flip	TRUE	FALSE
+624	R/generalize.R	226	bool flip	TRUE	FALSE
+625	R/generalize.R	233	bool flip	TRUE	FALSE
+626	R/generalize.R	233	bool flip	FALSE	TRUE
+627	R/generalize.R	238	bool flip	FALSE	TRUE
+628	R/generalize.R	238	bool flip	TRUE	FALSE
+629	R/generalize.R	261	bool flip	FALSE	TRUE
+630	R/generalize.R	279	bool flip	FALSE	TRUE
+631	R/generalize.R	381	bool flip	FALSE	TRUE
+632	R/generalize.R	450	bool flip	FALSE	TRUE
+633	R/generalize.R	489	bool flip	FALSE	TRUE
+634	R/generalize.R	523	bool flip	FALSE	TRUE
+635	R/generalize.R	529	bool flip	FALSE	TRUE
+636	R/generalize.R	548	bool flip	FALSE	TRUE
+637	R/generalize.R	550	bool flip	FALSE	TRUE
+638	R/generalize.R	551	bool flip	TRUE	FALSE
+639	R/generalize.R	633	bool flip	FALSE	TRUE
+640	R/generalize.R	643	bool flip	FALSE	TRUE
+641	R/generalize.R	650	bool flip	FALSE	TRUE
+642	R/generalize.R	655	bool flip	FALSE	TRUE
+643	R/generalize.R	663	bool flip	FALSE	TRUE
+644	R/generalize.R	669	bool flip	FALSE	TRUE
+645	R/generalize.R	672	bool flip	FALSE	TRUE
+646	R/generalize.R	679	bool flip	FALSE	TRUE
+647	R/generalize.R	722	bool flip	FALSE	TRUE
+648	R/generalize.R	725	bool flip	FALSE	TRUE
+649	R/generalize.R	737	bool flip	FALSE	TRUE
+650	R/generalize.R	761	bool flip	FALSE	TRUE
+651	R/generalize.R	767	bool flip	TRUE	FALSE
+652	R/generalize.R	823	bool flip	FALSE	TRUE
+653	R/generalize.R	826	bool flip	FALSE	TRUE
+654	R/generalize.R	835	bool flip	FALSE	TRUE
+655	R/generalize.R	836	bool flip	FALSE	TRUE
+656	R/generalize.R	840	bool flip	TRUE	FALSE
+657	R/generalize.R	844	bool flip	FALSE	TRUE
+658	R/generalize.R	865	bool flip	FALSE	TRUE
+659	R/generalize.R	874	bool flip	FALSE	TRUE
+660	R/generalize.R	878	bool flip	FALSE	TRUE
+661	R/generalize.R	888	bool flip	FALSE	TRUE
+662	R/generalize.R	899	bool flip	FALSE	TRUE
+663	R/generalize.R	908	bool flip	FALSE	TRUE
+664	R/generalize.R	927	bool flip	FALSE	TRUE
+665	R/generalize.R	993	bool flip	FALSE	TRUE
+666	R/generalize.R	997	bool flip	FALSE	TRUE
+667	R/generalize.R	1000	bool flip	FALSE	TRUE
+668	R/generalize.R	1004	bool flip	FALSE	TRUE
+669	R/generalize.R	1013	bool flip	FALSE	TRUE
+670	R/generalize.R	1054	bool flip	FALSE	TRUE
+671	R/generalize.R	1059	bool flip	FALSE	TRUE
+672	R/generalize.R	1064	bool flip	FALSE	TRUE
+673	R/generalize.R	1091	bool flip	FALSE	TRUE
+674	R/generalize.R	1095	bool flip	TRUE	FALSE
+675	R/generalize.R	1131	bool flip	FALSE	TRUE
+676	R/generalize.R	1136	bool flip	FALSE	TRUE
+677	R/generalize.R	1313	bool flip	FALSE	TRUE
+678	R/generalize.R	1319	bool flip	FALSE	TRUE
+679	R/idf.R	124	numeric+1	1	2
+680	R/idf.R	128	numeric+1	0	1
+681	R/idf.R	129	numeric+1	1	2
+682	R/idf.R	129	numeric+1	1	2
+683	R/idf.R	130	numeric+1	1	2
+684	R/idf.R	131	numeric+1	1	2
+685	R/idf.R	168	relational/logical	||	&&
+686	R/idf.R	184	relational/logical	!=	==
+687	R/idf.R	221	relational/logical	||	&&
+688	R/idf.R	221	relational/logical	==	!=
+689	R/idf.R	221	numeric+1	0	1
+690	R/idf.R	225	relational/logical	>	>=
+691	R/idf.R	225	numeric+1	0	1
+692	R/idf.R	227	function swap	unique	identity
+693	R/idf.R	82	bool flip	FALSE	TRUE
+694	R/idf.R	89	bool flip	FALSE	TRUE
+695	R/idf.R	92	bool flip	FALSE	TRUE
+696	R/idf.R	171	bool flip	FALSE	TRUE
+697	R/idf.R	223	bool flip	FALSE	TRUE
+698	R/idf.R	228	bool flip	FALSE	TRUE
+699	R/knowledge.R	57	relational/logical	||	&&
+700	R/knowledge.R	57	relational/logical	&&	||
+701	R/knowledge.R	57	relational/logical	==	!=
+702	R/knowledge.R	57	numeric+1	0	1
+703	R/knowledge.R	61	numeric+1	0	1
+704	R/knowledge.R	63	relational/logical	||	&&
+705	R/knowledge.R	63	relational/logical	||	&&
+706	R/knowledge.R	63	function swap	any	all
+707	R/knowledge.R	63	relational/logical	==	!=
+708	R/knowledge.R	68	function swap	unique	identity
+709	R/knowledge.R	69	relational/logical	>	>=
+710	R/knowledge.R	69	numeric+1	0	1
+711	R/knowledge.R	80	relational/logical	==	!=
+712	R/knowledge.R	80	numeric+1	0	1
+713	R/knowledge.R	88	function swap	max	min
+714	R/knowledge.R	88	function swap	floor	ceiling
+715	R/knowledge.R	88	numeric+1	2	3
+716	R/knowledge.R	92	relational/logical	>	>=
+717	R/knowledge.R	92	numeric+1	0	1
+718	R/knowledge.R	239	numeric+1	1e-6	1.000001
+719	R/knowledge.R	243	numeric+1	0.05	1.05
+720	R/knowledge.R	308	numeric+1	1	2
+721	R/knowledge.R	308	numeric+1	20	21
+722	R/knowledge.R	327	relational/logical	==	!=
+723	R/knowledge.R	66	bool flip	FALSE	TRUE
+724	R/knowledge.R	74	bool flip	FALSE	TRUE
+725	R/knowledge.R	82	bool flip	FALSE	TRUE
+726	R/knowledge.R	94	bool flip	FALSE	TRUE
+727	R/knowledge.R	181	bool flip	FALSE	TRUE
+728	R/knowledge.R	246	bool flip	FALSE	TRUE
+729	R/knowledge.R	330	bool flip	FALSE	TRUE
+730	R/match.R	80	numeric+1	0	1
+731	R/match.R	102	function swap	sum	prod
+732	R/match.R	102	relational/logical	==	!=
+733	R/match.R	102	function swap	min	max
+734	R/match.R	109	numeric+1	1	2
+735	R/match.R	110	relational/logical	==	!=
+736	R/match.R	300	numeric+1	1	2
+737	R/match.R	304	numeric+1	0	1
+738	R/match.R	308	relational/logical	==	!=
+739	R/match.R	308	numeric+1	0	1
+740	R/match.R	312	relational/logical	||	&&
+741	R/match.R	312	relational/logical	!=	==
+742	R/match.R	312	numeric+1	1	2
+743	R/match.R	312	relational/logical	||	&&
+744	R/match.R	313	relational/logical	||	&&
+745	R/match.R	313	relational/logical	<=	<
+746	R/match.R	313	numeric+1	0	1
+747	R/match.R	313	relational/logical	||	&&
+748	R/match.R	313	relational/logical	>	>=
+749	R/match.R	313	numeric+1	1	2
+750	R/match.R	318	relational/logical	&&	||
+751	R/match.R	319	relational/logical	||	&&
+752	R/match.R	319	relational/logical	!=	==
+753	R/match.R	319	numeric+1	1	2
+754	R/match.R	319	relational/logical	||	&&
+755	R/match.R	325	relational/logical	||	&&
+756	R/match.R	325	relational/logical	!=	==
+757	R/match.R	325	numeric+1	1	2
+758	R/match.R	325	relational/logical	||	&&
+759	R/match.R	342	relational/logical	>	>=
+760	R/match.R	342	numeric+1	0	1
+761	R/match.R	351	relational/logical	!=	==
+762	R/match.R	364	function swap	unique	identity
+763	R/match.R	365	function swap	any	all
+764	R/match.R	365	relational/logical	>	>=
+765	R/match.R	365	numeric+1	1	2
+766	R/match.R	367	function swap	sum	prod
+767	R/match.R	367	relational/logical	>	>=
+768	R/match.R	367	numeric+1	1	2
+769	R/match.R	378	function swap	unique	identity
+770	R/match.R	379	function swap	unique	identity
+771	R/match.R	380	function swap	max	min
+772	R/match.R	380	function swap	max	min
+773	R/match.R	380	function swap	min	max
+774	R/match.R	381	numeric+1	1	2
+775	R/match.R	382	function swap	max	min
+776	R/match.R	383	relational/logical	&&	||
+777	R/match.R	383	relational/logical	>	>=
+778	R/match.R	390	relational/logical	&&	||
+779	R/match.R	390	relational/logical	>	>=
+780	R/match.R	419	numeric+1	0	1
+781	R/match.R	442	function swap	sort	rev
+782	R/match.R	442	function swap	unique	identity
+783	R/match.R	443	function swap	sort	rev
+784	R/match.R	443	function swap	unique	identity
+785	R/match.R	448	function swap	min	max
+786	R/match.R	449	function swap	max	min
+787	R/match.R	455	function swap	min	max
+788	R/match.R	456	function swap	max	min
+789	R/match.R	468	relational/logical	>=	>
+790	R/match.R	468	numeric+1	1	2
+791	R/match.R	471	numeric+1	1	2
+792	R/match.R	475	numeric+1	7	8
+793	R/match.R	488	function swap	max	min
+794	R/match.R	488	numeric+1	1	2
+795	R/match.R	492	relational/logical	>	>=
+796	R/match.R	492	numeric+1	0	1
+797	R/match.R	499	relational/logical	>	>=
+798	R/match.R	499	relational/logical	|	&
+799	R/match.R	499	relational/logical	>=	>
+800	R/match.R	509	numeric+1	0	1
+801	R/match.R	511	relational/logical	>	>=
+802	R/match.R	511	numeric+1	0	1
+803	R/match.R	513	numeric+1	1	2
+804	R/match.R	514	function swap	sum	prod
+805	R/match.R	514	relational/logical	<=	<
+806	R/match.R	514	numeric+1	1	2
+807	R/match.R	522	relational/logical	&	|
+808	R/match.R	522	relational/logical	==	!=
+809	R/match.R	93	bool flip	FALSE	TRUE
+810	R/match.R	111	bool flip	FALSE	TRUE
+811	R/match.R	310	bool flip	FALSE	TRUE
+812	R/match.R	316	bool flip	FALSE	TRUE
+813	R/match.R	321	bool flip	FALSE	TRUE
+814	R/match.R	329	bool flip	FALSE	TRUE
+815	R/match.R	338	bool flip	FALSE	TRUE
+816	R/match.R	345	bool flip	FALSE	TRUE
+817	R/match.R	353	bool flip	FALSE	TRUE
+818	R/match.R	356	bool flip	FALSE	TRUE
+819	R/match.R	368	bool flip	FALSE	TRUE
+820	R/match.R	388	bool flip	FALSE	TRUE
+821	R/match.R	395	bool flip	FALSE	TRUE
+822	R/match.R	411	bool flip	FALSE	TRUE
+823	R/match.R	475	bool flip	FALSE	TRUE
+824	R/match.R	523	bool flip	FALSE	TRUE
+825	R/match.R	525	bool flip	FALSE	TRUE
+826	R/multiattr.R	86	numeric+1	1	2
+827	R/multiattr.R	117	numeric+1	0	1
+828	R/multiattr.R	124	numeric+1	2	3
+829	R/multiattr.R	124	numeric+1	1	2
+830	R/multiattr.R	125	relational/logical	>	>=
+831	R/multiattr.R	125	numeric+1	0	1
+832	R/multiattr.R	125	numeric+1	1	2
+833	R/multiattr.R	129	relational/logical	>	>=
+834	R/multiattr.R	129	numeric+1	0	1
+835	R/multiattr.R	129	function swap	mean	median
+836	R/multiattr.R	132	relational/logical	>	>=
+837	R/multiattr.R	132	numeric+1	1	2
+838	R/multiattr.R	132	relational/logical	&&	||
+839	R/multiattr.R	132	relational/logical	>	>=
+840	R/multiattr.R	132	numeric+1	0	1
+841	R/multiattr.R	133	numeric+1	1	2
+842	R/multiattr.R	133	numeric+1	1	2
+843	R/multiattr.R	205	numeric+1	1e-6	1.000001
+844	R/multiattr.R	209	relational/logical	||	&&
+845	R/multiattr.R	209	relational/logical	==	!=
+846	R/multiattr.R	209	numeric+1	0	1
+847	R/multiattr.R	213	relational/logical	>	>=
+848	R/multiattr.R	213	numeric+1	0	1
+849	R/multiattr.R	215	function swap	unique	identity
+850	R/multiattr.R	219	relational/logical	||	&&
+851	R/multiattr.R	219	relational/logical	!=	==
+852	R/multiattr.R	219	numeric+1	1	2
+853	R/multiattr.R	219	relational/logical	||	&&
+854	R/multiattr.R	219	relational/logical	||	&&
+855	R/multiattr.R	219	relational/logical	<	<=
+856	R/multiattr.R	219	numeric+1	0	1
+857	R/multiattr.R	231	numeric+1	1	2
+858	R/multiattr.R	246	relational/logical	||	&&
+859	R/multiattr.R	253	numeric+1	1	2
+860	R/multiattr.R	254	numeric+1	1	2
+861	R/multiattr.R	265	relational/logical	<	<=
+862	R/multiattr.R	265	numeric+1	2	3
+863	R/multiattr.R	270	numeric+1	2	3
+864	R/multiattr.R	271	relational/logical	&	|
+865	R/multiattr.R	271	relational/logical	>	>=
+866	R/multiattr.R	271	numeric+1	0	1
+867	R/multiattr.R	272	function swap	any	all
+868	R/multiattr.R	277	function swap	any	all
+869	R/multiattr.R	286	function swap	mean	median
+870	R/multiattr.R	304	relational/logical	<	<=
+871	R/multiattr.R	304	numeric+1	0	1
+872	R/multiattr.R	304	numeric+1	0	1
+873	R/multiattr.R	326	relational/logical	||	&&
+874	R/multiattr.R	326	relational/logical	==	!=
+875	R/multiattr.R	326	numeric+1	0	1
+876	R/multiattr.R	332	relational/logical	||	&&
+877	R/multiattr.R	332	function swap	all	any
+878	R/multiattr.R	332	relational/logical	==	!=
+879	R/multiattr.R	338	function swap	any	all
+880	R/multiattr.R	338	relational/logical	==	!=
+881	R/multiattr.R	343	function swap	unique	identity
+882	R/multiattr.R	344	relational/logical	>	>=
+883	R/multiattr.R	344	numeric+1	0	1
+884	R/multiattr.R	351	relational/logical	>	>=
+885	R/multiattr.R	351	numeric+1	0	1
+886	R/multiattr.R	353	function swap	unique	identity
+887	R/multiattr.R	531	numeric+1	0.05	1.05
+888	R/multiattr.R	535	relational/logical	||	&&
+889	R/multiattr.R	535	relational/logical	==	!=
+890	R/multiattr.R	535	numeric+1	0	1
+891	R/multiattr.R	539	relational/logical	||	&&
+892	R/multiattr.R	539	relational/logical	!=	==
+893	R/multiattr.R	539	numeric+1	1	2
+894	R/multiattr.R	539	relational/logical	||	&&
+895	R/multiattr.R	539	relational/logical	||	&&
+896	R/multiattr.R	540	relational/logical	<=	<
+897	R/multiattr.R	540	numeric+1	0	1
+898	R/multiattr.R	540	relational/logical	||	&&
+899	R/multiattr.R	540	relational/logical	>=	>
+900	R/multiattr.R	540	numeric+1	1	2
+901	R/multiattr.R	549	relational/logical	==	!=
+902	R/multiattr.R	549	relational/logical	==	!=
+903	R/multiattr.R	584	numeric+1	1	2
+904	R/multiattr.R	588	function swap	any	all
+905	R/multiattr.R	601	function swap	sum	prod
+906	R/multiattr.R	602	function swap	sum	prod
+907	R/multiattr.R	602	numeric+1	1	2
+908	R/multiattr.R	602	numeric+1	0	1
+909	R/multiattr.R	606	relational/logical	>	>=
+910	R/multiattr.R	606	numeric+1	0	1
+911	R/multiattr.R	606	numeric+1	0	1
+912	R/multiattr.R	610	relational/logical	>	>=
+913	R/multiattr.R	610	numeric+1	0	1
+914	R/multiattr.R	610	numeric+1	1	2
+915	R/multiattr.R	617	relational/logical	>	>=
+916	R/multiattr.R	617	numeric+1	0	1
+917	R/multiattr.R	621	relational/logical	<	<=
+918	R/multiattr.R	648	function swap	sort	rev
+919	R/multiattr.R	648	function swap	unique	identity
+920	R/multiattr.R	651	numeric+1	0	1
+921	R/multiattr.R	652	numeric+1	0	1
+922	R/multiattr.R	654	numeric+1	0	1
+923	R/multiattr.R	658	relational/logical	==	!=
+924	R/multiattr.R	659	function swap	any	all
+925	R/multiattr.R	665	numeric+1	1	2
+926	R/multiattr.R	665	numeric+1	2	3
+927	R/multiattr.R	667	numeric+1	1	2
+928	R/multiattr.R	668	function swap	mean	median
+929	R/multiattr.R	668	numeric+1	2	3
+930	R/multiattr.R	669	numeric+1	1	2
+931	R/multiattr.R	674	relational/logical	>	>=
+932	R/multiattr.R	674	numeric+1	0	1
+933	R/multiattr.R	702	relational/logical	&&	||
+934	R/multiattr.R	702	function swap	any	all
+935	R/multiattr.R	743	relational/logical	&	|
+936	R/multiattr.R	744	function swap	any	all
+937	R/multiattr.R	763	relational/logical	&&	||
+938	R/multiattr.R	763	function swap	all	any
+939	R/multiattr.R	869	numeric+1	1e-6	1.000001
+940	R/multiattr.R	873	numeric+1	0.05	1.05
+941	R/multiattr.R	885	numeric+1	1	2
+942	R/multiattr.R	887	relational/logical	||	&&
+943	R/multiattr.R	887	relational/logical	!=	==
+944	R/multiattr.R	908	function swap	all	any
+945	R/multiattr.R	917	numeric+1	0	1
+946	R/multiattr.R	923	relational/logical	==	!=
+947	R/multiattr.R	924	function swap	any	all
+948	R/multiattr.R	942	function swap	sum	prod
+949	R/multiattr.R	943	relational/logical	|	&
+950	R/multiattr.R	946	relational/logical	==	!=
+951	R/multiattr.R	947	function swap	any	all
+952	R/multiattr.R	956	function swap	sum	prod
+953	R/multiattr.R	957	relational/logical	|	&
+954	R/multiattr.R	86	bool flip	FALSE	TRUE
+955	R/multiattr.R	114	bool flip	FALSE	TRUE
+956	R/multiattr.R	205	bool flip	FALSE	TRUE
+957	R/multiattr.R	211	bool flip	FALSE	TRUE
+958	R/multiattr.R	217	bool flip	FALSE	TRUE
+959	R/multiattr.R	221	bool flip	FALSE	TRUE
+960	R/multiattr.R	234	bool flip	FALSE	TRUE
+961	R/multiattr.R	250	bool flip	FALSE	TRUE
+962	R/multiattr.R	258	bool flip	FALSE	TRUE
+963	R/multiattr.R	259	bool flip	FALSE	TRUE
+964	R/multiattr.R	261	bool flip	FALSE	TRUE
+965	R/multiattr.R	262	bool flip	FALSE	TRUE
+966	R/multiattr.R	267	bool flip	FALSE	TRUE
+967	R/multiattr.R	275	bool flip	FALSE	TRUE
+968	R/multiattr.R	282	bool flip	FALSE	TRUE
+969	R/multiattr.R	285	bool flip	FALSE	TRUE
+970	R/multiattr.R	295	bool flip	FALSE	TRUE
+971	R/multiattr.R	299	bool flip	FALSE	TRUE
+972	R/multiattr.R	299	bool flip	FALSE	TRUE
+973	R/multiattr.R	329	bool flip	FALSE	TRUE
+974	R/multiattr.R	340	bool flip	FALSE	TRUE
+975	R/multiattr.R	349	bool flip	FALSE	TRUE
+976	R/multiattr.R	354	bool flip	FALSE	TRUE
+977	R/multiattr.R	537	bool flip	FALSE	TRUE
+978	R/multiattr.R	542	bool flip	FALSE	TRUE
+979	R/multiattr.R	597	bool flip	FALSE	TRUE
+980	R/multiattr.R	610	bool flip	FALSE	TRUE
+981	R/multiattr.R	622	bool flip	FALSE	TRUE
+982	R/multiattr.R	742	bool flip	TRUE	FALSE
+983	R/multiattr.R	770	bool flip	FALSE	TRUE
+984	R/multiattr.R	779	bool flip	FALSE	TRUE
+985	R/multiattr.R	786	bool flip	FALSE	TRUE
+986	R/multiattr.R	890	bool flip	FALSE	TRUE
+987	R/multiattr.R	920	bool flip	FALSE	TRUE
+988	R/multiattr.R	927	bool flip	FALSE	TRUE
+989	R/reidentify.R	20	relational/logical	>	>=
+990	R/reidentify.R	20	numeric+1	0	1
+991	R/reidentify.R	109	function swap	unique	identity
+992	R/reidentify.R	111	relational/logical	==	!=
+993	R/reidentify.R	111	numeric+1	0	1
+994	R/reidentify.R	111	relational/logical	||	&&
+995	R/reidentify.R	111	function swap	all	any
+996	R/reidentify.R	124	relational/logical	==	!=
+997	R/reidentify.R	124	function swap	min	max
+998	R/reidentify.R	148	function swap	unique	identity
+999	R/reidentify.R	150	relational/logical	==	!=
+1000	R/reidentify.R	150	numeric+1	0	1
+1001	R/reidentify.R	150	relational/logical	||	&&
+1002	R/reidentify.R	150	relational/logical	<	<=
+1003	R/reidentify.R	202	relational/logical	==	!=
+1004	R/reidentify.R	233	relational/logical	>	>=
+1005	R/reidentify.R	233	numeric+1	0	1
+1006	R/reidentify.R	247	function swap	sum	prod
+1007	R/reidentify.R	305	relational/logical	==	!=
+1008	R/reidentify.R	366	relational/logical	==	!=
+1009	R/reidentify.R	385	relational/logical	||	&&
+1010	R/reidentify.R	385	relational/logical	!=	==
+1011	R/reidentify.R	385	relational/logical	||	&&
+1012	R/reidentify.R	442	numeric+1	1	2
+1013	R/reidentify.R	456	function swap	unique	identity
+1014	R/reidentify.R	541	numeric+1	1e-05	1.00001
+1015	R/reidentify.R	549	relational/logical	!=	==
+1016	R/reidentify.R	559	function swap	any	all
+1017	R/reidentify.R	559	relational/logical	<	<=
+1018	R/reidentify.R	559	numeric+1	0	1
+1019	R/reidentify.R	559	relational/logical	||	&&
+1020	R/reidentify.R	559	function swap	any	all
+1021	R/reidentify.R	559	relational/logical	<	<=
+1022	R/reidentify.R	559	numeric+1	0	1
+1023	R/reidentify.R	567	function swap	sum	prod
+1024	R/reidentify.R	568	function swap	sum	prod
+1025	R/reidentify.R	569	relational/logical	==	!=
+1026	R/reidentify.R	569	numeric+1	0	1
+1027	R/reidentify.R	569	relational/logical	||	&&
+1028	R/reidentify.R	569	relational/logical	==	!=
+1029	R/reidentify.R	569	numeric+1	0	1
+1030	R/reidentify.R	651	numeric+1	10	11
+1031	R/reidentify.R	655	relational/logical	!=	==
+1032	R/reidentify.R	655	numeric+1	1	2
+1033	R/reidentify.R	655	relational/logical	||	&&
+1034	R/reidentify.R	655	relational/logical	||	&&
+1035	R/reidentify.R	655	relational/logical	<	<=
+1036	R/reidentify.R	655	numeric+1	2	3
+1037	R/reidentify.R	665	numeric+1	0	1
+1038	R/reidentify.R	665	numeric+1	1	2
+1039	R/reidentify.R	666	numeric+1	7	8
+1040	R/reidentify.R	667	numeric+1	7	8
+1041	R/reidentify.R	669	function swap	sum	prod
+1042	R/reidentify.R	669	numeric+1	2	3
+1043	R/reidentify.R	743	relational/logical	==	!=
+1044	R/reidentify.R	776	numeric+1	1	2
+1045	R/reidentify.R	776	numeric+1	20	21
+1046	R/reidentify.R	779	relational/logical	<	<=
+1047	R/reidentify.R	779	numeric+1	2	3
+1048	R/reidentify.R	786	relational/logical	>	>=
+1049	R/reidentify.R	786	numeric+1	0	1
+1050	R/reidentify.R	792	function swap	sum	prod
+1051	R/reidentify.R	800	function swap	mean	median
+1052	R/reidentify.R	802	function swap	min	max
+1053	R/reidentify.R	803	function swap	max	min
+1054	R/reidentify.R	804	function swap	unique	identity
+1055	R/reidentify.R	27	bool flip	FALSE	TRUE
+1056	R/reidentify.R	53	bool flip	FALSE	TRUE
+1057	R/reidentify.R	55	bool flip	FALSE	TRUE
+1058	R/reidentify.R	56	bool flip	TRUE	FALSE
+1059	R/reidentify.R	60	bool flip	TRUE	FALSE
+1060	R/reidentify.R	117	bool flip	FALSE	TRUE
+1061	R/reidentify.R	134	bool flip	FALSE	TRUE
+1062	R/reidentify.R	140	bool flip	FALSE	TRUE
+1063	R/reidentify.R	141	bool flip	FALSE	TRUE
+1064	R/reidentify.R	146	bool flip	FALSE	TRUE
+1065	R/reidentify.R	155	bool flip	FALSE	TRUE
+1066	R/reidentify.R	240	bool flip	FALSE	TRUE
+1067	R/reidentify.R	389	bool flip	FALSE	TRUE
+1068	R/reidentify.R	397	bool flip	FALSE	TRUE
+1069	R/reidentify.R	400	bool flip	TRUE	FALSE
+1070	R/reidentify.R	442	bool flip	TRUE	FALSE
+1071	R/reidentify.R	444	bool flip	FALSE	TRUE
+1072	R/reidentify.R	448	bool flip	TRUE	FALSE
+1073	R/reidentify.R	449	bool flip	TRUE	FALSE
+1074	R/reidentify.R	463	bool flip	FALSE	TRUE
+1075	R/reidentify.R	473	bool flip	FALSE	TRUE
+1076	R/reidentify.R	555	bool flip	FALSE	TRUE
+1077	R/reidentify.R	563	bool flip	FALSE	TRUE
+1078	R/reidentify.R	574	bool flip	FALSE	TRUE
+1079	R/reidentify.R	658	bool flip	FALSE	TRUE
+1080	R/reidentify.R	666	bool flip	FALSE	TRUE
+1081	R/reidentify.R	667	bool flip	FALSE	TRUE
+1082	R/reidentify.R	783	bool flip	FALSE	TRUE
+1083	R/reidentify.R	787	bool flip	FALSE	TRUE
+1084	R/score.R	110	relational/logical	>	>=
+1085	R/score.R	110	numeric+1	0	1
+1086	R/score.R	121	relational/logical	&&	||
+1087	R/score.R	143	function swap	unique	identity
+1088	R/score.R	144	function swap	unique	identity
+1089	R/score.R	146	function swap	head	tail
+1090	R/score.R	147	relational/logical	>	>=
+1091	R/score.R	206	relational/logical	||	&&
+1092	R/score.R	207	relational/logical	||	&&
+1093	R/score.R	264	numeric+1	1	2
+1094	R/score.R	385	relational/logical	||	&&
+1095	R/score.R	386	relational/logical	||	&&
+1096	R/score.R	402	relational/logical	||	&&
+1097	R/score.R	82	bool flip	FALSE	TRUE
+1098	R/score.R	105	bool flip	FALSE	TRUE
+1099	R/score.R	114	bool flip	FALSE	TRUE
+1100	R/score.R	124	bool flip	FALSE	TRUE
+1101	R/score.R	213	bool flip	FALSE	TRUE
+1102	R/score.R	394	bool flip	FALSE	TRUE
+1103	R/score.R	409	bool flip	FALSE	TRUE
+1104	R/scoreboard.R	48	relational/logical	&	|
+1105	R/scoreboard.R	50	relational/logical	&&	||
+1106	R/scoreboard.R	52	relational/logical	>	>=
+1107	R/scoreboard.R	52	numeric+1	0	1
+1108	R/scoreboard.R	52	relational/logical	&&	||
+1109	R/scoreboard.R	53	numeric+1	0	1
+1110	R/scoreboard.R	53	numeric+1	1	2
+1111	R/scoreboard.R	55	relational/logical	<=	<
+1112	R/scoreboard.R	60	relational/logical	==	!=
+1113	R/scoreboard.R	63	numeric+1	0	1
+1114	R/scoreboard.R	153	numeric+1	0	1
+1115	R/scoreboard.R	164	relational/logical	||	&&
+1116	R/scoreboard.R	164	relational/logical	==	!=
+1117	R/scoreboard.R	164	numeric+1	0	1
+1118	R/scoreboard.R	168	relational/logical	>	>=
+1119	R/scoreboard.R	168	numeric+1	0	1
+1120	R/scoreboard.R	170	function swap	unique	identity
+1121	R/scoreboard.R	188	numeric+1	0	1
+1122	R/scoreboard.R	203	numeric+1	0	1
+1123	R/scoreboard.R	240	function swap	sum	prod
+1124	R/scoreboard.R	253	relational/logical	||	&&
+1125	R/scoreboard.R	253	relational/logical	||	&&
+1126	R/scoreboard.R	253	function swap	any	all
+1127	R/scoreboard.R	253	relational/logical	<	<=
+1128	R/scoreboard.R	253	numeric+1	0	1
+1129	R/scoreboard.R	258	relational/logical	==	!=
+1130	R/scoreboard.R	258	numeric+1	1	2
+1131	R/scoreboard.R	258	relational/logical	&&	||
+1132	R/scoreboard.R	271	relational/logical	>	>=
+1133	R/scoreboard.R	271	numeric+1	0	1
+1134	R/scoreboard.R	337	numeric+1	0	1
+1135	R/scoreboard.R	341	relational/logical	||	&&
+1136	R/scoreboard.R	341	relational/logical	!=	==
+1137	R/scoreboard.R	341	numeric+1	1	2
+1138	R/scoreboard.R	341	relational/logical	||	&&
+1139	R/scoreboard.R	341	relational/logical	||	&&
+1140	R/scoreboard.R	341	relational/logical	<	<=
+1141	R/scoreboard.R	341	numeric+1	0	1
+1142	R/scoreboard.R	166	bool flip	FALSE	TRUE
+1143	R/scoreboard.R	171	bool flip	FALSE	TRUE
+1144	R/scoreboard.R	255	bool flip	FALSE	TRUE
+1145	R/scoreboard.R	267	bool flip	FALSE	TRUE
+1146	R/scoreboard.R	273	bool flip	FALSE	TRUE
+1147	R/scoreboard.R	343	bool flip	FALSE	TRUE
+1148	R/setsim.R	39	numeric+1	2147483647	2147483648
+1149	R/setsim.R	115	numeric+1	1	2
+1150	R/setsim.R	115	numeric+1	1	2
+1151	R/setsim.R	128	relational/logical	==	!=
+1152	R/setsim.R	128	numeric+1	0	1
+1153	R/setsim.R	128	relational/logical	||	&&
+1154	R/setsim.R	128	relational/logical	==	!=
+1155	R/setsim.R	128	numeric+1	0	1
+1156	R/setsim.R	129	numeric+1	0	1
+1157	R/setsim.R	138	relational/logical	==	!=
+1158	R/setsim.R	138	numeric+1	0	1
+1159	R/setsim.R	138	numeric+1	0	1
+1160	R/setsim.R	138	function swap	sum	prod
+1161	R/setsim.R	140	function swap	sum	prod
+1162	R/setsim.R	157	numeric+1	2	3
+1163	R/setsim.R	162	relational/logical	>	>=
+1164	R/setsim.R	162	numeric+1	0	1
+1165	R/setsim.R	168	relational/logical	==	!=
+1166	R/setsim.R	168	numeric+1	0	1
+1167	R/setsim.R	168	relational/logical	&	|
+1168	R/setsim.R	168	relational/logical	==	!=
+1169	R/setsim.R	168	numeric+1	0	1
+1170	R/setsim.R	168	numeric+1	1	2
+1171	R/setsim.R	168	numeric+1	0	1
+1172	R/setsim.R	172	numeric+1	0	1
+1173	R/setsim.R	172	numeric+1	1	2
+1174	R/setsim.R	220	numeric+1	1	2
+1175	R/setsim.R	220	numeric+1	1	2
+1176	R/setsim.R	242	numeric+1	1	2
+1177	R/setsim.R	257	relational/logical	||	&&
+1178	R/setsim.R	257	relational/logical	!=	==
+1179	R/setsim.R	257	relational/logical	||	&&
+1180	R/setsim.R	257	relational/logical	||	&&
+1181	R/setsim.R	257	relational/logical	<	<=
+1182	R/setsim.R	257	numeric+1	0	1
+1183	R/setsim.R	297	relational/logical	||	&&
+1184	R/setsim.R	297	relational/logical	!=	==
+1185	R/setsim.R	297	relational/logical	||	&&
+1186	R/setsim.R	297	relational/logical	||	&&
+1187	R/setsim.R	297	relational/logical	<	<=
+1188	R/setsim.R	297	numeric+1	1	2
+1189	R/setsim.R	303	function swap	unique	identity
+1190	R/setsim.R	305	function swap	unique	identity
+1191	R/setsim.R	312	relational/logical	>	>=
+1192	R/setsim.R	312	numeric+1	0	1
+1193	R/setsim.R	312	relational/logical	&&	||
+1194	R/setsim.R	313	numeric+1	1	2
+1195	R/setsim.R	313	relational/logical	>=	>
+1196	R/setsim.R	313	numeric+1	2	3
+1197	R/setsim.R	313	numeric+1	53	54
+1198	R/setsim.R	320	relational/logical	==	!=
+1199	R/setsim.R	320	numeric+1	0	1
+1200	R/setsim.R	336	relational/logical	==	!=
+1201	R/setsim.R	336	numeric+1	0	1
+1202	R/setsim.R	340	relational/logical	==	!=
+1203	R/setsim.R	392	function swap	unique	identity
+1204	R/setsim.R	403	relational/logical	==	!=
+1205	R/setsim.R	403	numeric+1	0	1
+1206	R/setsim.R	404	relational/logical	==	!=
+1207	R/setsim.R	404	numeric+1	0	1
+1208	R/setsim.R	410	numeric+1	1	2
+1209	R/setsim.R	426	relational/logical	==	!=
+1210	R/setsim.R	427	relational/logical	&	|
+1211	R/setsim.R	428	numeric+1	0	1
+1212	R/setsim.R	429	numeric+1	1	2
+1213	R/setsim.R	448	relational/logical	<	<=
+1214	R/setsim.R	448	numeric+1	1	2
+1215	R/setsim.R	448	relational/logical	||	&&
+1216	R/setsim.R	448	relational/logical	>	>=
+1217	R/setsim.R	448	relational/logical	||	&&
+1218	R/setsim.R	448	relational/logical	!=	==
+1219	R/setsim.R	448	numeric+1	0	1
+1220	R/setsim.R	456	numeric+1	1	2
+1221	R/setsim.R	456	numeric+1	1	2
+1222	R/setsim.R	519	relational/logical	||	&&
+1223	R/setsim.R	529	relational/logical	>	>=
+1224	R/setsim.R	529	numeric+1	0	1
+1225	R/setsim.R	542	function swap	unique	identity
+1226	R/setsim.R	560	relational/logical	==	!=
+1227	R/setsim.R	560	numeric+1	0	1
+1228	R/setsim.R	572	relational/logical	||	&&
+1229	R/setsim.R	572	relational/logical	==	!=
+1230	R/setsim.R	572	numeric+1	0	1
+1231	R/setsim.R	573	numeric+1	0	1
+1232	R/setsim.R	574	numeric+1	0	1
+1233	R/setsim.R	592	function swap	unique	identity
+1234	R/setsim.R	115	bool flip	FALSE	TRUE
+1235	R/setsim.R	220	bool flip	FALSE	TRUE
+1236	R/setsim.R	260	bool flip	FALSE	TRUE
+1237	R/setsim.R	263	bool flip	TRUE	FALSE
+1238	R/setsim.R	298	bool flip	FALSE	TRUE
+1239	R/setsim.R	303	bool flip	FALSE	TRUE
+1240	R/setsim.R	316	bool flip	FALSE	TRUE
+1241	R/setsim.R	326	bool flip	TRUE	FALSE
+1242	R/setsim.R	327	bool flip	TRUE	FALSE
+1243	R/setsim.R	379	bool flip	FALSE	TRUE
+1244	R/setsim.R	393	bool flip	FALSE	TRUE
+1245	R/setsim.R	394	bool flip	FALSE	TRUE
+1246	R/setsim.R	401	bool flip	FALSE	TRUE
+1247	R/setsim.R	402	bool flip	FALSE	TRUE
+1248	R/setsim.R	450	bool flip	FALSE	TRUE
+1249	R/setsim.R	457	bool flip	FALSE	TRUE
+1250	R/setsim.R	517	bool flip	FALSE	TRUE
+1251	R/setsim.R	521	bool flip	FALSE	TRUE
+1252	R/setsim.R	531	bool flip	FALSE	TRUE
+1253	R/setsim.R	543	bool flip	FALSE	TRUE
+1254	R/setsim.R	543	bool flip	FALSE	TRUE
+1255	R/setsim.R	566	bool flip	FALSE	TRUE
+1256	R/setsim.R	576	bool flip	FALSE	TRUE
+1257	R/setsim.R	577	bool flip	FALSE	TRUE
+1258	R/spatiotemporal.R	51	numeric+1	1	2
+1259	R/spatiotemporal.R	52	relational/logical	||	&&
+1260	R/spatiotemporal.R	52	relational/logical	!=	==
+1261	R/spatiotemporal.R	52	numeric+1	1	2
+1262	R/spatiotemporal.R	52	relational/logical	||	&&
+1263	R/spatiotemporal.R	52	relational/logical	||	&&
+1264	R/spatiotemporal.R	53	relational/logical	<=	<
+1265	R/spatiotemporal.R	53	numeric+1	0	1
+1266	R/spatiotemporal.R	57	relational/logical	&&	||
+1267	R/spatiotemporal.R	61	function swap	floor	ceiling
+1268	R/spatiotemporal.R	91	numeric+1	1	2
+1269	R/spatiotemporal.R	92	relational/logical	||	&&
+1270	R/spatiotemporal.R	92	relational/logical	!=	==
+1271	R/spatiotemporal.R	92	numeric+1	1	2
+1272	R/spatiotemporal.R	92	relational/logical	||	&&
+1273	R/spatiotemporal.R	92	relational/logical	||	&&
+1274	R/spatiotemporal.R	93	relational/logical	<	<=
+1275	R/spatiotemporal.R	93	numeric+1	1	2
+1276	R/spatiotemporal.R	97	function swap	sort	rev
+1277	R/spatiotemporal.R	97	function swap	unique	identity
+1278	R/spatiotemporal.R	175	numeric+1	1	2
+1279	R/spatiotemporal.R	175	numeric+1	4	5
+1280	R/spatiotemporal.R	176	numeric+1	1	2
+1281	R/spatiotemporal.R	176	numeric+1	1	2
+1282	R/spatiotemporal.R	177	numeric+1	20	21
+1283	R/spatiotemporal.R	182	relational/logical	>	>=
+1284	R/spatiotemporal.R	182	numeric+1	0	1
+1285	R/spatiotemporal.R	186	relational/logical	==	!=
+1286	R/spatiotemporal.R	186	numeric+1	0	1
+1287	R/spatiotemporal.R	204	function swap	sort	rev
+1288	R/spatiotemporal.R	204	function swap	unique	identity
+1289	R/spatiotemporal.R	205	relational/logical	||	&&
+1290	R/spatiotemporal.R	205	function swap	any	all
+1291	R/spatiotemporal.R	205	relational/logical	<	<=
+1292	R/spatiotemporal.R	205	numeric+1	1	2
+1293	R/spatiotemporal.R	210	relational/logical	||	&&
+1294	R/spatiotemporal.R	210	relational/logical	==	!=
+1295	R/spatiotemporal.R	210	numeric+1	0	1
+1296	R/spatiotemporal.R	210	relational/logical	||	&&
+1297	R/spatiotemporal.R	210	relational/logical	||	&&
+1298	R/spatiotemporal.R	210	function swap	any	all
+1299	R/spatiotemporal.R	210	relational/logical	<=	<
+1300	R/spatiotemporal.R	210	numeric+1	0	1
+1301	R/spatiotemporal.R	217	relational/logical	||	&&
+1302	R/spatiotemporal.R	217	relational/logical	!=	==
+1303	R/spatiotemporal.R	217	numeric+1	1	2
+1304	R/spatiotemporal.R	217	relational/logical	||	&&
+1305	R/spatiotemporal.R	217	relational/logical	||	&&
+1306	R/spatiotemporal.R	218	relational/logical	<	<=
+1307	R/spatiotemporal.R	218	numeric+1	1	2
+1308	R/spatiotemporal.R	224	function swap	sort	rev
+1309	R/spatiotemporal.R	224	function swap	unique	identity
+1310	R/spatiotemporal.R	230	function swap	sort	rev
+1311	R/spatiotemporal.R	230	function swap	unique	identity
+1312	R/spatiotemporal.R	231	function swap	sort	rev
+1313	R/spatiotemporal.R	231	function swap	unique	identity
+1314	R/spatiotemporal.R	240	numeric+1	1	2
+1315	R/spatiotemporal.R	241	numeric+1	1	2
+1316	R/spatiotemporal.R	248	function swap	unique	identity
+1317	R/spatiotemporal.R	294	numeric+1	0	1
+1318	R/spatiotemporal.R	295	numeric+1	0	1
+1319	R/spatiotemporal.R	296	numeric+1	0	1
+1320	R/spatiotemporal.R	306	relational/logical	<	<=
+1321	R/spatiotemporal.R	311	relational/logical	<=	<
+1322	R/spatiotemporal.R	315	function swap	sort	rev
+1323	R/spatiotemporal.R	319	function swap	unique	identity
+1324	R/spatiotemporal.R	328	numeric+1	1	2
+1325	R/spatiotemporal.R	329	numeric+1	1	2
+1326	R/spatiotemporal.R	331	relational/logical	==	!=
+1327	R/spatiotemporal.R	336	numeric+1	1	2
+1328	R/spatiotemporal.R	338	function swap	mean	median
+1329	R/spatiotemporal.R	338	relational/logical	==	!=
+1330	R/spatiotemporal.R	338	numeric+1	1	2
+1331	R/spatiotemporal.R	339	function swap	mean	median
+1332	R/spatiotemporal.R	339	numeric+1	1	2
+1333	R/spatiotemporal.R	340	function swap	mean	median
+1334	R/spatiotemporal.R	352	relational/logical	>	>=
+1335	R/spatiotemporal.R	352	numeric+1	0	1
+1336	R/spatiotemporal.R	353	relational/logical	>	>=
+1337	R/spatiotemporal.R	353	numeric+1	0	1
+1338	R/spatiotemporal.R	354	relational/logical	>	>=
+1339	R/spatiotemporal.R	354	numeric+1	0	1
+1340	R/spatiotemporal.R	355	relational/logical	>	>=
+1341	R/spatiotemporal.R	355	numeric+1	0	1
+1342	R/spatiotemporal.R	54	bool flip	FALSE	TRUE
+1343	R/spatiotemporal.R	59	bool flip	FALSE	TRUE
+1344	R/spatiotemporal.R	94	bool flip	FALSE	TRUE
+1345	R/spatiotemporal.R	179	bool flip	FALSE	TRUE
+1346	R/spatiotemporal.R	184	bool flip	FALSE	TRUE
+1347	R/spatiotemporal.R	187	bool flip	FALSE	TRUE
+1348	R/spatiotemporal.R	200	bool flip	FALSE	TRUE
+1349	R/spatiotemporal.R	207	bool flip	FALSE	TRUE
+1350	R/spatiotemporal.R	212	bool flip	FALSE	TRUE
+1351	R/spatiotemporal.R	219	bool flip	FALSE	TRUE
+1352	R/spatiotemporal.R	232	bool flip	FALSE	TRUE
+1353	R/spatiotemporal.R	239	bool flip	TRUE	FALSE
+1354	R/spatiotemporal.R	272	bool flip	FALSE	TRUE
+1355	R/spatiotemporal.R	298	bool flip	TRUE	FALSE
+1356	R/spatiotemporal.R	320	bool flip	FALSE	TRUE
+1357	R/spatiotemporal.R	356	bool flip	FALSE	TRUE
+1358	R/transform_transaction_to_master.R	76	relational/logical	==	!=
+1359	R/transform_transaction_to_master.R	76	numeric+1	0	1
+1360	R/transform_transaction_to_master.R	106	function swap	sort	rev
+1361	R/transform_transaction_to_master.R	80	bool flip	FALSE	TRUE
+1362	R/unicity.R	44	relational/logical	>	>=
+1363	R/unicity.R	44	numeric+1	0	1
+1364	R/unicity.R	48	relational/logical	==	!=
+1365	R/unicity.R	48	numeric+1	0	1
+1366	R/unicity.R	49	numeric+1	0	1
+1367	R/unicity.R	52	relational/logical	==	!=
+1368	R/unicity.R	52	numeric+1	0	1
+1369	R/unicity.R	55	relational/logical	==	!=
+1370	R/unicity.R	55	numeric+1	1	2
+1371	R/unicity.R	62	function swap	mean	median
+1372	R/unicity.R	62	relational/logical	|	&
+1373	R/unicity.R	107	numeric+1	100	101
+1374	R/unicity.R	111	relational/logical	||	&&
+1375	R/unicity.R	111	relational/logical	==	!=
+1376	R/unicity.R	111	numeric+1	0	1
+1377	R/unicity.R	115	relational/logical	>	>=
+1378	R/unicity.R	115	numeric+1	0	1
+1379	R/unicity.R	119	relational/logical	>	>=
+1380	R/unicity.R	119	numeric+1	0	1
+1381	R/unicity.R	125	function swap	sort	rev
+1382	R/unicity.R	125	function swap	unique	identity
+1383	R/unicity.R	126	relational/logical	<	<=
+1384	R/unicity.R	126	numeric+1	1	2
+1385	R/unicity.R	126	relational/logical	|	&
+1386	R/unicity.R	126	relational/logical	>	>=
+1387	R/unicity.R	127	relational/logical	>	>=
+1388	R/unicity.R	127	numeric+1	0	1
+1389	R/unicity.R	131	relational/logical	||	&&
+1390	R/unicity.R	131	relational/logical	!=	==
+1391	R/unicity.R	131	numeric+1	1	2
+1392	R/unicity.R	131	relational/logical	||	&&
+1393	R/unicity.R	131	relational/logical	<	<=
+1394	R/unicity.R	131	numeric+1	1	2
+1395	R/unicity.R	139	relational/logical	<=	<
+1396	R/unicity.R	146	function swap	sort	rev
+1397	R/unicity.R	150	function swap	unique	identity
+1398	R/unicity.R	157	numeric+1	1	2
+1399	R/unicity.R	164	function swap	mean	median
+1400	R/unicity.R	167	relational/logical	>	>=
+1401	R/unicity.R	167	numeric+1	1	2
+1402	R/unicity.R	167	numeric+1	0	1
+1403	R/unicity.R	168	function swap	min	max
+1404	R/unicity.R	169	function swap	max	min
+1405	R/unicity.R	41	bool flip	FALSE	TRUE
+1406	R/unicity.R	46	bool flip	FALSE	TRUE
+1407	R/unicity.R	62	bool flip	TRUE	FALSE
+1408	R/unicity.R	109	bool flip	FALSE	TRUE
+1409	R/unicity.R	113	bool flip	FALSE	TRUE
+1410	R/unicity.R	116	bool flip	FALSE	TRUE
+1411	R/unicity.R	121	bool flip	FALSE	TRUE
+1412	R/unicity.R	129	bool flip	FALSE	TRUE
+1413	R/unicity.R	132	bool flip	FALSE	TRUE
+1414	R/unicity.R	143	bool flip	TRUE	FALSE
+1415	R/unicity.R	151	bool flip	FALSE	TRUE
+1416	R/unicity.R	170	bool flip	FALSE	TRUE

@@ -1,0 +1,47 @@
+############ (A) one sentinel value kills the default normalisation ############
+ANON AGE sentinel                  range*       rank     zscore |  AGE alone SPEND alone
+none (clean)                       0.2875     0.2675     0.2675 |     0.1127     0.0550
+1 record AGE = 120                 0.2725     0.2675     0.2675 |     0.1127     0.0550
+1 record AGE = 999                 0.1800     0.2675     0.2075 |     0.1127     0.0550
+1 record AGE = 9999                0.0800     0.2675     0.1000 |     0.1127     0.0550
+1 record AGE = 99999               0.0550     0.2675     0.0550 |     0.1127     0.0550
+  * range is the DEFAULT of score_multi() / score_by_knowledge().
+  warnings from the default call: NONE
+  axis report:
+axis informativeness (2 axis/axes, alpha = 0.05)
+  AGE                  success 0.1127  baseline 0.0050  lift  22.54x  rank 0.050  z  22.18  p = 0.0000  informative
+  SPEND_MEAN           success 0.0550  baseline 0.0050  lift  11.00x  rank 0.147  z  17.41  p = 0.0000  informative
+
+  printed evaluation of the broken default:
+reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+  success rate   : 0.0800 exact | simulated mean 0.0800 sd 0.0000 range [0.0800, 0.0800] over 20 seeds
+  baseline       : random 0.0050 | mode 0.0050   (lift vs random: 16.00x)
+  top-k hit rate : k=1 0.0800  k=5 0.2450  k=10 0.3400
+  max per-record risk: 1.0000
+  precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    conf >= 0.3543 : attack 1/200 (0.5%)  precision 1.0000  recall 0.0050
+    conf >= 0.3346 : attack 2/200 (1.0%)  precision 0.5000  recall 0.0050
+    conf >= 0.2286 : attack 3/200 (1.5%)  precision 0.3333  recall 0.0050
+    conf >= 0.1748 : attack 4/200 (2.0%)  precision 0.5000  recall 0.0100
+    conf >= 0.1549 : attack 5/200 (2.5%)  precision 0.4000  recall 0.0100
+    ... 195 more threshold(s)
+
+############ (B) Scoreboard-RH on sparse data ############
+  score_scoreboard + reid_evaluate  1.0000
+  match_scoreboard_rh(phi = 0   )    1.0000
+  match_scoreboard_rh(phi = 0.5 )    1.0000
+  match_scoreboard_rh(phi = 1.5 )    1.0000
+  match_scoreboard_rh(phi = 3   )    0.9750
+  match_greedy on the same scores   1.0000
+  score_jaccard on the same people  1.0000
+
+############ (C) candidate-reduction defaults ############
+  full join                              0.9200
+  top_k_candidates(k=1   ties=keep  ) 0.9200   recall 0.9400  blocked-flag TRUE
+  top_k_candidates(k=1   ties=random) 0.9150   recall 0.9150  blocked-flag TRUE
+  top_k_candidates(k=5   ties=keep  ) 0.9200   recall 1.0000  blocked-flag TRUE
+  top_k_candidates(k=5   ties=random) 0.9200   recall 1.0000  blocked-flag TRUE
+  top_k_candidates(k=10  ties=keep  ) 0.9200   recall 1.0000  blocked-flag TRUE
+  top_k_candidates(k=10  ties=random) 0.9200   recall 1.0000  blocked-flag TRUE
+  top_k_candidates(k=50  ties=keep  ) 0.9200   recall 1.0000  blocked-flag TRUE
+  top_k_candidates(k=50  ties=random) 0.9200   recall 1.0000  blocked-flag TRUE

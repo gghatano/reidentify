@@ -1,0 +1,23 @@
+R: R version 4.6.1 (2026-06-24 ucrt) 
+date: 2026-07-31 22:49:17 
+
+== figure 1: a rule-following generalisation still identifies people ==
+  candidates offered            : 200
+  surviving candidates          : median 3, mean 2.86, max 6
+  records narrowed to 1 person  : 17.0%
+  records narrowed to <= 3      : 71.5%
+  records narrowed to <= 5      : 94.0%
+  identified (correct method)   : 0.4550
+  random-guess baseline         : 0.0050  (lift 91x)
+
+== figure 2: the same data, measured the wrong way ==
+  identified (wrong method)     : 0.1169
+  fraction of the real figure   : 0.26
+
+== figure 3: set-valued data, measured two ways ==
+  distribution distance         : 0.0700
+  set overlap (Jaccard)         : 0.9447
+  ratio                         : 13.5x
+
+== package state quoted on the page ==
+  exported functions            : 55
