@@ -448,3 +448,22 @@ test_that("unicity() rejects a matrix column rather than mis-encoding it", {
   d$M <- matrix(1:6, nrow = 3)
   expect_error(unicity_fraction(d, c("A", "M")), regexp = "one value per record")
 })
+
+test_that("the tolerant key still handles NA, NaN, Inf and non-double columns", {
+  ## snap_tied_values() runs before the equivalence coding, so the special
+  ## values have to survive it: NA and NaN are distinct classes of their own,
+  ## Inf is not fused with a finite value, and columns that are exact already
+  ## (integer, logical, character) skip the snapping entirely.
+  expect_equal(unicity_fraction(data.frame(V = c(NA_real_, NaN, 1, 1, 2)), "V"), 0.6)
+  expect_equal(unicity_fraction(data.frame(V = c(NA_real_, NA_real_)), "V"), 0)
+  expect_equal(unicity_fraction(data.frame(V = c(Inf, Inf, -Inf, 1)), "V"), 0.5)
+  expect_equal(unicity_fraction(data.frame(V = 1.5), "V"), 1)
+  expect_equal(unicity_fraction(data.frame(V = c(1L, 2L, 2L)), "V"), 1 / 3)
+  expect_equal(unicity_fraction(data.frame(V = c(TRUE, FALSE, NA)), "V"), 1)
+})
+
+test_that("unicity_fraction() and unicity() validate the tolerance", {
+  d <- data.frame(A = c(1, 2, 3))
+  expect_error(unicity_fraction(d, "A", tolerance = -1))
+  expect_error(unicity(d, "A", tolerance = -1))
+})
