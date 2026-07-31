@@ -4,8 +4,26 @@
 \name{reidentify-package}
 \alias{reidentify}
 \alias{reidentify-package}
-\title{reidentify: Reidentify and check the safety of Anonymized data}
+\title{reidentify: Measure Re-Identification Risk in Anonymized Data}
 \description{
-Check the safety of Anonymized data by estimating reid-attack success rate.
+Estimates how reliably the records of an anonymized data set can be linked back to the individuals in the original data. Per-attribute scores are provided for categorical, numeric, set-valued and spatio-temporal variables, combined across attributes, and turned into an assignment by greedy or optimal ('Hungarian') matching; generalized values are also checked for consistency with the original ones. Blocking keeps large data tractable. Results are reported as a success rate next to a random baseline, together with per-record risk, uniqueness and a precision-recall curve, so that a measurement which has quietly stopped working is less likely to read as a safe one.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://gghatano.github.io/reidentify/}
+  \item \url{https://github.com/gghatano/reidentify}
+  \item Report bugs at \url{https://github.com/gghatano/reidentify/issues}
+}
+
+}
+\author{
+\strong{Maintainer}: @gg_hatano \email{adad0405+reidentify@gmail.com}
+
+Authors:
+\itemize{
+  \item @gg_hatano \email{adad0405+reidentify@gmail.com}
+}
+
 }
 \keyword{internal}
