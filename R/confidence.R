@@ -141,6 +141,10 @@
 reid_confidence <- function(scores, method = c("margin", "tie")) {
   method <- match.arg(method)
   score_type <- validate_reid_scores(scores, "scores")
+  ## TIE_SIZE counts rows and SD_SCORE is taken over rows, so a candidate pair
+  ## listed twice corrupts both -- the same defect, on the same contract, as
+  ## Issue #60 in match_greedy() / reid_evaluate().
+  validate_unique_candidate_pairs(scores, "reid_confidence")
 
   value <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
   if (anyNA(value)) {

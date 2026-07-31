@@ -260,6 +260,11 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
                           confidence = c("margin", "tie")) {
   confidence <- match.arg(confidence)
   validate_reid_scores(scores, "scores")
+  ## Issue #60: this has to be checked here and not left to the cross-check
+  ## between success_analytic and success_mean, because a duplicated candidate
+  ## pair moves both of them the same way. See
+  ## validate_unique_candidate_pairs().
+  validate_unique_candidate_pairs(scores, "reid_evaluate")
 
   if (length(seeds) < 2) {
     stop("reid_evaluate(): need at least 2 seeds to report a standard ",

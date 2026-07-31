@@ -470,3 +470,110 @@ test_that("a genuinely blocked set still prints the #36 banner unchanged (#56)",
   expect_match(out, "BLOCKED")
   expect_false(grepl("NOT MEASURABLE", out))
 })
+
+## ---------------------------------------------------------------------------
+## Issue #60: a duplicated candidate pair breaks the tie model, and breaks it
+## in the one way the package's own self-check cannot see
+##
+## An attacker's candidate list is a set. Listing (ANON 1, RAW 2) twice must
+## not give RAW 2 two thirds of the draw. The analytic path counts rows
+## (reid_per_anon: sum(v == true_score)), the simulated path shuffles rows
+## (resolve_min_distance_ties), and the random baseline is 1 / N_CANDIDATES --
+## all three read the same inflated multiset, so all three move together and
+## `lift` does not budge. Measured on the two-record fixture below:
+##
+##            analytic  simulated(200 seeds)  ANON1 RISK
+##   correct    0.5000        0.4925            0.5000
+##   +1 dup     0.4167        0.3950            0.3333   <- both "agree"
+##
+## The correct answer for ANON1 is 1/2: the candidate SET is {RAW1, RAW2}.
+## ---------------------------------------------------------------------------
+
+make_two_way_tie <- function() {
+  ## ANON 1 and 2 both sit exactly between RAW 1 and RAW 2, so every candidate
+  ## ties and every record's true risk is 1/2.
+  raw <- data.frame(ROW_NUMBER = 1:2, V = c(0, 10))
+  anon <- data.frame(ROW_NUMBER = 1:2, V = c(5, 5))
+  score_num(join_raw_anon_data(raw, anon), "V")
+}
+
+duplicate_pair <- function(s, anon_row, raw_row) {
+  extra <- s[s$ANON_ROW_NUMBER == anon_row & s$RAW_ROW_NUMBER == raw_row, ,
+             drop = FALSE]
+  out <- rbind(as.data.frame(s), extra)
+  attr(out, "score_type") <- attr(s, "score_type") %||% "distance"
+  class(out) <- unique(c("reid_scores", class(out)))
+  out
+}
+
+test_that("reid_evaluate() refuses a duplicated candidate pair (#60)", {
+  s <- make_two_way_tie()
+  ## the correct answer, for the record
+  e <- reid_evaluate(s, seeds = 1:20, top_k = 1)
+  expect_equal(e$success_analytic, 0.5)
+  expect_equal(e$per_record$RISK[e$per_record$ANON_ROW_NUMBER == 1], 0.5)
+
+  bad <- duplicate_pair(s, anon_row = 1, raw_row = 2)
+  expect_error(reid_evaluate(bad, seeds = 1:20, top_k = 1), regexp = "duplicated")
+  expect_error(reid_evaluate(bad, seeds = 1:20, top_k = 1), regexp = "SET")
+})
+
+test_that("match_greedy() refuses a duplicated candidate pair (#60)", {
+  s <- make_two_way_tie()
+  expect_s3_class(match_greedy(s), "data.frame")
+  expect_error(match_greedy(duplicate_pair(s, 1, 2)), regexp = "duplicated")
+})
+
+test_that("reid_confidence() refuses a duplicated candidate pair (#60)", {
+  s <- make_two_way_tie()
+  expect_s3_class(reid_confidence(s), "data.frame")
+  expect_error(reid_confidence(duplicate_pair(s, 1, 2)), regexp = "duplicated")
+})
+
+test_that("the four entry points now agree on the same contract (#60)", {
+  ## match_optimal / combine_scores / reid_result already refused this; the
+  ## point of #60 is that reid_evaluate / match_greedy did not.
+  s <- make_two_way_tie()
+  bad <- duplicate_pair(s, 1, 2)
+
+  expect_error(match_optimal(bad), regexp = "duplicated")
+  expect_error(combine_scores(list(bad)), regexp = "duplicated")
+  expect_error(reid_evaluate(bad, seeds = 1:3), regexp = "duplicated")
+  expect_error(match_greedy(bad), regexp = "duplicated")
+})
+
+test_that("duplicated ROW_NUMBER in the input data is caught at evaluation (#60)", {
+  ## The score_* route: nothing between join_raw_anon_data() and reid_evaluate()
+  ## looked at row-number uniqueness, so repeated row numbers -- a routine CSV
+  ## accident -- reached the tie model as duplicated candidate pairs.
+  raw <- data.frame(ROW_NUMBER = c(1, 2, 3, 3, 4, 5), V = c(10, 20, 30, 31, 40, 50))
+  anon <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+  s <- score_num(join_raw_anon_data(raw, anon), "V")
+
+  expect_gt(sum(duplicated(paste(s$ANON_ROW_NUMBER, s$RAW_ROW_NUMBER))), 0)
+  expect_error(reid_evaluate(s, seeds = 1:3), regexp = "duplicated")
+  expect_error(match_greedy(s), regexp = "duplicated")
+
+  ## The ANON side too, where the old code silently evaluated 4 records
+  ## instead of 5 and reported a success rate of 1.
+  raw2 <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+  anon2 <- data.frame(ROW_NUMBER = c(1, 2, 3, 3, 4), V = c(10, 20, 30, 31, 40))
+  s2 <- score_num(join_raw_anon_data(raw2, anon2), "V")
+  expect_error(reid_evaluate(s2, seeds = 1:3), regexp = "duplicated")
+})
+
+test_that("an ordinary score table is not rejected -- no false positive (#60)", {
+  for (s in list(score_num(make_uniq3_tied3(), "V"),
+                 score_num(make_all_tied(), "V"),
+                 score_num(make_unique(7), "V"))) {
+    expect_s3_class(reid_evaluate(s, seeds = 1:3), "reid_evaluation")
+    expect_s3_class(match_greedy(s), "data.frame")
+    expect_s3_class(reid_confidence(s), "data.frame")
+  }
+  ## and a legitimately blocked (sparse) candidate set is still fine
+  raw <- data.frame(ROW_NUMBER = 1:6, ZIP = c("A", "A", "B", "B", "C", "C"),
+                    V = c(1, 2, 3, 4, 5, 6), stringsAsFactors = FALSE)
+  cand <- block_candidates(raw, raw, keys = "ZIP")
+  expect_s3_class(reid_evaluate(score_num(cand, "V"), seeds = 1:3),
+                  "reid_evaluation")
+})

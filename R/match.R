@@ -13,6 +13,58 @@
 ## Margin/eccentricity-based confidence is Issue #16.
 ## ---------------------------------------------------------------------------
 
+#' reject a score table that lists the same candidate pair more than once
+#'
+#' An attacker's candidate list is a **set**. If (ANON 1, RAW 2) appears twice,
+#' RAW 2 is still one guess, and a uniform draw among the tied best candidates
+#' must still give it probability `1 / (number of distinct candidates)`. Both
+#' tie paths in this package count *rows* instead: `resolve_min_distance_ties()`
+#' shuffles every row of the tie group, and `reid_per_anon()` computes
+#' `sum(v == true_score)` over rows. A duplicated wrong candidate therefore
+#' takes a share of the draw it is not entitled to, and the reported risk falls.
+#'
+#' The reason this needs an explicit guard rather than being caught downstream
+#' is Issue #60: the analytic value and the simulated value are wrong **in the
+#' same direction and by the same amount**, because they read the same inflated
+#' multiset. The random baseline is `1 / N_CANDIDATES`, which is inflated
+#' identically, so `lift` does not move either. The "would I notice if this
+#' broke" cross-check that `docs/lessons-learned.md` section 2 asks for is
+#' precisely what fails here, and it fails silently, downwards.
+#'
+#' `match_optimal()`, `combine_scores()` and `reid_result()` already refused
+#' duplicated input. This is the same test, so that `match_greedy()` and
+#' `reid_evaluate()` -- the two entry points that were still permissive -- hold
+#' to the same contract.
+#'
+#' @param scores a score table, already through [validate_reid_scores()]
+#' @param fn_name calling function, for the message
+#'
+#' @return `scores`, invisibly
+#'
+#' @keywords internal
+validate_unique_candidate_pairs <- function(scores, fn_name) {
+  key <- paste(scores$ANON_ROW_NUMBER, scores$RAW_ROW_NUMBER, sep = "\r")
+  if (anyDuplicated(key) > 0) {
+    dup <- duplicated(key)
+    first <- which(dup)[1]
+    stop(fn_name, "(): `scores` contains duplicated (ANON_ROW_NUMBER, ",
+         "RAW_ROW_NUMBER) pairs; each candidate pair must appear exactly once. ",
+         sum(dup), " repeated row(s); e.g. (ANON ",
+         format(scores$ANON_ROW_NUMBER[first]), ", RAW ",
+         format(scores$RAW_ROW_NUMBER[first]), ") appears ",
+         sum(key == key[first]), " times. An attacker's candidates are a SET, ",
+         "so a pair listed twice must not take twice the share of the ",
+         "tie-break -- and when it does, the analytic rate, the simulated ",
+         "rate and the random baseline are all wrong in the same direction, ",
+         "so their agreement does not reveal it (Issue #60). Repeated row ",
+         "numbers in `raw` or `anon` produce this: deduplicate before ",
+         "join_raw_anon_data(). So do unioned candidate passes: drop the ",
+         "pairs the passes share.",
+         call. = FALSE)
+  }
+  invisible(scores)
+}
+
 #' assign each ANON record to its best-scoring RAW record, independently
 #'
 #' For every ANON record this picks the RAW record with the best (by default:
@@ -80,6 +132,7 @@ match_greedy <- function(scores, seed = 0L, confidence = c("margin", "tie"),
                          min_confidence = 0) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
+  validate_unique_candidate_pairs(scores, "match_greedy")
 
   ## Internally everything is minimised. A similarity is negated rather than
   ## inverted so the transformation is monotone and never divides by zero.
@@ -338,12 +391,7 @@ match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
          "silently change the reported reidentification rate.", call. = FALSE)
   }
 
-  key <- paste(scores$ANON_ROW_NUMBER, scores$RAW_ROW_NUMBER, sep = "\r")
-  if (anyDuplicated(key) > 0) {
-    stop("match_optimal(): `scores` contains duplicated (ANON_ROW_NUMBER, ",
-         "RAW_ROW_NUMBER) pairs; each candidate pair must appear exactly once.",
-         call. = FALSE)
-  }
+  validate_unique_candidate_pairs(scores, "match_optimal")
 
   if (is.null(block)) {
     parts <- list(seq_len(nrow(scores)))
