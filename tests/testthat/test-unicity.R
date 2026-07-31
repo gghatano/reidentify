@@ -241,3 +241,151 @@ test_that("unicity is a LOWER bound on the attack's expected success rate, not a
   ## certainty, i.e. risk exactly 1
   expect_equal(mean(e$per_record$RISK == 1), u_full)
 })
+
+## ---------------------------------------------------------------------------
+## #58: the key must not flatten distinct records onto one value
+##
+## Every failure below reported a *lower* unicity than the truth. A safety
+## tool erring towards "looks anonymous" is the failure mode of
+## docs/lessons-learned.md section 2, so each case is pinned down here.
+## ---------------------------------------------------------------------------
+
+test_that("a value containing the field separator does not collide", {
+  ## The reproduction from #58: unicity(A) = 1 but unicity(A, B) = 0, which is
+  ## mathematically impossible -- adding an attribute can only refine classes.
+  d <- data.frame(A = c("x", "x\ry"), B = c("y\rz", "z"),
+                  stringsAsFactors = FALSE)
+
+  expect_equal(unicity_fraction(d, "A"), 1)
+  expect_equal(unicity_fraction(d, "B"), 1)
+  expect_equal(unicity_fraction(d, c("A", "B")), 1)
+
+  ## and the other control characters, plus non-ASCII
+  for (sep in c("\r", "\n", "\t", "\u3000")) {
+    dd <- data.frame(A = c("x", paste0("x", sep, "y")),
+                     B = c(paste0("y", sep, "z"), "z"),
+                     stringsAsFactors = FALSE)
+    expect_equal(unicity_fraction(dd, c("A", "B")), 1, info = sep)
+  }
+
+  non_ascii <- data.frame(A = c("\u3042", "\u3044"), B = c("\u3046", "\u3046"),
+                          stringsAsFactors = FALSE)
+  expect_equal(unicity_fraction(non_ascii, c("A", "B")), 1)
+})
+
+test_that("doubles that print the same are still distinct records", {
+  ## as.character() prints 15 significant digits, so both pairs printed
+  ## identically and every record looked non-unique.
+  expect_equal(unicity_fraction(data.frame(V = c(0.1 + 0.2, 0.3)), "V"), 1)
+  expect_equal(unicity_fraction(data.frame(V = c(1e15, 1e15 + 1)), "V"), 1)
+
+  ## exactly equal values are still a tie, of course
+  expect_equal(unicity_fraction(data.frame(V = c(0.3, 0.3)), "V"), 0)
+})
+
+test_that("unicity agrees with the score layer on what \"the same value\" means", {
+  ## The package must not hold two definitions of equality that disagree on
+  ## real data: reid_evaluate() called these two records distinguishable
+  ## (TIE_SIZE 1, success 1) while unicity_fraction() called them a tie.
+  v <- c(0.1 + 0.2, 0.3)
+  d <- data.frame(ROW_NUMBER = 1:2, V = v)
+  j <- join_raw_anon_data(d, d)
+
+  expect_equal(unicity_fraction(data.frame(V = v), "V"), 1)
+  expect_equal(reid_evaluate(score_num(j, "V"), seeds = 1:2)$success_analytic, 1)
+  expect_equal(reid_confidence(score_num(j, "V"))$TIE_SIZE, c(1, 1))
+})
+
+test_that("NA is not the string \"NA\"", {
+  d <- data.frame(A = c(NA, "NA"), B = c("z", "z"), stringsAsFactors = FALSE)
+  expect_equal(unicity_fraction(d, c("A", "B")), 1)
+
+  ## NA is a value in its own right: two NAs on the same column tie
+  d2 <- data.frame(A = c(NA, NA), B = c("z", "z"), stringsAsFactors = FALSE)
+  expect_equal(unicity_fraction(d2, c("A", "B")), 0)
+
+  ## NA and NaN are different values, and neither is the string
+  d3 <- data.frame(V = c(NA_real_, NaN))
+  expect_equal(unicity_fraction(d3, "V"), 1)
+})
+
+test_that("unicity is monotone under adding attributes (property test)", {
+  ## unicity(S) <= unicity(T) whenever S is contained in T. This is not an
+  ## empirical tendency: the classes of T refine those of S, and refining a
+  ## class of size 1 cannot destroy it. Any key collision breaks it, which is
+  ## how #58 was caught, so it is fixed here as a property.
+  ##
+  ## NEGATIVE CONTROL. A generator of "ordinary" random columns does NOT catch
+  ## this: it was run against the pre-#58 implementation and produced 0
+  ## violations in 2698 checks, because a monotonicity break needs two rows
+  ## whose *concatenations* coincide while the rows differ -- independent draws
+  ## from disjoint alphabets essentially never do that. The alphabet below puts
+  ## the separator at the start, the end and the middle of the values, so the
+  ## field boundary can shift between rows. Against the pre-#58
+  ## implementation this generator produces 33 violations in 2827 checks; the
+  ## fixed one produces 0. A property test that cannot fail is not a test.
+  set.seed(58)
+
+  ## values that can shift the field boundary: "a\r" + sep + "\rb" and
+  ## "a" + sep + "\r\rb" both flatten to "a\r\r\rb"
+  alphabet <- c("", "a", "\r", "a\r", "\ra", "\r\r")
+
+  draw_column <- function(n) {
+    switch(
+      sample.int(6L, 1L),
+      sample(alphabet, n, replace = TRUE),
+      sample(alphabet, n, replace = TRUE),
+      sample(alphabet, n, replace = TRUE),
+      sample(alphabet, n, replace = TRUE),
+      sample(c(1, 2, 0.1 + 0.2, 0.3, 1e15, 1e15 + 1, NA), n, replace = TRUE),
+      sample(c("a", "NA", NA), n, replace = TRUE)
+    )
+  }
+
+  ## Violations are collected rather than asserted one by one, so a failure
+  ## names the data set and the pair that broke instead of drowning in a few
+  ## thousand identical expectations.
+  violations <- character(0)
+  n_checks <- 0L
+
+  for (i in seq_len(200)) {
+    n <- sample(2:8, 1)
+    p <- sample(2:4, 1)
+    dat <- as.data.frame(
+      stats::setNames(lapply(seq_len(p), function(k) draw_column(n)),
+                      paste0("C", seq_len(p))),
+      stringsAsFactors = FALSE
+    )
+    cols <- names(dat)
+
+    subsets <- unlist(
+      lapply(seq_along(cols), function(k) {
+        apply(utils::combn(length(cols), k), 2, function(idx) list(cols[idx]))
+      }),
+      recursive = FALSE
+    )
+    subsets <- lapply(subsets, function(x) x[[1]])
+
+    for (s in subsets) {
+      u_s <- unicity_fraction(dat, s)
+      for (extra in setdiff(cols, s)) {
+        u_t <- unicity_fraction(dat, c(s, extra))
+        n_checks <- n_checks + 1L
+        if (u_t < u_s - 1e-12) {
+          violations <- c(violations, paste0(
+            "data set ", i, ": unicity(", paste(s, collapse = ","), ") = ", u_s,
+            " > unicity(", paste(c(s, extra), collapse = ","), ") = ", u_t))
+        }
+      }
+    }
+  }
+
+  expect_gt(n_checks, 1000L)
+  expect_equal(violations, character(0))
+})
+
+test_that("unicity() rejects a matrix column rather than mis-encoding it", {
+  d <- data.frame(A = 1:3)
+  d$M <- matrix(1:6, nrow = 3)
+  expect_error(unicity_fraction(d, c("A", "M")), regexp = "one value per record")
+})

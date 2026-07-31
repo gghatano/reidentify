@@ -23,6 +23,19 @@
 #' A record is unique with respect to `columns` when no other record in `dat`
 #' carries exactly the same combination of values on those columns.
 #'
+#' "The same value" means R's own equality, as used by [match()]: two doubles
+#' are the same only if they are equal to the last bit (`0.1 + 0.2` and `0.3`
+#' are *different*), `NA` is its own value and is not the string `"NA"`, and no
+#' value is ever confused with another because of how it prints. This matches
+#' the score layer, where `score_num()` also gives `0.1 + 0.2` and `0.3` a
+#' non-zero distance.
+#'
+#' Adding attributes can never lower the result: the equivalence classes of a
+#' larger attribute set refine those of a smaller one, and refining a class of
+#' size 1 cannot destroy it. `unicity_fraction(dat, S) <= unicity_fraction(dat,
+#' T)` holds for every `S` contained in `T`, and is pinned down as a property
+#' test.
+#'
 #' @param dat a data frame with one row per individual (master form)
 #' @param columns character vector of column names
 #'
@@ -55,11 +68,54 @@ unicity_fraction <- function(dat, columns) {
     return(as.numeric(nrow(dat) == 1))
   }
 
-  ## "\r" is used as the field separator because it cannot appear in the
-  ## colon-joined distribution strings this package produces, so two different
-  ## value combinations cannot be flattened into the same key.
-  key <- do.call(paste, c(lapply(columns, function(cn) as.character(dat[[cn]])), sep = "\r"))
+  key <- unicity_key(dat, columns)
   mean(!(duplicated(key) | duplicated(key, fromLast = TRUE)))
+}
+
+#' collision-free key for a combination of column values
+#'
+#' Encodes each column as equivalence-class codes and joins the codes, so that
+#' two rows share a key exactly when they agree on every column.
+#'
+#' The obvious implementation -- `paste(as.character(col1), as.character(col2),
+#' sep = "\\r")`, which is also what `duplicated.data.frame()` does -- has three
+#' failure modes, and **all three collapse distinct records onto one key** and
+#' therefore report a *lower* unicity than the truth. That is the safe-looking
+#' direction, which a safety-checking tool must never take quietly
+#' (docs/lessons-learned.md section 2):
+#'
+#' 1. a value can contain the separator. `A = c("x", "x\\ry")` with
+#'    `B = c("y\\rz", "z")` yields `"x\\ry\\rz"` for both rows; a carriage
+#'    return reaches a column routinely, e.g. from a CRLF-quoted CSV field.
+#' 2. `as.character()` prints a double to 15 significant digits, so
+#'    `0.1 + 0.2` and `0.3`, or `1e15` and `1e15 + 1`, produce the same text.
+#' 3. `NA` prints as `"NA"`, which is also a perfectly ordinary string value.
+#'
+#' `match(x, unique(x))` avoids all three: it compares the values themselves
+#' rather than their printed form, keeps `NA` as a class of its own, and
+#' returns small integers whose decimal representation cannot contain the
+#' separator -- so joining the codes is injective.
+#'
+#' This also makes "two values are the same" mean the same thing here as it
+#' does in the score layer: `score_num()` gives `0.1 + 0.2` and `0.3` a
+#' non-zero distance, and now so does `unicity_fraction()`.
+#'
+#' @param dat a data frame
+#' @param columns character vector of column names, at least one
+#'
+#' @return a character vector with one key per row of `dat`
+#'
+#' @keywords internal
+unicity_key <- function(dat, columns) {
+  codes <- lapply(columns, function(cn) {
+    v <- dat[[cn]]
+    if (!is.null(dim(v))) {
+      stop("column `", cn, "` is a matrix or data frame column; unicity needs ",
+           "one value per record.", call. = FALSE)
+    }
+    match(v, unique(v))
+  })
+  do.call(paste, c(codes, list(sep = "\r")))
 }
 
 #' measure unicity as a function of the number of known attributes

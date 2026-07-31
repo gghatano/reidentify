@@ -20,6 +20,20 @@ the proportion of rows of `dat` that are unique on `columns`, in
 A record is unique with respect to `columns` when no other record in `dat`
 carries exactly the same combination of values on those columns.
 }
+\details{
+"The same value" means R's own equality, as used by [match()]: two doubles
+are the same only if they are equal to the last bit (`0.1 + 0.2` and `0.3`
+are *different*), `NA` is its own value and is not the string `"NA"`, and no
+value is ever confused with another because of how it prints. This matches
+the score layer, where `score_num()` also gives `0.1 + 0.2` and `0.3` a
+non-zero distance.
+
+Adding attributes can never lower the result: the equivalence classes of a
+larger attribute set refine those of a smaller one, and refining a class of
+size 1 cannot destroy it. `unicity_fraction(dat, S) <= unicity_fraction(dat,
+T)` holds for every `S` contained in `T`, and is pinned down as a property
+test.
+}
 \examples{
 dat <- data.frame(A = c(1, 1, 2, 2), B = c(1, 2, 1, 2))
 unicity_fraction(dat, "A")
