@@ -33,7 +33,10 @@ it explicitly, otherwise a bin nobody happens to use simply does not
 exist.}
 
 \item{shape_only}{divide each histogram by its total, making the score
-independent of activity volume (default TRUE)}
+independent of activity volume (default TRUE). A record with no value in
+any bin then has no shape at all and is an error rather than an all-zero
+profile, which would match every other empty record perfectly; pass
+`FALSE` to compare raw counts, where an empty record is a meaningful zero.}
 
 \item{metric}{`"l1"` (default; total variation when `shape_only = TRUE`) or
 `"l2"` (squared Euclidean)}

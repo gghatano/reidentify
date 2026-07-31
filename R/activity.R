@@ -164,14 +164,31 @@ score_count <- function(dat_raw_anon, target = "ROWCOUNT",
 collapsed_histogram <- function(values, bins, split, shape_only, target, fn_name) {
   parts <- split_collapsed(values, split, target, fn_name)
 
+  ## A record with no value in any bin has no shape. Under shape_only the row
+  ## would be divided by a total of zero, and the branch that catches that has
+  ## to hand *something* back: an all-zero row. Two such rows then differ by
+  ## nothing, so score_profile() reports them as a perfect match -- the best
+  ## possible score for two records it knows nothing about, and one that beats
+  ## every genuine match in the table. Refuse instead, the same way
+  ## split_collapsed() refuses NA: an absent profile is not an empty one, and
+  ## guessing which was meant changes the reported risk.
+  if (shape_only) {
+    empty <- vapply(parts, function(p) !any(p %in% bins), logical(1))
+    if (any(empty)) {
+      i <- which(empty)[1]
+      stop(fn_name, "(): value \"", values[i], "\" of column \"", target,
+           "\" has nothing in any of the ", length(bins), " bin(s), so its ",
+           "profile has no shape to compare and would score as a perfect ",
+           "match against every other empty record. Widen `bins`, drop the ",
+           "record, or pass shape_only = FALSE to compare raw counts.",
+           call. = FALSE)
+    }
+  }
+
   out <- vapply(parts, function(p) {
     counts <- tabulate(match(p, bins), nbins = length(bins))
-    if (shape_only) {
-      total <- sum(counts)
-      if (total > 0) counts / total else counts
-    } else {
-      as.numeric(counts)
-    }
+    ## the guard above is what makes sum(counts) safe to divide by here
+    if (shape_only) counts / sum(counts) else as.numeric(counts)
   }, numeric(length(bins)))
 
   ## vapply gives bins-by-records; the rest of the file wants records-by-bins
@@ -209,7 +226,10 @@ collapsed_histogram <- function(values, bins, split, shape_only, target, fn_name
 #'   it explicitly, otherwise a bin nobody happens to use simply does not
 #'   exist.
 #' @param shape_only divide each histogram by its total, making the score
-#'   independent of activity volume (default TRUE)
+#'   independent of activity volume (default TRUE). A record with no value in
+#'   any bin then has no shape at all and is an error rather than an all-zero
+#'   profile, which would match every other empty record perfectly; pass
+#'   `FALSE` to compare raw counts, where an empty record is a meaningful zero.
 #' @param metric `"l1"` (default; total variation when `shape_only = TRUE`) or
 #'   `"l2"` (squared Euclidean)
 #'

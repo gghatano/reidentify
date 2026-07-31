@@ -205,6 +205,29 @@ test_that("a value outside the declared bins is dropped from the histogram", {
   expect_equal(s$SCORE, rep(0, nrow(j)))
 })
 
+test_that("a record with nothing in any bin is refused, not scored as empty", {
+  ## Dropping *some* of a record's values is the documented behaviour above.
+  ## Dropping all of them is different in kind: the row is then divided by a
+  ## total of zero. Handing back the all-zero row instead makes any two such
+  ## records differ by nothing, i.e. score 0 -- a better match than any real
+  ## pair in the table, for two records the profile says nothing about.
+  j <- profile_join(c("Mon:Tue", "Sat:Sun", "Wed", "Sat:Sun"))
+  expect_error(score_profile(j, "P", bins = c("Mon", "Tue", "Wed")),
+               "no shape to compare")
+  ## an empty collapsed value is the same situation with the default bins
+  expect_error(score_profile(profile_join(c("Mon:Tue", "", "Wed", "")), "P"),
+               "no shape to compare")
+
+  ## shape_only = FALSE is the documented way out: without the division an
+  ## empty record is a genuine all-zero count vector, and two of them really
+  ## are equal -- but so is the distance to a record with events, which is now
+  ## its event count rather than a fixed 1.
+  s <- score_profile(j, "P", bins = c("Mon", "Tue", "Wed"), shape_only = FALSE)
+  pair <- function(r, a) s$SCORE[s$RAW_ROW_NUMBER == r & s$ANON_ROW_NUMBER == a]
+  expect_equal(pair(2, 4), 0)
+  expect_equal(pair(1, 2), 2)
+})
+
 test_that("score_profile() rejects NA and a malformed bin set", {
   j <- profile_join(c("Mon", "Tue"))
   j$ANON_P[1] <- NA
@@ -251,6 +274,48 @@ test_that("a single-event record has a span of zero, and order does not matter",
 test_that("score_span() needs a numeric collapsed column", {
   expect_error(score_span(profile_join(c("Mon:Tue", "Wed")), "P"),
                regexp = "numeric")
+})
+
+test_that("ONE unparseable record is enough to stop score_span()", {
+  ## The dangerous case is the mixed column, not the wholly wrong one. A
+  ## column that is entirely non-numeric is obvious and the caller finds out
+  ## immediately; a column where a single record carries a stray token would,
+  ## if it were let through, produce an NA span for that record alone. NA
+  ## propagates into the score, the record silently fails to match anything,
+  ## and the reported reidentification rate goes *down* -- the direction
+  ## docs/lessons-learned.md section 2 says must never happen quietly.
+  expect_error(score_span(profile_join(c("1:2:3", "4:x", "5:6")), "P"),
+               regexp = "could not convert")
+  ## and the message points at the offending value, not just the column
+  expect_error(score_span(profile_join(c("1:2:3", "4:x", "5:6")), "P"),
+               regexp = "4:x", fixed = TRUE)
+
+  ## the last record, and the ANON side only, are equally fatal
+  expect_error(score_span(profile_join(c("1:2", "3:4", "5:zz")), "P"),
+               regexp = "could not convert")
+  expect_error(
+    score_span(profile_join(c("1:2", "3:4"), c("1:2", "3:q")), "P"),
+    regexp = "could not convert"
+  )
+
+  ## a stray empty element counts too: "3::8" is not "3:8"
+  expect_error(score_span(profile_join(c("1:2", "3::8")), "P"),
+               regexp = "could not convert")
+
+  ## the surviving records are not scored in the meantime
+  expect_error(score_span(profile_join(c("1:2:3", "4:x", "5:6")), "P"),
+               regexp = "score_span")
+})
+
+test_that("ONE unparseable record is enough to stop the distribution scores", {
+  ## Same property one layer down, where the split is per record rather than
+  ## vectorised: reid_by_dist()/score_dist() must not average over the records
+  ## that happened to parse.
+  m <- data.frame(ROW_NUMBER = 1:3, D = c("1:2:3", "4:oops:6", "7:8"),
+                  stringsAsFactors = FALSE)
+  j <- join_raw_anon_data(m, m)
+  expect_error(score_dist(j, "D"), regexp = "could not convert")
+  expect_error(reid_by_dist(j, "D"), regexp = "could not convert")
 })
 
 ## ---------------------------------------------------------------------------

@@ -19,6 +19,39 @@ qi_fixture <- function(people = 60, seed = 3, jitter_age = TRUE) {
   list(raw = raw, anon = anon)
 }
 
+## A candidate set whose ANON records have DIFFERENT numbers of candidates --
+## the shape top_k_candidates() is actually used on, and the one a cross join
+## can never produce (Issue #64). `sizes` gives the block sizes; each block
+## contributes one ANON record, matched against `sizes[i]` RAW records whose
+## distance to it is 0, 1, 2, ... in order.
+##
+## Every per-block quantity here has to differ from every other, because the
+## bug this fixture exists to catch -- indexing the k-th best score with the
+## wrong per-group offset -- is invisible the moment two groups agree.
+uneven_fixture <- function(sizes = c(5, 3, 2)) {
+  zip <- rep(LETTERS[seq_along(sizes)], times = sizes)
+  age <- unlist(lapply(sizes, function(n) seq_len(n) - 1L), use.names = FALSE)
+  raw <- data.frame(ROW_NUMBER = seq_along(zip), ZIP = zip, AGE = age,
+                    stringsAsFactors = FALSE)
+  ## one ANON record per block: the first RAW record of each, so the true pair
+  ## is always present and always scores 0
+  anon <- raw[cumsum(c(0, utils::head(sizes, -1))) + 1, , drop = FALSE]
+  list(raw = raw, anon = anon, sizes = sizes)
+}
+
+## What top_k_candidates(ties = "keep") must return, worked out per ANON record
+## with no shared code: keep every candidate whose score is at most the k-th
+## smallest score of that record.
+top_k_reference <- function(scores, k) {
+  keep <- unsplit(
+    lapply(split(scores$SCORE, scores$ANON_ROW_NUMBER), function(v) {
+      v <= sort(v)[min(k, length(v))]
+    }),
+    scores$ANON_ROW_NUMBER
+  )
+  scores[keep, c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER"), drop = FALSE]
+}
+
 ## ---------------------------------------------------------------------------
 ## block_candidates
 ## ---------------------------------------------------------------------------
@@ -133,6 +166,17 @@ test_that("block_candidates refuses to build a table above max_pairs", {
   )
 })
 
+test_that("max_pairs is a ceiling the key is allowed to reach exactly", {
+  ## The boundary, in both directions: a budget of exactly the number of pairs
+  ## the key produces is enough, one less is not. A `>=` here would reject a
+  ## key the user sized correctly.
+  raw <- data.frame(ROW_NUMBER = 1:3, K = c("a", "a", "a"),
+                    stringsAsFactors = FALSE)
+  expect_equal(nrow(block_candidates(raw, raw, keys = "K", max_pairs = 9)), 9L)
+  expect_error(block_candidates(raw, raw, keys = "K", max_pairs = 8),
+               "too coarse")
+})
+
 test_that("block_candidates validates its arguments", {
   f <- qi_fixture(people = 10)
   expect_error(block_candidates("nope", f$anon, keys = "ZIP"), "data frames")
@@ -149,6 +193,30 @@ test_that("block_candidates validates its arguments", {
     block_candidates(f$raw, f$anon, keys = "ZIP", max_pairs = 0),
     "positive number"
   )
+  ## every clause of the max_pairs check, not just the sign: a vector, an NA
+  ## and a string all have to be refused *here*, with the message that names
+  ## the argument, rather than surfacing later as "the key is too coarse".
+  expect_error(
+    block_candidates(f$raw, f$anon, keys = "ZIP", max_pairs = c(10, 20)),
+    "positive number"
+  )
+  expect_error(
+    block_candidates(f$raw, f$anon, keys = "ZIP", max_pairs = NA_real_),
+    "positive number"
+  )
+  expect_error(
+    block_candidates(f$raw, f$anon, keys = "ZIP", max_pairs = "10"),
+    "positive number"
+  )
+  ## a pass has to name at least one existing column; an empty pass or a
+  ## numeric "column index" would otherwise block on whatever column happened
+  ## to sit in that position
+  expect_error(block_candidates(f$raw, f$anon, keys = list(character(0))),
+               "one per blocking pass")
+  expect_error(block_candidates(f$raw, f$anon, keys = list(1)),
+               "one per blocking pass")
+  expect_error(block_candidates(f$raw, f$anon, keys = list("ZIP", 2)),
+               "one per blocking pass")
 })
 
 test_that("block_candidates on wholly disjoint keys keeps nothing", {
@@ -173,9 +241,55 @@ test_that("recall is NA, not 1, when there is no ground truth to measure", {
   info <- attr(block_candidates(raw, anon, keys = "K"), "blocking")
 
   expect_equal(info$n_true_pairs, 0)
-  expect_true(is.na(info$recall))
+  ## NA_real_ exactly. 0/0 is NaN, and is.na(NaN) is TRUE, so `is.na()` alone
+  ## cannot tell "we refused to divide" from "we divided by zero anyway" --
+  ## and NaN would go on to print and compare as a number-shaped nothing.
+  expect_identical(info$recall, NA_real_)
   ## and no warning: there was nothing to lose
   expect_silent(block_candidates(raw, anon, keys = "K"))
+})
+
+test_that("an empty side gives NA ratios, not a 100% reduction", {
+  ## Zero pairs in the full join is the other divide-by-zero. Reporting
+  ## kept_fraction 1 / reduction 0 / recall 1 here would be three reassuring
+  ## numbers about a measurement that did not happen -- exactly what
+  ## docs/lessons-learned.md section 2 says a safety tool must not do.
+  empty <- data.frame(ROW_NUMBER = integer(0), K = character(0),
+                      stringsAsFactors = FALSE)
+  anon <- data.frame(ROW_NUMBER = 1:3, K = c("a", "b", "c"),
+                     stringsAsFactors = FALSE)
+
+  info <- attr(block_candidates(empty, anon, keys = "K"), "blocking")
+  expect_equal(info$n_pairs_full, 0)
+  expect_identical(info$kept_fraction, NA_real_)
+  expect_identical(info$reduction, NA_real_)
+  expect_identical(info$recall, NA_real_)
+  expect_equal(info$n_anon_without_candidate, 3)
+
+  ## the same on the other side, and through blocking_recall()
+  info2 <- blocking_recall(
+    data.frame(RAW_ROW_NUMBER = integer(0), ANON_ROW_NUMBER = integer(0)),
+    empty, empty
+  )
+  expect_identical(info2$kept_fraction, NA_real_)
+  expect_identical(info2$reduction, NA_real_)
+  expect_identical(info2$recall, NA_real_)
+
+  ## and it prints without inventing a percentage
+  out <- paste(utils::capture.output(print(info)), collapse = "\n")
+  expect_match(out, "not measurable")
+})
+
+test_that("no warning and no loss line when blocking kept every true pair", {
+  ## The warning must be strictly one-sided. If it fired at recall == 1 too it
+  ## would appear on every correct run, and a warning that always fires is a
+  ## warning nobody reads -- which would hide the case it exists for.
+  f <- qi_fixture()
+  expect_silent(block_candidates(f$raw, f$anon, keys = "ZIP"))
+  clean <- block_candidates(f$raw, f$anon, keys = "ZIP")
+  expect_equal(attr(clean, "blocking")$recall, 1)
+  expect_silent(warn_blocking_loss(attr(clean, "blocking"), "test"))
+  expect_silent(block_candidates(f$raw, f$anon, keys = list("AGE", "ZIP")))
 })
 
 ## ---------------------------------------------------------------------------
@@ -240,6 +354,114 @@ test_that("top_k_candidates leaves the single-guess success rate alone", {
   expect_lt(max(e_pruned$top_k$hit_rate), max(e_full$top_k$hit_rate))
 })
 
+test_that("top_k_candidates cuts each ANON record at its OWN k-th best score", {
+  ## Issue #64. Every previous test fed this function a full cross join, where
+  ## every ANON record has the same number of candidates -- and with equal
+  ## group sizes an off-by-one in the per-group offset is invisible, because
+  ## every wrong offset happens to land on an equally-sized group. The shape
+  ## README recommends (block first, prune second) never has that property.
+  f <- uneven_fixture(c(5, 3, 2))
+  cand <- block_candidates(f$raw, f$anon, keys = "ZIP")
+  s <- score_num(cand, "AGE")
+
+  ## the premise: candidate counts differ between ANON records
+  expect_equal(as.integer(table(s$ANON_ROW_NUMBER)), c(5L, 3L, 2L))
+
+  pruned <- top_k_candidates(s, k = 2)
+
+  ## Worked through by hand: each ANON record's two best distances are 0 and 1,
+  ## so exactly two candidates survive per record.
+  expect_equal(nrow(pruned), 6L)
+  expect_equal(as.integer(table(pruned$ANON_ROW_NUMBER)), c(2L, 2L, 2L))
+  expect_true(all(pruned$SCORE <= 1))
+  expect_equal(attr(pruned, "blocking")$recall, 1)
+})
+
+test_that("top_k_candidates agrees with a per-record reference on uneven blocks", {
+  ## The same property stated generally, over several block shapes and several
+  ## k, so it keeps holding when the implementation changes.
+  for (sizes in list(c(5, 3, 2), c(2, 7, 4, 1), c(9, 1, 6, 3, 8))) {
+    f <- uneven_fixture(sizes)
+    s <- score_num(block_candidates(f$raw, f$anon, keys = "ZIP"), "AGE")
+    for (k in c(1, 2, 3)) {
+      pruned <- suppressWarnings(top_k_candidates(s, k = k))
+      ref <- top_k_reference(s, k)
+      expect_equal(
+        pruned[, c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER")],
+        `rownames<-`(ref, NULL),
+        info = paste0("sizes = ", paste(sizes, collapse = ","), ", k = ", k)
+      )
+    }
+  }
+})
+
+test_that("top_k_candidates keeps the k-th tie on uneven blocks too", {
+  ## Ties and unequal group sizes at once: the group with the flat score must
+  ## keep more than k, and that must not shift the cut of any other group.
+  raw <- data.frame(
+    ROW_NUMBER = 1:9,
+    ZIP = c("A", "A", "A", "A", "B", "B", "B", "C", "C"),
+    AGE = c(0, 0, 0, 7, 0, 1, 2, 0, 5),
+    stringsAsFactors = FALSE
+  )
+  anon <- raw[c(1, 5, 8), , drop = FALSE]
+  s <- score_num(block_candidates(raw, anon, keys = "ZIP"), "AGE")
+
+  pruned <- top_k_candidates(s, k = 2)
+  ## ANON 1: three candidates tie at distance 0, so all three stay.
+  ## ANON 5: distances 0, 1, 2 -> the two best.
+  ## ANON 8: distances 0, 5 -> the two best (both).
+  expect_equal(as.integer(table(pruned$ANON_ROW_NUMBER)), c(3L, 2L, 2L))
+  expect_equal(nrow(pruned), 7L)
+})
+
+test_that("top_k_candidates with ties = random caps every uneven block at k", {
+  f <- uneven_fixture(c(6, 4, 2))
+  s <- score_num(block_candidates(f$raw, f$anon, keys = "ZIP"), "AGE")
+  pruned <- suppressWarnings(top_k_candidates(s, k = 3, ties = "random", seed = 4))
+
+  ## the last block only has 2 candidates, so it cannot reach k
+  expect_equal(as.integer(table(pruned$ANON_ROW_NUMBER)), c(3L, 3L, 2L))
+})
+
+test_that("top_k_candidates counts records, not rows, in its blocking record", {
+  f <- uneven_fixture(c(5, 3, 2))
+  s <- score_num(block_candidates(f$raw, f$anon, keys = "ZIP"), "AGE")
+  pruned <- top_k_candidates(s, k = 2)
+  info <- attr(pruned, "blocking")
+
+  ## 10 distinct RAW records appear as candidates, 3 distinct ANON records --
+  ## not the 10 candidate rows.
+  expect_equal(info$n_raw, 10)
+  expect_equal(info$n_anon, 3)
+  expect_equal(info$n_pairs_full, 10)
+  expect_equal(info$n_pairs_kept, 6)
+  expect_equal(info$n_anon_without_candidate, 0)
+  expect_equal(info$kept_fraction, 0.6)
+
+  ## the class is set, not accumulated: the input is already a reid_scores
+  expect_identical(class(pruned), c("reid_scores", "data.frame"))
+
+  ## and where a RAW record IS offered to several ANON records, n_raw still
+  ## counts it once -- rows would give 16 for four people
+  wide <- data.frame(ROW_NUMBER = 1:4, V = c(1, 2, 3, 4))
+  ws <- score_num(join_raw_anon_data(wide, wide), "V")
+  winfo <- attr(suppressWarnings(top_k_candidates(ws, k = 2)), "blocking")
+  expect_equal(winfo$n_raw, 4)
+  expect_equal(winfo$n_anon, 4)
+  expect_equal(winfo$n_pairs_full, 16)
+})
+
+test_that("top_k_candidates says nothing when it lost nothing", {
+  ## The warning has to be one-sided. Firing on recall == 1 as well would
+  ## teach a reader to ignore it, which is the same as not having it.
+  f <- uneven_fixture(c(5, 3, 2))
+  s <- score_num(block_candidates(f$raw, f$anon, keys = "ZIP"), "AGE")
+  expect_equal(attr(top_k_candidates(s, k = 2), "blocking")$recall, 1)
+  expect_silent(top_k_candidates(s, k = 2))
+  expect_silent(top_k_candidates(s, k = 2, ties = "random", seed = 1))
+})
+
 test_that("top_k_candidates handles similarity tables and validates arguments", {
   raw <- data.frame(ROW_NUMBER = 1:4, V = c(1, 2, 3, 4))
   d <- join_raw_anon_data(raw, raw)
@@ -285,6 +507,17 @@ test_that("blocking_recall accepts a score table and infers totals when it must"
   info <- blocking_recall(s)
   expect_equal(info$n_true_pairs_kept, 30)
   expect_equal(info$method, "measured (totals inferred)")
+
+  ## The inferred totals count *records*, not candidate rows: every record
+  ## appears once per candidate, so counting rows would report an n_raw of
+  ## several hundred for 30 people and a full-join size in the millions --
+  ## which would then be divided into, making the reduction look enormous.
+  expect_equal(info$n_raw, 30)
+  expect_equal(info$n_anon, 30)
+  expect_equal(info$n_pairs_full, 900)
+  expect_equal(info$n_true_pairs, 30)
+  expect_equal(info$n_pairs_kept, nrow(s))
+  expect_lt(info$kept_fraction, 1)
 })
 
 test_that("blocking_recall validates its input", {
@@ -294,6 +527,37 @@ test_that("blocking_recall validates its input", {
   cand <- block_candidates(f$raw, f$anon, keys = "ZIP")
   expect_error(blocking_recall(cand, f$raw[, "ZIP", drop = FALSE], f$anon),
                "not found in `raw`")
+
+  ## half a pair of columns is not a pair: RAW_ID without ANON_ID must be
+  ## refused, not silently completed from whatever else is lying around
+  expect_error(
+    blocking_recall(data.frame(RAW_ID = 1:2, SOMETHING = 1:2), row_number = "ID"),
+    "neither"
+  )
+  ## and half a score-layer pair is not a fallback either. The message has to
+  ## name the columns the caller asked for -- reporting the score-layer names
+  ## instead sends them looking for a column they never mentioned.
+  expect_error(
+    blocking_recall(data.frame(RAW_ROW_NUMBER = 1:2, RAW_ID = 1:2),
+                    row_number = "ID"),
+    '"RAW_ID"/"ANON_ID"'
+  )
+})
+
+test_that("blocking_recall falls back to the score-layer columns as a pair", {
+  ## Both prefixed columns have to be present for the requested row_number to
+  ## be used. With only one of them the score-layer names are the right
+  ## reading -- taking the half-present pair instead makes the call fail on a
+  ## table that does carry the ground truth.
+  cand <- data.frame(
+    RAW_ROW_NUMBER = c(1L, 2L, 2L),
+    ANON_ROW_NUMBER = c(1L, 1L, 2L),
+    RAW_ID = c(1L, 2L, 2L)
+  )
+  info <- blocking_recall(cand, row_number = "ID")
+  expect_equal(info$n_true_pairs_kept, 2)
+  expect_equal(info$n_raw, 2)
+  expect_equal(info$n_anon, 2)
 })
 
 ## ---------------------------------------------------------------------------
@@ -369,6 +633,23 @@ test_that("the printed evaluation says so, without being asked", {
   expect_match(out, "BLOCKED")
   expect_match(out, "LOWER bound")
   expect_gt(e$n_true_missing, 0)
+})
+
+test_that("reid_evaluate keeps every k some ANON record could reach", {
+  ## The same shape blind spot as top_k_candidates(), one file over
+  ## (R/evaluate.R): the top-k table drops any k above the largest candidate
+  ## set, and on a cross join the largest and the smallest are the same
+  ## number, so a bound taken from the *smallest* is indistinguishable. On a
+  ## blocked candidate set it silently deletes rows from the reported table --
+  ## and a missing row reads as "that k was not measured", not as a bug.
+  f <- uneven_fixture(c(6, 3, 2))
+  s <- score_num(block_candidates(f$raw, f$anon, keys = "ZIP"), "AGE")
+  expect_equal(range(as.integer(table(s$ANON_ROW_NUMBER))), c(2L, 6L))
+
+  e <- reid_evaluate(s, seeds = 1:3, top_k = c(1, 3, 6, 7))
+  ## 6 is reachable (one record has six candidates); 7 is not reachable by any
+  expect_equal(e$top_k$k, c(1, 3, 6))
+  expect_true(all(diff(e$top_k$hit_rate) >= 0))
 })
 
 test_that("a full join prints no blocking line at all", {
