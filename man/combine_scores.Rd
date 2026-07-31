@@ -4,7 +4,7 @@
 \alias{combine_scores}
 \title{combine several score tables into one weighted score}
 \usage{
-combine_scores(scores, weights = NULL)
+combine_scores(scores, weights = NULL, scale_check = c("warn", "none"))
 }
 \arguments{
 \item{scores}{a list of score tables (each with columns RAW_ROW_NUMBER,
@@ -16,6 +16,11 @@ of the same `score_type`}
 unchanged). Must be non-negative and not all zero -- a negative weight
 would flip that component's orientation, turning "far apart" into
 "good match".}
+
+\item{scale_check}{`"warn"` (default) to warn when the weighted standard
+deviations of two components differ by more than 10x, `"none"` to skip
+the check. Components with zero weight or constant SCORE are excluded:
+they add a constant and cannot change any ranking.}
 }
 \value{
 a "reid_scores" table over the same candidate pairs, ordered as the
@@ -38,15 +43,50 @@ SCALING IS THE CALLER'S JOB. The metrics in this package live on very
 different scales -- an edit distance is a small integer, a squared L2
 quantile distance is unbounded -- so an unweighted sum lets whichever
 metric happens to have the largest spread dominate. `combine_scores()`
-deliberately does not normalise: choosing a defensible normalisation
-(standardisation, Mahalanobis, learned weights) is Issue #14. Use
-`weights` to compensate in the meantime, and read a combined score as
-"this particular weighted sum", not as a scale-free distance.
+deliberately does not normalise: normalisation is a separate, explicit
+step ([normalize_scores()], or [score_multi()] which does it for you). Use
+`weights` to compensate otherwise, and read a combined score as "this
+particular weighted sum", not as a scale-free distance.
+
+WHAT DOMINATION ACTUALLY COSTS. The component with the widest weighted
+spread decides the ranking; the others only break its ties. Whether that
+hurts depends on the *dominant* component, and the effect runs in both
+directions -- so a large scale gap is a condition to check, not a defect
+by itself:
+
+\itemize{
+  \item dominant component also the most informative: the sum is as good
+    as, or better than, the normalised sum. On the fixture in
+    `docs/default-changes.md` an under-weighted informative axis still
+    reached 0.8417, identical to the normalised combination.
+  \item dominant component the *less* informative one: the sum tracks that
+    component and adding attributes lowers the measured rate. On the same
+    fixture, ZIP alone scores 0.2000 and normalised ZIP + SPEND_DIST
+    scores 0.4450, but the unnormalised sum -- where SPEND_DIST's spread is
+    roughly 16000x ZIP's -- scores 0.0300. A safety tool reporting 0.03
+    where 0.45 is achievable understates the risk 15-fold, and nothing
+    errors.
+}
+
+Because the harmful case cannot be told from the harmless one without
+running the attack, `combine_scores()` warns when the weighted spreads of
+two components differ by more than 10x. 10 is where the loss first becomes
+visible in the calibration recorded in `docs/default-changes.md` (ratio 3:
+under 1%; ratio 10: 0.4450 -> 0.3900; ratio 30: 0.2500; ratio 100: 0.1350)
+and is also the largest gap that costs nothing when the dominant component
+is the informative one, so it does not fire on the harmless direction.
+Silence the check with `scale_check = "none"` when the scale gap is
+deliberate, as in an IDF block where the magnitude *is* the evidence.
 }
 \examples{
 raw <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50), W = c(1, 1, 2, 2, 3))
 d <- join_raw_anon_data(raw, raw)
-combined <- combine_scores(list(score_num(d, "V"), score_num(d, "W")), weights = c(1, 10))
+parts <- normalize_scores(list(score_num(d, "V"), score_num(d, "W")), "range")
+combined <- combine_scores(parts, weights = c(1, 2))
 match_greedy(combined)
 
+}
+\seealso{
+[normalize_scores()] to put the components on a common scale
+  first, and [score_multi()] which normalises and combines in one call.
 }

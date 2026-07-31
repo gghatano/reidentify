@@ -328,6 +328,115 @@ test_that("combine_scores() validates its arguments", {
   expect_error(combine_scores(list(s, sim)), regexp = "same score_type")
 })
 
+## ---------------------------------------------------------------------------
+## #57: combine_scores() does not normalise, and says so when it matters
+## ---------------------------------------------------------------------------
+
+## V spans 10..50 and W spans 1..2, so the weighted spreads differ by ~55x.
+make_lopsided_join <- function() {
+  raw <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50),
+                    W = c(1, 1, 2, 2, 2))
+  join_raw_anon_data(raw, raw)
+}
+
+test_that("combine_scores() warns when one component's weighted spread dominates", {
+  d <- make_lopsided_join()
+  big   <- score_num(d, "V")
+  small <- score_num(d, "W")
+
+  expect_warning(combine_scores(list(big, small)),
+                 regexp = "very different scales")
+  ## the message must name the offender and the direction of the error
+  w <- tryCatch(combine_scores(list(big, small)), warning = conditionMessage)
+  expect_match(w, "scores\\[\\[1\\]\\]")
+  expect_match(w, "LOWERS the measured reidentification rate")
+
+  ## names of the list are used when present, so the warning is readable
+  named <- tryCatch(combine_scores(list(BIG = big, SMALL = small)),
+                    warning = conditionMessage)
+  expect_match(named, "`BIG`")
+  expect_match(named, "`SMALL`")
+})
+
+test_that("combine_scores() stays quiet when the scales are comparable", {
+  d <- make_unique_join()
+  ## V sd ~12.2, W sd ~2.4: a 5x gap, below the 10x threshold
+  expect_silent(combine_scores(list(score_num(d, "V"), score_num(d, "W"))))
+
+  ## normalising first is the documented fix, and it must silence the warning
+  d2 <- make_lopsided_join()
+  parts <- normalize_scores(list(score_num(d2, "V"), score_num(d2, "W")), "range")
+  expect_silent(combine_scores(parts))
+})
+
+test_that("weights that compensate for the scale gap silence the warning", {
+  ## The check looks at the spread each component contributes *after* its
+  ## weight: a caller who has already corrected the gap must not be nagged.
+  d <- make_lopsided_join()
+  big   <- score_num(d, "V")
+  small <- score_num(d, "W")
+  w <- stats::sd(big$SCORE) / stats::sd(small$SCORE)
+
+  expect_silent(combine_scores(list(big, small), weights = c(1, w)))
+  ## ... and a weight that *creates* a gap is flagged just the same
+  expect_warning(combine_scores(list(big, small), weights = c(1, w * 1000)),
+                 regexp = "very different scales")
+})
+
+test_that("scale_check = \"none\" turns the check off", {
+  d <- make_lopsided_join()
+  expect_silent(
+    combine_scores(list(score_num(d, "V"), score_num(d, "W")),
+                   scale_check = "none")
+  )
+  expect_error(
+    combine_scores(list(score_num(d, "V")), scale_check = "bogus"),
+    regexp = "should be one of"
+  )
+})
+
+test_that("components that cannot reorder anything do not trip the check", {
+  ## A zero-weight component, and a component whose score is constant, add a
+  ## constant to every candidate. Counting them would make the ratio infinite
+  ## and fire on something that provably changes no ranking.
+  d <- make_lopsided_join()
+  big   <- score_num(d, "V")
+  small <- score_num(d, "W")
+
+  expect_silent(combine_scores(list(big, small), weights = c(1, 0)))
+
+  flat <- big
+  flat$SCORE <- rep(1, nrow(flat))
+  attr(flat, "score_type") <- attr(big, "score_type")
+  expect_silent(combine_scores(list(big, flat)))
+})
+
+test_that("a dominated informative axis is exactly the failure the warning describes", {
+  ## Two columns: SIGNAL identifies every record, NOISE is pure noise on a
+  ## scale 1000x wider. Summed without normalisation the attack collapses to
+  ## the noise column; normalised, it recovers. The warning fires on the case
+  ## that loses, which is the whole point of #57.
+  set.seed(57)
+  n <- 40
+  raw <- data.frame(ROW_NUMBER = seq_len(n),
+                    SIGNAL = seq_len(n),
+                    NOISE = rnorm(n, sd = 1000))
+  anon <- raw
+  anon$NOISE <- rnorm(n, sd = 1000)   # carries no information at all
+  j <- join_raw_anon_data(raw, anon)
+
+  parts <- list(SIGNAL = score_num(j, "SIGNAL"), NOISE = score_num(j, "NOISE"))
+
+  expect_warning(dominated <- combine_scores(parts), regexp = "very different scales")
+  fixed <- combine_scores(normalize_scores(parts, "range"))
+
+  rate <- function(s) mean(reid_evaluate(s, seeds = 1:5)$per_record$RISK)
+  expect_lt(rate(dominated), rate(fixed))
+  ## and the dominated sum is worse than SIGNAL on its own: more knowledge,
+  ## a lower reported risk
+  expect_lt(rate(dominated), rate(parts$SIGNAL))
+})
+
 test_that("combining two attributes finds records that neither attribute finds alone", {
   ## V alone and W alone each leave every ANON record in a tie of 2, but the
   ## pair (V, W) is unique for every record.

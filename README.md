@@ -184,7 +184,7 @@ reid_evaluate(scores, seeds = 1:20)
 | スコア層（一般化） | `score_containment()` | 「30代」に入りうる RAW を絞る |
 | スコア層（疎データ） | `score_scoreboard()` | 欠測だらけの疎行列向け |
 | 統合層 | `normalize_scores()` | 尺度の違う複数スコアを共通尺度に載せる |
-| | `combine_scores()` | 正規化して加重和 |
+| | `combine_scores()` | 加重和（**正規化はしない**。尺度合わせは `normalize_scores()` を明示的に呼ぶ） |
 | 軸の診断 | `axis_informativeness()` / `axis_report()` | 各軸が本当に情報を持つかの検定 |
 | 割当層 | `match_greedy()` | ANON 1 件ごとに最良の RAW を選ぶ |
 | | `match_optimal()` | 全体の総コストが最小になる 1 対 1 割当 |
@@ -196,40 +196,74 @@ reid_evaluate(scores, seeds = 1:20)
 s_age <- score_num(pairs, "AGE")
 s_zip <- score_char(pairs, "ZIP")
 
-combined <- combine_scores(list(s_age, s_zip))
+## 統合層は「正規化 → 加重和」の 2 段です。combine_scores() は正規化しません。
+combined <- combine_scores(normalize_scores(list(s_age, s_zip), "range"))
 picked   <- match_greedy(combined, seed = 1)
 
 head(picked, 5)
 #>   ANON_ROW_NUMBER RAW_ROW_NUMBER CONFIDENCE RESULT
-#> 1               1            121 0.11578124  FALSE
-#> 2               2              2 0.00000000   TRUE
-#> 3               3            166 0.00000000  FALSE
-#> 4               4              4 0.05924507   TRUE
-#> 5               5              5 0.06046164   TRUE
+#> 1               1              1 0.38374738   TRUE
+#> 2               2              2 0.29878528   TRUE
+#> 3               3              3 0.38771948   TRUE
+#> 4               4              4 0.04014106   TRUE
+#> 5               5              5 0.04375234   TRUE
 
 reid_evaluate(combined, seeds = 1:20)
 #> reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
-#>   success rate   : 0.4303 exact | simulated mean 0.4363 sd 0.0121 range [0.4100, 0.4600] over 20 seeds
-#>   baseline       : random 0.0050 | mode 0.0050   (lift vs random: 86.06x)
-#>   top-k hit rate : k=1 0.4303  k=5 0.8387  k=10 0.9940
+#>   success rate   : 0.8417 exact | simulated mean 0.8458 sd 0.0098 range [0.8250, 0.8650] over 20 seeds
+#>   baseline       : random 0.0050 | mode 0.0050   (lift vs random: 168.33x)
+#>   top-k hit rate : k=1 0.8417  k=5 1.0000  k=10 1.0000
 #>   max per-record risk: 1.0000
 #>   precision-recall (threshold on attacker-visible CONFIDENCE, margin):
-#>     conf >= 0.2364 : attack 1/200 (0.5%)  precision 1.0000  recall 0.0050
-#>     conf >= 0.2080 : attack 2/200 (1.0%)  precision 1.0000  recall 0.0100
-#>     conf >= 0.1945 : attack 3/200 (1.5%)  precision 1.0000  recall 0.0150
-#>     conf >= 0.1796 : attack 4/200 (2.0%)  precision 1.0000  recall 0.0200
-#>     conf >= 0.1791 : attack 5/200 (2.5%)  precision 1.0000  recall 0.0250
-#>     ... 109 more threshold(s)
+#>     conf >= 1.7198 : attack 1/200 (0.5%)  precision 1.0000  recall 0.0050
+#>     conf >= 1.5790 : attack 2/200 (1.0%)  precision 1.0000  recall 0.0100
+#>     conf >= 1.4664 : attack 3/200 (1.5%)  precision 1.0000  recall 0.0150
+#>     conf >= 1.4469 : attack 4/200 (2.0%)  precision 1.0000  recall 0.0200
+#>     conf >= 1.4130 : attack 5/200 (2.5%)  precision 1.0000  recall 0.0250
+#>     ... 178 more threshold(s)
 ```
 
-AGE 単独の 11.3% が、ZIP を足しただけで 43.0% に上がります。
+AGE 単独の 11.3% が、ZIP を足すと 84.2% に上がります。
 
-1 行目に注目してください。`CONFIDENCE` が 5 件中で最も高い（＝攻撃者から見れば
-最も確信できるケース）にもかかわらず `RESULT` は `FALSE` です。
-**確信度の高さは正しさを意味しません。**
+`CONFIDENCE` は攻撃者から見える確信度で、正解を知らなくても計算できます。
+ただし**確信度の高さは正しさを意味しません。**
 
-`CONFIDENCE` の定義と、その閾値をどう選ぶかは
-[信頼度 `CONFIDENCE`](#信頼度-confidence) を参照してください。
+```r
+wrong <- picked[!picked$RESULT, ]
+c(wrong         = nrow(wrong),
+  correct_below = sum(picked$RESULT & picked$CONFIDENCE < max(wrong$CONFIDENCE)))
+#>         wrong correct_below 
+#>            31            53 
+```
+
+200 件中 31 件が外れています。そのうち最も確信度の高い外れよりも**低い**確信度で
+正解しているケースが 53 件あります。**確信度で並べても正誤は分かれません。**
+定義と閾値の選び方は [信頼度 `CONFIDENCE`](#信頼度-confidence) を参照してください。
+
+### 正規化を省くと、属性を足したのに数値が下がることがあります
+
+`combine_scores()` は**正規化しません**。`normalize_scores()` を挟まずに足すと、
+**重み付きのばらつきが最も大きい軸が順位を決め、残りの軸は同点崩ししかしません。**
+
+```r
+## 攻撃者の知識はまったく同じ。違うのは正規化を挟むかどうかだけです
+vapply(list(
+  raw_sum    = combine_scores(list(s_age, s_zip)),
+  normalised = combine_scores(normalize_scores(list(s_age, s_zip), "range"))
+), function(s) reid_evaluate(s, seeds = 1:20)$success_analytic, numeric(1))
+#>    raw_sum normalised 
+#>  0.4303214  0.8416667 
+```
+
+同じ知識で 0.43 と 0.84 に分かれます。危険なのは**支配する軸が情報量に乏しいとき**です。
+この例では AGE（sd 13.8）が ZIP（sd 0.53）を 26 倍上回りますが、
+単独の成功率は ZIP 20.0% > AGE 11.3% で、**識別力の低い方が結果を決めています。**
+逆に支配する軸が最も情報量の多い軸なら、正規化しない和でも成績は落ちません。
+**どちらになるかは実行してみるまで分かりません。**
+
+そのため `combine_scores()` は、重みをかけた後のばらつきが 10 倍を超えて食い違うと
+警告します（意図的な尺度差なら `scale_check = "none"` で抑制できます）。
+実測とこの閾値の根拠は [`docs/default-changes.md`](docs/default-changes.md) にあります。
 
 ### 従来の 1 発呼び出し API
 
@@ -303,6 +337,27 @@ axis_report(s_multi)
 相関の強い数値列（身長と体重、購入回数と購入金額など）を等重みで足すと、
 実質 1 列分の情報を 2 列分として数えてしまいます。`score_mahalanobis()` は
 RAW 側の共分散でこの冗長さを打ち消します。
+
+> **ただし、この手法は強い相関のもとで壊れることがあります**（Issue #59 の実測）。
+> `S^-1` は母集団の広がりが小さい方向を増幅するので、**加工ノイズがその方向に
+> 乗っていると、白色化距離がノイズに支配されます。**「相関が強いほど有効」ではなく
+> 「相関が強いほど**加工の仕方に結果が左右される**」が正しい理解です。
+>
+> 3 列のフィクスチャでの実測（A と B が相関 rho、C は独立）:
+>
+> | 加工ノイズの形 | rho | κ(S) | `weighted` | `mahalanobis` |
+> |---|---|---|---|---|
+> | 等方（各列に同じ sd） | 0.99 | 273 | 0.9350 | **0.5600** |
+> | 等方 | 0.999 | 2756 | 0.8850 | **0.2100** |
+> | 母集団の共分散に沿う | 0.99 | 273 | 0.8900 | **0.9800** |
+> | 母集団の共分散に沿う | 0.999 | 2756 | 0.8400 | **0.9800** |
+>
+> **同じ共分散・同じ条件数で結論が逆になります。** 条件数が大きいことは
+> 「結果が壊れやすい」ことを示すだけで、どちらに転ぶかまでは決めません。
+> `score_mahalanobis()` は条件数が 100 を超えると警告します。
+> **`method = "weighted"` と両方を測って、大きい方を採用してください。**
+> `ridge` を上げるのは対策になりません（大きくすると加重和そのものに戻ります）。
+> 実測の全掃引は [`docs/default-changes.md`](docs/default-changes.md) にあります。
 
 ```r
 head(score_mahalanobis(pairs, c("AGE", "VISIT_COUNT")), 3)
@@ -700,10 +755,13 @@ match_scoreboard_rh(score_scoreboard(sb_pairs, c("I1", "I2", "I3", "I4"),
 （ハンガリアン法 / `clue`）。
 
 ```r
-c(greedy  = mean(match_greedy(combined, seed = 1)$RESULT),
-  optimal = mean(match_optimal(combined, seed = 1)$RESULT))
+## rank 正規化は同点を増やすので、1 対 1 制約の効き方が見えます
+ranked <- combine_scores(normalize_scores(list(s_age, s_zip), "rank"))
+
+c(greedy  = mean(match_greedy(ranked, seed = 1)$RESULT),
+  optimal = mean(match_optimal(ranked, seed = 1)$RESULT))
 #>  greedy optimal 
-#>   0.435   0.630 
+#>   0.845   0.895 
 ```
 
 この例では RAW と ANON が完全に 1 対 1 対応しているため、制約が正しく効いて
@@ -732,14 +790,14 @@ c(greedy  = mean(match_greedy(combined, seed = 1)$RESULT),
 
 ```r
 head(reid_confidence(combined), 3)
-#>   ANON_ROW_NUMBER N_CANDIDATES BEST_SCORE SECOND_SCORE TIE_SIZE MARGIN
-#> 1               1          200          1            2        1      1
-#> 2               2          200          2            2        6      0
-#> 3               3          200          2            2        5      0
+#>   ANON_ROW_NUMBER N_CANDIDATES BEST_SCORE SECOND_SCORE TIE_SIZE     MARGIN
+#> 1               1          200 0.03278689    0.1475410        1 0.11475410
+#> 2               2          200 0.03278689    0.1311475        1 0.09836066
+#> 3               3          200 0.03278689    0.1803279        1 0.14754098
 #>    SD_SCORE ECCENTRICITY CONFIDENCE
-#> 1  8.636978    0.1157812  0.1157812
-#> 2 10.739584    0.0000000  0.0000000
-#> 3 16.687021    0.0000000  0.0000000
+#> 1 0.2990355    0.3837474  0.3837474
+#> 2 0.3292018    0.2987853  0.2987853
+#> 3 0.3805354    0.3877195  0.3877195
 ```
 
 `TIE_SIZE` / `MARGIN` / `SD_SCORE` / `ECCENTRICITY` はどちらの設定でも同じ値が入り、
@@ -753,13 +811,14 @@ head(reid_confidence(combined), 3)
 
 > **eccentricity には尺度の可搬性がありません。** その記録自身の候補スコアの
 > 散らばりに対する比なので、数値の範囲はスコア表の性質で決まります
-> （実測で、密な数値データは最大 0.45、疎なトランザクションデータは 4.86）。
+> （実測で、密な 150 人 2 属性の数値フィクスチャは最大 0.45、上の
+> AGE + ZIP の例は 1.72、疎なトランザクションデータは 4.86）。
 > **閾値をデータセット間で使い回さないでください。** 必ず実測分布から取ります。
 
 ```r
 stats::quantile(reid_confidence(combined)$CONFIDENCE, c(0.5, 0.9, 1))
-#>        50%        90%       100% 
-#> 0.06204356 0.11889747 0.23643010 
+#>       50%       90%      100% 
+#> 0.1552860 0.8216121 1.7198005 
 ```
 
 ---
