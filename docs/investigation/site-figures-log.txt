@@ -1,5 +1,5 @@
 R: R version 4.6.1 (2026-06-24 ucrt) 
-date: 2026-08-01 00:55:51 
+date: 2026-08-01 01:36:23 
 
 == figure 1: a rule-following generalisation still identifies people ==
   candidates offered            : 200
