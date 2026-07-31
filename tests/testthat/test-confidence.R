@@ -321,3 +321,183 @@ test_that("min_confidence is validated", {
   expect_error(match_greedy(sc, min_confidence = c(1, 2)), "single number")
   expect_error(match_greedy(sc, confidence = "eccentric"), "should be one of")
 })
+
+## ---------------------------------------------------------------------------
+## Issue #61: tie detection needs a tolerance, or the risk depends on the units
+##
+## score_num() is |raw - anon|. In exact arithmetic, multiplying every value by
+## c > 0 multiplies every score by c and leaves the tie structure -- and so
+## every risk figure -- unchanged. In doubles it does not:
+##
+##   42.3 - 41.2 = 1.0999999999999943
+##   43.4 - 42.3 = 1.1000000000000014
+##
+## Equal as reals, 7.1e-15 apart as doubles. Measured on the 200-record fixture
+## below (docs/adversarial/adv2-02-probe.R C3), with the exact == comparison
+## that predates #61:
+##
+##                       integer units   1/10 units
+##   success_analytic       0.494167      0.504167
+##   max per-record risk    0.5           1.0
+##   TIE_SIZE > 1           198           108
+##   precision_recall rows  3             93
+##
+## 43 records with a true risk of 0.5 were reported as 0 and 47 as 1, so the
+## error does not even have a safe direction.
+## ---------------------------------------------------------------------------
+
+fp_score_table <- function(v_raw, v_anon) {
+  score_num(join_raw_anon_data(
+    data.frame(ROW_NUMBER = seq_along(v_raw), V = v_raw),
+    data.frame(ROW_NUMBER = seq_along(v_anon), V = v_anon)
+  ), "V")
+}
+
+fp_symmetric_decoys <- function(n = 200, seed = 11) {
+  ## Every ANON record sits exactly halfway between its own RAW record and a
+  ## decoy, so every true risk is exactly 1/2 and the answer is known without
+  ## running anything.
+  set.seed(seed)
+  base <- sample(seq(1000, 99999), n)
+  delta <- sample(c(3, 5, 7, 11), n, TRUE)
+  list(raw = c(base, base + 2 * delta), anon = base + delta)
+}
+
+test_that("the tie structure survives a change of units (#61)", {
+  f <- fp_symmetric_decoys()
+  s_int <- fp_score_table(f$raw, f$anon)
+  s_dec <- fp_score_table(f$raw / 10, f$anon / 10)
+
+  e_int <- reid_evaluate(s_int, seeds = 1:5, top_k = 1)
+  e_dec <- reid_evaluate(s_dec, seeds = 1:5, top_k = 1)
+
+  expect_equal(e_dec$success_analytic, e_int$success_analytic)
+  expect_equal(e_dec$max_risk, e_int$max_risk)
+  expect_equal(nrow(e_dec$precision_recall), nrow(e_int$precision_recall))
+
+  ord_i <- order(e_int$per_record$ANON_ROW_NUMBER)
+  ord_d <- order(e_dec$per_record$ANON_ROW_NUMBER)
+  expect_equal(e_dec$per_record$RISK[ord_d], e_int$per_record$RISK[ord_i])
+  expect_equal(e_dec$per_record$TIE_SIZE[ord_d], e_int$per_record$TIE_SIZE[ord_i])
+
+  c_int <- reid_confidence(s_int)
+  c_dec <- reid_confidence(s_dec)
+  expect_equal(c_dec$TIE_SIZE, c_int$TIE_SIZE)
+  expect_equal(c_dec$ECCENTRICITY, c_int$ECCENTRICITY)
+})
+
+test_that("tolerance = 0 reproduces the pre-#61 numbers exactly", {
+  ## The point of keeping the old path reachable: this test is also the record
+  ## of what the defect looked like.
+  f <- fp_symmetric_decoys()
+  s_int <- fp_score_table(f$raw, f$anon)
+  s_dec <- fp_score_table(f$raw / 10, f$anon / 10)
+
+  old_int <- reid_evaluate(s_int, seeds = 1:5, top_k = 1, tolerance = 0)
+  old_dec <- reid_evaluate(s_dec, seeds = 1:5, top_k = 1, tolerance = 0)
+
+  expect_equal(round(old_int$success_analytic, 6), 0.494167)
+  expect_equal(round(old_dec$success_analytic, 6), 0.504167)
+  expect_equal(old_int$max_risk, 0.5)
+  expect_equal(old_dec$max_risk, 1)
+  expect_equal(nrow(old_int$precision_recall), 3)
+  expect_equal(nrow(old_dec$precision_recall), 93)
+
+  ## The new default agrees with the integer-unit answer, which is the one the
+  ## arithmetic says is right.
+  new_dec <- reid_evaluate(s_dec, seeds = 1:5, top_k = 1)
+  expect_equal(round(new_dec$success_analytic, 6), 0.494167)
+  expect_equal(new_dec$max_risk, 0.5)
+  expect_equal(nrow(new_dec$precision_recall), 3)
+})
+
+test_that("the exact-tie case is the one the tolerance has to reproduce (#61)", {
+  ## 3 records; ANON 2 sits exactly between RAW 2 and RAW 3. Written as
+  ## integers there is no representation error at all, so this fixture pins
+  ## the answer the 1/10 version has to match.
+  s <- fp_score_table(c(100, 412, 434), c(100, 423, 434))
+  cf <- reid_confidence(s)
+  expect_equal(cf$TIE_SIZE, c(1, 2, 1))
+  expect_equal(cf$MARGIN[2], 0)
+
+  cf_dec <- reid_confidence(fp_score_table(c(10.0, 41.2, 43.4),
+                                           c(10.0, 42.3, 43.4)))
+  expect_equal(cf_dec$TIE_SIZE, c(1, 2, 1))
+  expect_equal(cf_dec$MARGIN[2], 0)
+
+  ## Without the tolerance, the 1/10 version claims a unique winner on a
+  ## margin of 7.1e-15.
+  cf_old <- reid_confidence(fp_score_table(c(10.0, 41.2, 43.4),
+                                           c(10.0, 42.3, 43.4)), tolerance = 0)
+  expect_equal(cf_old$TIE_SIZE, c(1, 1, 1))
+  expect_gt(cf_old$MARGIN[2], 0)
+  expect_lt(cf_old$MARGIN[2], 1e-12)
+})
+
+test_that("the tolerance does not fuse genuinely distinct candidates (#61)", {
+  ## 1e-7 relative apart is ten times the default tolerance: these stay apart.
+  expect_equal(length(unique(snap_tied_values(c(1, 1 + 1e-7, 1 + 2e-7, 5)))), 4L)
+  ## 1e-12 apart is representation noise: these fuse.
+  expect_equal(length(unique(snap_tied_values(c(1, 1 + 1e-12, 5)))), 2L)
+  ## min() is preserved, which is what keeps BEST_SCORE and the identity of the
+  ## winning candidate unchanged.
+  v <- c(3, 3 + 1e-13, 1, 1 + 1e-13)
+  expect_equal(min(snap_tied_values(v)), min(v))
+  ## Inf gets its own group rather than being fused with a finite score.
+  expect_equal(snap_tied_values(c(1, Inf, Inf, 2)), c(1, Inf, Inf, 2))
+  ## A table with no near-ties comes back unchanged.
+  expect_equal(snap_tied_values(c(0, 10, 20, 30)), c(0, 10, 20, 30))
+  ## tolerance = 0 is exactly the old comparison.
+  expect_equal(snap_tied_values(c(1, 1 + 1e-15), tolerance = 0), c(1, 1 + 1e-15))
+})
+
+test_that("the tolerance leaves ordinary fixtures alone -- no false positives (#61)", {
+  fixtures <- list(
+    score_num(join_raw_anon_data(
+      data.frame(ROW_NUMBER = 1:6, V = c(10, 20, 30, 40, 40, 40)),
+      data.frame(ROW_NUMBER = 1:6, V = c(10, 20, 30, 40, 40, 40))), "V"),
+    score_num(join_raw_anon_data(
+      data.frame(ROW_NUMBER = 1:6, V = c(1, 1, 2, 2, 3, 3)),
+      data.frame(ROW_NUMBER = 1:6, V = c(1, 1, 2, 2, 3, 3))), "V")
+  )
+  set.seed(3)
+  rawv <- runif(60, 0, 1000)
+  fixtures[[3]] <- fp_score_table(rawv, rawv + rnorm(60, 0, 0.5))
+
+  for (s in fixtures) {
+    a <- reid_evaluate(s, seeds = 1:5, top_k = 1, tolerance = 0)
+    b <- reid_evaluate(s, seeds = 1:5, top_k = 1)
+    expect_equal(b$success_analytic, a$success_analytic)
+    expect_equal(b$max_risk, a$max_risk)
+    expect_equal(nrow(b$precision_recall), nrow(a$precision_recall))
+    expect_equal(reid_confidence(s)$TIE_SIZE,
+                 reid_confidence(s, tolerance = 0)$TIE_SIZE)
+  }
+})
+
+test_that("match_greedy and match_optimal use the same notion of 'tied' (#61)", {
+  f <- fp_symmetric_decoys(n = 40, seed = 5)
+  s <- fp_score_table(f$raw / 10, f$anon / 10)
+
+  g <- match_greedy(s, seed = 1, confidence = "tie")
+  o <- match_optimal(s, seed = 1, confidence = "tie")
+  expect_lt(sum(g$CONFIDENCE == 1), nrow(g))
+  expect_lt(sum(o$CONFIDENCE == 1), nrow(o))
+
+  ## With tolerance = 0 both report far more unique winners: the same defect,
+  ## in both functions.
+  g0 <- match_greedy(s, seed = 1, confidence = "tie", tolerance = 0)
+  o0 <- match_optimal(s, seed = 1, confidence = "tie", tolerance = 0)
+  expect_gt(sum(g0$CONFIDENCE == 1), sum(g$CONFIDENCE == 1))
+  expect_gt(sum(o0$CONFIDENCE == 1), sum(o$CONFIDENCE == 1))
+})
+
+test_that("tolerance is validated (#61)", {
+  s <- fp_score_table(c(1, 2, 3), c(1, 2, 3))
+  for (bad in list(-1, NA_real_, c(1, 2), "x", Inf)) {
+    expect_error(reid_evaluate(s, seeds = 1:3, tolerance = bad), regexp = "tolerance")
+    expect_error(reid_confidence(s, tolerance = bad), regexp = "tolerance")
+    expect_error(match_greedy(s, tolerance = bad), regexp = "tolerance")
+    expect_error(match_optimal(s, tolerance = bad), regexp = "tolerance")
+  }
+})

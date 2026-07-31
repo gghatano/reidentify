@@ -13,6 +13,124 @@
 ## Margin/eccentricity-based confidence is Issue #16.
 ## ---------------------------------------------------------------------------
 
+#' the package-wide default tolerance for deciding that two scores are tied
+#'
+#' `sqrt(.Machine$double.eps)`, about 1.5e-8, used as a **relative** tolerance:
+#' two scores count as tied when they agree to roughly the first 8 significant
+#' digits. That is `all.equal()`'s default and it deliberately spends half of a
+#' double's 16 digits, because the last 8 are where representation noise lives.
+#'
+#' @return a single positive number
+#'
+#' @keywords internal
+reid_tie_tolerance <- function() sqrt(.Machine$double.eps)
+
+#' collapse near-equal scores onto a common value, so `==` can be used on them
+#'
+#' Issue #61. `score_num()` is `|raw - anon|`, so in exact arithmetic scaling
+#' every value by `c > 0` scales every score by `c` and leaves the tie structure
+#' -- and therefore every risk figure -- unchanged. In doubles it does not:
+#'
+#' ```
+#' 42.3 - 41.2 = 1.0999999999999943
+#' 43.4 - 42.3 = 1.1000000000000014
+#' ```
+#'
+#' Equal as reals, 7.1e-15 apart as doubles. Every tie test in this package was
+#' an exact `==`, so re-expressing the same data in 1/10 units turned ties into
+#' strict orderings. Measured on a 200-record fixture built so every ANON record
+#' has exactly one symmetric decoy (`docs/adversarial/adv2-02-probe.R` C3): the
+#' max per-record risk moved from 0.5 to 1.0, 43 records with a true risk of 0.5
+#' were reported as 0 and 47 as 1, and the precision-recall table grew from 3
+#' rows to 93 -- 90 of them thresholds separated by ~1e-14 of rounding noise.
+#'
+#' Rather than scatter tolerant comparisons through every tie test, this
+#' rewrites the values once: within one ANON record's candidate list, scores
+#' that are within `tolerance` of each other are replaced by their group
+#' minimum. All the existing `==`, `<` and `min()` tests then work unchanged and
+#' remain exact, transitive and order-preserving -- which a pairwise
+#' `abs(a - b) < tol` is not.
+#'
+#' Grouping is single-linkage over the sorted values: a gap wider than
+#' `tolerance * max(1, |a|, |b|)` starts a new group. Chaining is therefore
+#' possible in principle (a ladder of values each within tolerance of the next
+#' fuses end to end), but at 1.5e-8 relative it takes on the order of 10^8
+#' candidates in one ANON record's list to span a factor of two.
+#'
+#' `min()` is preserved exactly -- the representative of a group is its
+#' smallest member -- so `BEST_SCORE` and the identity of the winning candidate
+#' do not move. What moves is only how many candidates count as tied with it.
+#'
+#' @param v numeric vector of scores for one ANON record, on the internally
+#'   minimised scale
+#' @param tolerance relative tolerance; 0 restores exact `==` comparison
+#'
+#' @return `v` with near-equal entries replaced by their group minimum
+#'
+#' @keywords internal
+snap_tied_values <- function(v, tolerance = reid_tie_tolerance()) {
+  if (tolerance == 0 || length(v) < 2L) {
+    return(v)
+  }
+  ord <- order(v)
+  s <- v[ord]
+  a <- s[-length(s)]
+  b <- s[-1L]
+  ## a == b catches Inf == Inf, which the subtraction cannot (Inf - Inf is
+  ## NaN); the is.finite() guard keeps Inf from being fused with a finite
+  ## score, which the scaled comparison would otherwise do (Inf <= Inf).
+  same <- (a == b) |
+    (is.finite(a) & is.finite(b) & (b - a) <= tolerance * pmax(1, abs(a), abs(b)))
+  same[is.na(same)] <- FALSE
+  gid <- cumsum(c(TRUE, !same))
+  out <- v
+  out[ord] <- s[!duplicated(gid)][gid]
+  out
+}
+
+#' apply [snap_tied_values()] within each ANON record's candidate list
+#'
+#' Ties only ever mean anything *within* one ANON record's candidates, so the
+#' snapping is per group; comparing scores across ANON records would fuse
+#' values that are never compared with each other.
+#'
+#' @param v numeric vector of scores, on the internally minimised scale
+#' @param group ANON record identifier, same length as `v`
+#' @param tolerance relative tolerance; 0 restores exact `==` comparison
+#'
+#' @return `v`, snapped within each group
+#'
+#' @keywords internal
+snap_tied_values_by_group <- function(v, group, tolerance = reid_tie_tolerance()) {
+  if (tolerance == 0 || length(v) < 2L) {
+    return(v)
+  }
+  out <- v
+  for (idx in split(seq_along(v), group)) {
+    if (length(idx) > 1L) {
+      out[idx] <- snap_tied_values(v[idx], tolerance)
+    }
+  }
+  out
+}
+
+#' validate a tie tolerance
+#'
+#' @param tolerance the value to check
+#' @param fn_name calling function, for the message
+#'
+#' @return `tolerance`, invisibly
+#'
+#' @keywords internal
+validate_tie_tolerance <- function(tolerance, fn_name) {
+  if (!is.numeric(tolerance) || length(tolerance) != 1L || is.na(tolerance) ||
+        tolerance < 0 || is.infinite(tolerance)) {
+    stop(fn_name, "(): `tolerance` must be a single finite non-negative ",
+         "number (0 restores exact == comparison of scores).", call. = FALSE)
+  }
+  invisible(tolerance)
+}
+
 #' reject a score table that lists the same candidate pair more than once
 #'
 #' An attacker's candidate list is a **set**. If (ANON 1, RAW 2) appears twice,
@@ -75,7 +193,9 @@ validate_unique_candidate_pairs <- function(scores, fn_name) {
 #' Ties are broken uniformly at random via [resolve_min_distance_ties()], so a
 #' record that is genuinely indistinguishable from `k` others is credited with
 #' a `1/k` chance rather than being deterministically awarded to whichever
-#' candidate happened to sort first (Issue #3).
+#' candidate happened to sort first (Issue #3). Two scores count as tied when
+#' they agree to within `tolerance` **relatively**, not only when they are
+#' bit-identical; see `tolerance` below and `docs/default-changes.md`.
 #'
 #' By default `CONFIDENCE` is the **eccentricity** (`confidence = "margin"`):
 #' how far ahead of the runner-up the winner is, in units of the spread of
@@ -115,6 +235,12 @@ validate_unique_candidate_pairs <- function(scores, fn_name) {
 #'   record keeps its row but is reported with `RAW_ROW_NUMBER = NA` and
 #'   `RESULT = FALSE`, so the trial count is unchanged and the reported rate
 #'   cannot be inflated by simply attacking less.
+#' @param tolerance relative tolerance for deciding that two candidate scores
+#'   are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Scores agreeing
+#'   to about the first 8 significant digits are treated as indistinguishable,
+#'   so re-expressing the same data in different units does not turn a tie into
+#'   a strict ordering. Pass `tolerance = 0` for the exact `==` comparison used
+#'   before #61; see `docs/default-changes.md`.
 #'
 #' @return a data frame with exactly one row per ANON record, ordered by
 #'   ANON_ROW_NUMBER, with columns ANON_ROW_NUMBER, RAW_ROW_NUMBER,
@@ -129,14 +255,25 @@ validate_unique_candidate_pairs <- function(scores, fn_name) {
 #'
 #' @export
 match_greedy <- function(scores, seed = 0L, confidence = c("margin", "tie"),
-                         min_confidence = 0) {
+                         min_confidence = 0,
+                         tolerance = reid_tie_tolerance()) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
   validate_unique_candidate_pairs(scores, "match_greedy")
+  validate_tie_tolerance(tolerance, "match_greedy")
 
   ## Internally everything is minimised. A similarity is negated rather than
   ## inverted so the transformation is monotone and never divides by zero.
   distance <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
+
+  ## Issue #61: collapse near-equal candidate scores onto one value *before*
+  ## any tie test, so both the "which rows are minimal" filter inside
+  ## resolve_min_distance_ties() and the tie-size count below see the same,
+  ## unit-invariant notion of "tied". DISTANCE is only used for those two
+  ## comparisons, never reported, so snapping it changes no output value --
+  ## only which candidates count as indistinguishable.
+  distance <- snap_tied_values_by_group(distance, scores$ANON_ROW_NUMBER,
+                                        tolerance)
 
   work <- data.frame(
     RAW_ROW_NUMBER = scores$RAW_ROW_NUMBER,
@@ -165,7 +302,7 @@ match_greedy <- function(scores, seed = 0L, confidence = c("margin", "tie"),
   )
 
   score_row <- picked$SCORE_ROW
-  out <- apply_confidence(out, scores, confidence, min_confidence)
+  out <- apply_confidence(out, scores, confidence, min_confidence, tolerance)
 
   ## Which row of `scores` each winner came from. The reid_by_*() wrappers use
   ## this to recover the per-pair detail columns they have always reported;
@@ -335,6 +472,12 @@ reid_lsap_solvers <- function() {
 #'   `"margin"`.
 #' @param min_confidence decline to guess below this confidence (default 0).
 #'   Applied on top of any declining the padding already did.
+#' @param tolerance relative tolerance for tie detection in the reported
+#'   CONFIDENCE, default `sqrt(.Machine$double.eps)` (Issue #61), so that
+#'   `match_optimal()` and [match_greedy()] agree on what "tied" means. The
+#'   **assignment** is unaffected: the solver minimises the raw costs, and
+#'   perturbing them to make the report unit-invariant could change which
+#'   assignment is chosen. Pass 0 for the exact comparison used before #61.
 #'
 #' @return a data frame with the same four columns as [match_greedy()] --
 #'   ANON_ROW_NUMBER, RAW_ROW_NUMBER, CONFIDENCE, RESULT -- one row per ANON
@@ -354,9 +497,11 @@ match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
                           dummy_cost = NULL, solver = "clue", block = NULL,
                           warn_size = 1000L, max_size = 5000L,
                           confidence = c("margin", "tie"),
-                          min_confidence = 0) {
+                          min_confidence = 0,
+                          tolerance = reid_tie_tolerance()) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "match_optimal")
 
   if (nrow(scores) == 0) {
     stop("match_optimal(): `scores` has no rows; there is nothing to assign.",
@@ -451,7 +596,8 @@ match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
         value = value[idx],
         sampling_rate = sampling_rate,
         dummy_cost = dummy_cost,
-        solve_fn = solve_fn
+        solve_fn = solve_fn,
+        tolerance = tolerance
       )
     }))
   })
@@ -463,7 +609,7 @@ match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
   ## measure is asked for: it made no claim, so there is nothing to be
   ## confident about.
   declined_by_padding <- is.na(res$RAW_ROW_NUMBER)
-  res <- apply_confidence(res, scores, confidence, min_confidence)
+  res <- apply_confidence(res, scores, confidence, min_confidence, tolerance)
   res$CONFIDENCE[declined_by_padding] <- 0
 
   res
@@ -481,12 +627,14 @@ match_optimal <- function(scores, sampling_rate = 1, seed = 0L,
 #' @param sampling_rate see [match_optimal()]
 #' @param dummy_cost see [match_optimal()]
 #' @param solve_fn a solver function from [reid_lsap_solvers()]
+#' @param tolerance relative tie tolerance for the CONFIDENCE count only, see
+#'   [match_optimal()]
 #'
 #' @return a data frame of ANON_ROW_NUMBER, RAW_ROW_NUMBER, CONFIDENCE, RESULT
 #'
 #' @keywords internal
 match_optimal_one <- function(raw, anon, value, sampling_rate, dummy_cost,
-                              solve_fn) {
+                              solve_fn, tolerance = reid_tie_tolerance()) {
   anon_levels <- sort(unique(anon))
   raw_levels <- sort(unique(raw))
   n_anon <- length(anon_levels)
@@ -553,13 +701,33 @@ match_optimal_one <- function(raw, anon, value, sampling_rate, dummy_cost,
   ## k-way tie at the best score it is 1/k -- the same number match_greedy()
   ## reports -- and it degrades when the one-to-one constraint pushed this
   ## record off its own first choice. Margin-based confidence is Issue #16.
+  ##
+  ## The count is taken on tie-snapped costs (Issue #61) so that "at least as
+  ## good as" means the same here as in match_greedy(): otherwise the same
+  ## data in different units would give the two functions different
+  ## CONFIDENCE for an identical assignment. The *assignment* above is still
+  ## solved on the raw costs -- perturbing the solver's input to make a report
+  ## unit-invariant could change which assignment is optimal, which is a much
+  ## bigger claim than this fix is making.
   anon_idx <- match(anon, anon_shuffled)
   conf <- rep(0, n_anon)
   ok <- which(!declined)
   if (length(ok) > 0) {
-    by_anon <- split(cost, factor(anon_idx, levels = seq_len(n_anon)))
+    snapped <- snap_tied_values_by_group(cost, anon_idx, tolerance)
+    ## picked_cost was read off the raw matrix, so it has to be mapped onto the
+    ## snapped scale too, or a winner sitting a rounding error above its own
+    ## group representative would count itself out.
+    snapped_pick <- picked_cost
+    by_raw <- split(cost, factor(anon_idx, levels = seq_len(n_anon)))
+    by_anon <- split(snapped, factor(anon_idx, levels = seq_len(n_anon)))
+    for (i in ok) {
+      hit <- which(by_raw[[i]] == picked_cost[i])
+      if (length(hit) > 0) {
+        snapped_pick[i] <- by_anon[[i]][hit[1]]
+      }
+    }
     conf[ok] <- 1 / vapply(
-      ok, function(i) sum(by_anon[[i]] <= picked_cost[i]), numeric(1)
+      ok, function(i) sum(by_anon[[i]] <= snapped_pick[i]), numeric(1)
     )
   }
 

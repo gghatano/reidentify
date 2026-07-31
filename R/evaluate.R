@@ -29,15 +29,21 @@
 #' @param confidence which confidence measure to put in the CONFIDENCE
 #'   column, `"margin"` (default since Issue #44) or `"tie"`. See
 #'   [reid_confidence()].
+#' @param tolerance relative tie tolerance (Issue #61), see
+#'   [reid_confidence()]. `N_BETTER`, `TRUE_TIE_SIZE`, `TRUE_RANK` and
+#'   `BEST_TIE_SIZE` are all counts of "how many candidates are as good as, or
+#'   better than, this one", so all four depend on it.
 #'
 #' @return a data frame with one row per ANON record and columns
 #'   ANON_ROW_NUMBER, N_CANDIDATES, BEST_SCORE, BEST_TIE_SIZE, CONFIDENCE,
 #'   MARGIN, ECCENTRICITY, TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
 #'
 #' @keywords internal
-reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
+reid_per_anon <- function(scores, confidence = c("margin", "tie"),
+                          tolerance = reid_tie_tolerance()) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "reid_per_anon")
 
   value <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
   if (anyNA(value)) {
@@ -52,7 +58,10 @@ reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
 
   rows <- lapply(seq_along(groups), function(i) {
     idx <- groups[[i]]
-    v <- value[idx]
+    ## Issue #61: every comparison below is a tie test ("as good as", "better
+    ## than"), so they all run on tie-snapped values. snap_tied_values()
+    ## preserves min(), so BEST_SCORE is unchanged.
+    v <- snap_tied_values(value[idx], tolerance)
     this_anon <- levels_anon[i]
 
     best <- min(v)
@@ -91,7 +100,7 @@ reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
   ## MARGIN / ECCENTRICITY are reported whichever measure was asked for, so a
   ## reader can see why the threshold sweep has the resolution it has without
   ## rerunning anything (Issue #16).
-  conf <- reid_confidence(scores, method = confidence)
+  conf <- reid_confidence(scores, method = confidence, tolerance = tolerance)
   ord <- match(out$ANON_ROW_NUMBER, conf$ANON_ROW_NUMBER)
   out$MARGIN <- conf$MARGIN[ord]
   out$ECCENTRICITY <- conf$ECCENTRICITY[ord]
@@ -180,6 +189,14 @@ top_k_probability <- function(n_better, tie_size, k) {
 #'   distinct threshold per record and is what makes "attack the top 10% and
 #'   be right most of the time" visible. It is an ordering, not a probability
 #'   (Issue #16), and its scale does not carry between data sets.
+#' @param tolerance relative tolerance for deciding that two candidate scores
+#'   are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Every risk
+#'   figure here is built out of "how many candidates are at least as good as
+#'   the true one", so an exact `==` made them depend on the units the input
+#'   happened to use: the same 200-record data set expressed in 1/10 units
+#'   moved `max_risk` from 0.5 to 1.0 and grew `precision_recall` from 3 rows
+#'   to 93. Pass `tolerance = 0` for the pre-#61 behaviour; see
+#'   `docs/default-changes.md`.
 #'
 #' @section Changed defaults:
 #'
@@ -257,9 +274,11 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' @importFrom stats sd
 #' @export
 reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
-                          confidence = c("margin", "tie")) {
+                          confidence = c("margin", "tie"),
+                          tolerance = reid_tie_tolerance()) {
   confidence <- match.arg(confidence)
   validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "reid_evaluate")
   ## Issue #60: this has to be checked here and not left to the cross-check
   ## between success_analytic and success_mean, because a duplicated candidate
   ## pair moves both of them the same way. See
@@ -274,7 +293,8 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
     stop("reid_evaluate(): `seeds` must not contain duplicates.", call. = FALSE)
   }
 
-  per_anon <- reid_per_anon(scores, confidence = confidence)
+  per_anon <- reid_per_anon(scores, confidence = confidence,
+                            tolerance = tolerance)
   n_anon <- nrow(per_anon)
   n_raw <- length(unique(scores$RAW_ROW_NUMBER))
 
@@ -284,7 +304,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
 
   ## ---- simulated success rate, for the variance and as a cross-check ------
   per_seed <- do.call(rbind, lapply(seeds, function(s) {
-    m <- match_greedy(scores, seed = s)
+    m <- match_greedy(scores, seed = s, tolerance = tolerance)
     data.frame(seed = s, success = sum(m$RESULT), trial = nrow(m))
   }))
   per_seed$rate <- per_seed$success / per_seed$trial
@@ -305,6 +325,10 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   } else {
     scores$SCORE
   }
+  ## Snapped for the same reason as everywhere else (Issue #61): "is this
+  ## candidate one of the best ones" is a tie test, and the mode baseline is
+  ## what the measured rate has to beat, so it must not move with the units.
+  value <- snap_tied_values_by_group(value, scores$ANON_ROW_NUMBER, tolerance)
   best_mask <- value == per_anon$BEST_SCORE[
     match(scores$ANON_ROW_NUMBER, per_anon$ANON_ROW_NUMBER)
   ]
@@ -352,7 +376,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   hit_counts <- rep(0, n_anon)
   names(hit_counts) <- as.character(per_anon$ANON_ROW_NUMBER)
   for (s in seeds) {
-    m <- match_greedy(scores, seed = s)
+    m <- match_greedy(scores, seed = s, tolerance = tolerance)
     hit_counts[as.character(m$ANON_ROW_NUMBER)] <-
       hit_counts[as.character(m$ANON_ROW_NUMBER)] + as.integer(m$RESULT)
   }

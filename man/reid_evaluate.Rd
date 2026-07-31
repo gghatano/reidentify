@@ -9,7 +9,8 @@ reid_evaluate(
   scores,
   seeds = 1:20,
   top_k = c(1, 5, 10),
-  confidence = c("margin", "tie")
+  confidence = c("margin", "tie"),
+  tolerance = reid_tie_tolerance()
 )
 }
 \arguments{
@@ -32,6 +33,15 @@ a single point equal to the overall success rate. `"margin"` gives a
 distinct threshold per record and is what makes "attack the top 10% and
 be right most of the time" visible. It is an ordering, not a probability
 (Issue #16), and its scale does not carry between data sets.}
+
+\item{tolerance}{relative tolerance for deciding that two candidate scores
+are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Every risk
+figure here is built out of "how many candidates are at least as good as
+the true one", so an exact `==` made them depend on the units the input
+happened to use: the same 200-record data set expressed in 1/10 units
+moved `max_risk` from 0.5 to 1.0 and grew `precision_recall` from 3 rows
+to 93. Pass `tolerance = 0` for the pre-#61 behaviour; see
+`docs/default-changes.md`.}
 }
 \value{
 an object of class "reid_evaluation": a list with
