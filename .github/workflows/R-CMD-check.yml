@@ -71,6 +71,35 @@ jobs:
                "上のステップのログの MISMATCH 節に、どのブロックのどの行がずれたかが出ています。"\
                "出力の再生成: Rscript docs/verify-readme-examples.R . --rewrite"
 
+  # pkgload::load_all() + testthat::test_dir() で作業ツリーそのものを検査する。
+  # R CMD check はビルド済み tarball を一時ライブラリへ入れて検査するので、
+  # ソースツリーが見えることを前提にしたテストは別の分岐を通る。2 つの経路は
+  # 通る本数が違う (実測 2225 / 2227) ので、どちらにも価値がある。
+  # site/index.html が載せている「自動テスト N 件」はこちらの完全な方の数字で、
+  # 同じジョブで照合する (#63)。
+  source-tree-tests:
+    runs-on: ubuntu-latest
+    name: source-tree tests
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgload, any::rcmdcheck
+          needs: check
+
+      - name: Run the suite against the working tree
+        run: Rscript docs/run-source-tests.R . --check-figures
+
   R-CMD-check:
     runs-on: ubuntu-latest
     name: R CMD check
