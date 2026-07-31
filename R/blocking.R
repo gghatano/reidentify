@@ -181,27 +181,46 @@ assemble_candidates <- function(raw, anon, ri, ai, raw_header, anon_header) {
   out
 }
 
-#' build the blocking key of one pass
+#' build the blocking keys of one pass, for both sides at once
 #'
-#' @param df a data frame
+#' Both sides are coded together and only then split apart, because the codes
+#' have to mean the same thing on each: a key is only useful here if
+#' `key_raw[i] == key_anon[j]` says the two records agree, and per-frame codes
+#' would make that comparison meaningless.
+#'
+#' This uses [reid_value_key()] rather than pasting the values themselves
+#' (Issue #70). The old form separated the parts with `"\\r"` on the assumption
+#' that no column value contains one -- an assumption about the *user's* data,
+#' not about this package's output, and false for anything read out of a
+#' CRLF-quoted CSV field. Two records that disagreed could then land in one
+#' block, which is not the direction that loses true pairs, but it does make
+#' the reported reduction describe a different blocking than the one asked for.
+#'
+#' @param raw,anon the two data frames
 #' @param cols column names making up the key
 #' @param transform named list of functions applied before comparison
 #'
-#' @return a character vector, one key per row
+#' @return a list with `raw` and `anon` character vectors, one key per row
 #'
 #' @keywords internal
-blocking_pass_key <- function(df, cols, transform) {
-  vals <- lapply(cols, function(cl) {
-    v <- df[[cl]]
+blocking_pass_keys <- function(raw, anon, cols, transform) {
+  n_raw <- nrow(raw)
+  codes <- lapply(cols, function(cl) {
     fn <- transform[[cl]]
+    vr <- raw[[cl]]
+    va <- anon[[cl]]
     if (!is.null(fn)) {
-      v <- fn(v)
+      vr <- fn(vr)
+      va <- fn(va)
     }
-    as.character(v)
+    ## as.character() first: the two sides are supplied independently and may
+    ## disagree on storage type (factor against character, integer against
+    ## double), and blocking has always compared the value as written. Coding
+    ## the two sides jointly is what makes the codes comparable.
+    reid_class_codes(c(as.character(vr), as.character(va)))
   })
-  ## "\r" cannot occur in a column value produced by this package's collapse
-  ## conventions, so it separates the parts unambiguously.
-  do.call(paste, c(vals, list(sep = "\r")))
+  key <- reid_value_key(codes)
+  list(raw = key[seq_len(n_raw)], anon = key[n_raw + seq_len(nrow(anon))])
 }
 
 #' build a reduced RAW/ANON candidate table by deterministic blocking
@@ -318,11 +337,10 @@ block_candidates <- function(raw, anon, keys, transform = NULL,
   ri <- integer(0)
   ai <- integer(0)
   for (pass in keys) {
-    kr <- blocking_pass_key(raw, pass, transform)
-    ka <- blocking_pass_key(anon, pass, transform)
+    pk <- blocking_pass_keys(raw, anon, pass, transform)
 
-    by_raw <- split(seq_len(n_raw), kr)
-    by_anon <- split(seq_len(n_anon), ka)
+    by_raw <- split(seq_len(n_raw), pk$raw)
+    by_anon <- split(seq_len(n_anon), pk$anon)
     common <- intersect(names(by_raw), names(by_anon))
     if (length(common) == 0) {
       next

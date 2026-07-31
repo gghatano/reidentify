@@ -670,7 +670,12 @@ generalization_hierarchy <- function(x) {
   }
 
   edges <- edges[!duplicated(edges), , drop = FALSE]
-  key <- paste(edges$attribute, edges$value, sep = "\r")
+  ## Issue #70: pasting the two fields with "\r" made ("A", "x\ry") and
+  ## ("A\rx", "y") the same key, so a hierarchy holding both was rejected as
+  ## having two parents for one value -- a legitimate tree refused, with a
+  ## message pointing at the wrong thing. reid_value_key() cannot collide.
+  key <- reid_value_key(list(reid_class_codes(edges$attribute),
+                             reid_class_codes(edges$value)))
   if (anyDuplicated(key) > 0) {
     i <- which(duplicated(key))[1]
     stop("generalization_hierarchy(): \"", edges$value[i], "\" (attribute \"",

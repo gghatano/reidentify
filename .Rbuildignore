@@ -4,7 +4,6 @@
 ^\.git$
 ^\.gitignore$
 ^docs$
-^reidentify\.pdf$
 ^R/tmp$
 ^\.github$
 ^site$
