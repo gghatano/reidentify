@@ -160,4 +160,5 @@ SKIP  README.md:88 (install/help instructions)
 SKIP  README.md:1164 (install/help instructions)
 
 ==== 34 R block(s) run, 4 skipped; 45 output unit(s) compared, 0 mismatching ====
+==== 3 warning(s)/message(s) signalled, 0 pinned expectation(s) violated ====
 ==== 55 exported function(s), 0 missing from README ====
