@@ -186,8 +186,8 @@ test_that("a real two-parent edge is still rejected", {
 ##
 ## What does reach it is the second failure mode of unicity_key(): paste()
 ## prints a double to 15 significant digits. coarsen_time() returns a double,
-## so on a nanosecond clock (~1.7e18) every distinct instant printed as the
-## same "1.7e+18" and the points collapsed onto one -- and collapsed points
+## so on a microsecond clock (~1.75e15) every distinct instant printed as the
+## same "1.75e+15" and the points collapsed onto one -- and collapsed points
 ## enlarge every anonymity set, so the reported unicity FALLS. That is the
 ## under-reporting direction of docs/lessons-learned.md section 2.
 ##
@@ -214,7 +214,7 @@ distinct_points <- function(place, time) {
 ## epoch -- what a Postgres timestamp holds -- are about 1.75e15, and 15
 ## significant digits stop resolving just below that. The value is still an
 ## exact double (2^53 is 9.0e15), so nothing here is floating-point noise: the
-## six instants really are six distinct numbers, and only their printed form
+## five instants really are five distinct numbers, and only their printed form
 ## loses them.
 microsecond_trace <- function(n_people = 5, magnitude = 1.75e15) {
   data.frame(
