@@ -1,0 +1,697 @@
+---
+title: "再識別リスクの測り方 — 数値が意味を持つ条件"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{再識別リスクの測り方 — 数値が意味を持つ条件}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+options(width = 80, digits = 7)
+```
+
+README は**使い方**を、`?reid_evaluate` などのヘルプは**関数ごとの仕様**を書いています。
+この文書はそのどちらでもなく、**なぜそう測るのか**、そして
+**出てきた数値をどういう条件のもとで信じてよいのか**を書きます。
+
+背骨にあるのは 1 つの経験則です。
+
+> **安全性評価ツールの不具合は、安全に見える方向に外れる。**
+> 低い数値は歓迎され、疑われにくい。
+> （`docs/lessons-learned.md` §2）
+
+「再識別されませんでした」という結果には、少なくとも 4 つの原因があります。
+
+1. 本当に安全である
+2. 測り方が対象に合っていない
+3. 攻撃が弱すぎる
+4. 測定そのものが壊れている
+
+**出力を見ただけでは、この 4 つは区別できません。** この文書は、区別するために
+何を一緒に見るべきかを、実測付きで説明します。
+
+以下のコードはすべて実行され、表示されている数値はこの文書をビルドしたときに
+生成されたものです。乱数はすべて `set.seed()` で固定してあります。
+
+```{r library}
+library(reidentify)
+```
+
+---
+
+# 1. 規則どおりに加工することと、特定されないことは別
+
+匿名加工の作業は「氏名を消す」「ID を置き換える」「年齢をぼかす」といった
+**手順**として記述されがちです。手順は検査しやすく、実施したかどうかも記録できます。
+しかし手順を満たしたことは、**その人が誰か分からなくなったこと**を意味しません。
+
+ダミーデータで確かめます。直接識別子（`ID`, `FINGERPRINT`）は公開データから
+完全に削除し、年齢には ±2 歳のノイズを加えます。
+
+```{r fixture}
+raw  <- create_dummy_qi_data(people = 200, seed = 1)
+anon <- create_dummy_qi_data(people = 200, seed = 1)
+
+set.seed(42)
+anon$AGE <- anon$AGE + sample(c(-2, 0, 2), nrow(anon), replace = TRUE)
+
+## 公開データからは直接識別子を落とす
+anon$ID <- NULL
+anon$FINGERPRINT <- NULL
+names(anon)
+```
+
+直接識別子は 1 つも残っていません。では安全でしょうか。
+**ユニシティ**（他の誰とも区別がついてしまうレコードの割合）を測ります。
+これは特定の攻撃手法に依存しない量で、`unicity_fraction()` が数えます。
+
+```{r unicity}
+c(SEX           = unicity_fraction(raw, "SEX"),
+  AGE           = unicity_fraction(raw, "AGE"),
+  ZIP           = unicity_fraction(raw, "ZIP"),
+  "AGE+ZIP"     = unicity_fraction(raw, c("AGE", "ZIP")),
+  "AGE+ZIP+SEX" = unicity_fraction(raw, c("AGE", "ZIP", "SEX")))
+```
+
+1 列ずつ見れば、一意になる人はほとんど居ません（`SEX` は 0%、`ZIP` で 0.5%、
+`AGE` でも 5%）。**ところが 2 列を組み合わせた瞬間に 94% が一意になります。**
+列ごとの安全性を積み上げても、組み合わせの安全性にはなりません。
+
+実際に攻撃してみると、ユニシティとほぼ同じ水準の数値が出ます。
+
+```{r attack-qi}
+pairs <- join_raw_anon_data(raw, anon)
+qi    <- c(AGE = "num", ZIP = "char", SEX = "char")
+
+reid_evaluate(score_multi(pairs, qi), seeds = 1:20)
+```
+
+**直接識別子を全部消しても 92% が元の個人に戻ります。**
+「規則どおりに加工したか」を検査する仕組みと、「特定できてしまわないか」を
+測る仕組みは、別に用意する必要がある、というのがこの節の主張です。
+
+なお、ユニシティは**確実に**特定できる割合なので、期待成功率の**下界**です
+（上界ではありません）。m 人が同じ値を共有するレコードはユニシティでは
+0 と数えますが、攻撃者は 1/m で当てられます。
+
+上の 0.94 は「`AGE` と `ZIP` を正確に知る攻撃者」に対する下界です。
+実際の攻撃 0.92 は、`AGE` がぼかされた公開データに対して `SEX` も足した値なので
+条件が違いますが、**±2 歳のノイズがリスクをほとんど下げていない**ことは読めます。
+加工の強さを議論する前に、まず下界がどこにあるかを見てください。
+
+---
+
+# 2. 攻撃者知識モデル — 「成功率 92%」は誰に対しての話か
+
+前節の 92% は、**攻撃者が `AGE`・`ZIP`・`SEX` を正確に知っている**という前提で
+測った値です。前提を書かなければ、この数値は解釈できません。
+
+`join_raw_anon_data()` は RAW と ANON を総当たりで突き合わせるので、
+既定では暗黙に**最強の攻撃者**（元データを丸ごと持っている）を仮定しています。
+上界としては正しいのですが、それだけでは現実のリスクを過大評価します。
+
+このパッケージは想定を 3 段に分けて明示します。
+
+| レベル | 攻撃者が持つ補助情報 | 対応する現実 |
+|---|---|---|
+| **W（弱）** | 準識別子の一部のみ | 公開統計・名簿からの推測 |
+| **M（中）** | 準識別子一式（+ 粗い行動特徴） | 別サービスの会員データを持つ事業者 |
+| **S（強）** | RAW レコードそのもの | 元データ保有者、内部犯行、データ流出後 |
+
+同じデータ・同じ加工に対し、3 レベルを横並びで測ります。
+ここでは W が見えるのは `ZIP` だけ、M が準識別子 3 列、
+S はさらに行動列（`VISIT_COUNT`, `SPEND_MEAN`）と `FINGERPRINT` まで持つ、
+という設定にしています。
+
+```{r knowledge-curve}
+raw_s  <- create_dummy_qi_data(people = 200, seed = 1)
+anon_s <- create_dummy_qi_data(people = 200, seed = 1)
+set.seed(42)
+anon_s$AGE <- anon_s$AGE + sample(c(-2, 0, 2), nrow(anon_s), replace = TRUE)
+pairs_s <- join_raw_anon_data(raw_s, anon_s)
+
+reid_knowledge_curve(
+  pairs_s,
+  quasi_identifiers = c(ZIP = "char", AGE = "num", SEX = "char"),
+  weak_subset       = "ZIP",
+  identifiers       = c(VISIT_COUNT = "num", SPEND_MEAN = "num",
+                        FINGERPRINT = "num"),
+  seeds             = 1:10
+)
+```
+
+**同じ公開データが 20% でもあり 100% でもあります。** 違うのは想定だけです。
+
+## どのレベルを選ぶか
+
+選び方の基準は「どれが正しいか」ではなく、**どの主張をしたいか**です。
+
+- **S を測る**のは、「最悪でもここまで」を示すためです。S が低ければ強い主張に
+  なりますが、S が高いのは当たり前なので、それだけでは何も言えません。
+- **M を測る**のは、多くの実務でここが判断の分かれ目になるからです。
+  「別サービスの会員データと突き合わされたら」という想定は具体的で、
+  補助情報の入手可能性を根拠として書けます。
+- **W を測る**のは、公開情報だけで攻撃が成立するかを見るためです。
+  W ですら高ければ、補助情報の入手可能性を論じる意味がなくなります。
+
+`attacker_knowledge()` は、この「誰が何を見るか」をオブジェクトとして残します。
+**報告書には数値ではなくこのオブジェクトの中身を書いてください。**
+
+```{r knowledge-object}
+attacker_knowledge(
+  "M",
+  quasi_identifiers = c(AGE = "num", ZIP = "char", SEX = "char"),
+  behavior          = c(VISIT_COUNT = "num")
+)
+```
+
+---
+
+# 3. 測り方を間違えると、危険なデータが安全に見える
+
+**この文書でいちばん重要な節です。**
+
+再識別リスクの測定は「距離を定義して、近いものを選ぶ」という形をしています。
+距離の定義が対象に合っていないとき、多くの場合エラーは出ません。
+**もっともらしく低い数値が出ます。** 以下はすべて、この形の失敗の実測です。
+
+## 3.1 集合属性を分布距離で測る
+
+「買った商品の集合」「訪れた店の集合」は、`"1:2:4:5"` のように区切り文字で
+連結された列として表現されます。見た目が数値の並びなので、分布間距離
+（`score_dist()`）で測りたくなりますが、これは**集合を値のヒストグラムとして
+扱う**ため、「この稀な品目を両方が持っている」という最も強い証拠を捨てます。
+
+200 人が 500 品目のカタログから 8 品目を買い（人気は Zipf 的に偏る）、
+公開時には各人の半分が抑止される、という条件で測ります。
+
+```{r setsim-fixture}
+set.seed(20260801)
+catalogue <- 500L
+people    <- 200L
+popularity <- 1 / seq_len(catalogue)^1.1
+
+basket <- lapply(seq_len(people), function(i)
+  sort(sample.int(catalogue, size = 8L, replace = FALSE, prob = popularity)))
+kept   <- lapply(basket, function(v) sort(sample(v, 4L)))
+
+set_raw  <- data.frame(ROW_NUMBER = seq_len(people),
+                       ITEMS = vapply(basket, paste, character(1),
+                                      collapse = ":"))
+set_anon <- data.frame(ROW_NUMBER = seq_len(people),
+                       ITEMS = vapply(kept, paste, character(1),
+                                      collapse = ":"))
+head(set_raw, 2)
+head(set_anon, 2)
+```
+
+```{r setsim-compare}
+set_pairs <- join_raw_anon_data(set_raw, set_anon)
+
+## success_analytic は解析的な厳密値なので、シード数には依存しない
+rate <- function(scores, seeds = 1:10) {
+  reid_evaluate(scores, seeds = seeds, top_k = 1)$success_analytic
+}
+
+c(score_dist    = rate(score_dist(set_pairs, "ITEMS")),
+  score_jaccard = rate(score_jaccard(set_pairs, "ITEMS")),
+  score_minhash = rate(score_minhash(set_pairs, "ITEMS", n_hash = 128)))
+```
+
+**同じデータ・同じ攻撃者で、測り方を変えただけで 20 倍以上違います。**
+分布距離は 0.04 という「もっともらしく低い」数値を、警告もエラーも出さずに返します。
+
+この現象は Issue #18 で最初に測られました。そのときのベンチマーク
+（`docs/investigation/setsim-benchmark.R`、同条件を 5 回反復した平均）は
+**`score_dist` 0.0650 対 `score_jaccard` 0.9091（14 倍）** です。
+上の 1 回分のフィクスチャでは 0.0400 対 0.9458（24 倍）になりました。
+倍率はフィクスチャで動きますが、**桁が違うという結論は動きません。**
+
+## 3.2 一般化された値に文字列距離を使う
+
+公開データで年齢が `"[30,40)"`、住所が `"神奈川県"` のように**粗くされている**とき、
+RAW の `37` と ANON の `"[30,40)"` は「文字列として違う」のではなく
+「**含まれている**」関係です。編集距離を計算すると、実質**文字列長の差**を
+測っているだけになります。
+
+同梱の一般化階層を使って、生データと公開データを作ります。
+
+```{r generalize-fixture}
+hier <- read_generalization_hierarchy(
+  system.file("extdata", "generalization-jp.csv", package = "reidentify")
+)
+area_leaves <- with(hier$edges, value[attribute == "AREA" & level == 1L])
+
+set.seed(20260801)
+g_raw <- data.frame(
+  ROW_NUMBER = 1:200,
+  AGE  = sample(20:79, 200, replace = TRUE),
+  AREA = sample(area_leaves, 200, replace = TRUE),
+  SEX  = sample(c("M", "F"), 200, replace = TRUE),
+  stringsAsFactors = FALSE
+)
+g_anon <- data.frame(
+  ROW_NUMBER = g_raw$ROW_NUMBER,
+  AGE  = generalize_value(g_raw$AGE,  "AGE",  hier, levels = 1),
+  AREA = generalize_value(g_raw$AREA, "AREA", hier, levels = 1),
+  SEX  = g_raw$SEX,
+  stringsAsFactors = FALSE
+)
+head(g_raw, 3)
+head(g_anon, 3)
+```
+
+`score_char()` は、ANON 側が一般化されていることを検出して**停止します**。
+
+```{r generalize-stop}
+g_pairs <- join_raw_anon_data(g_raw, g_anon)
+
+tryCatch(score_char(g_pairs, "AGE"),
+         error = function(e) cat(strwrap(conditionMessage(e), 76), sep = "\n"))
+```
+
+停止をわざと外して（`generalized = "ignore"`）、正しい手法と並べてみます。
+
+```{r generalize-compare}
+wrong <- combine_scores(lapply(c("AGE", "AREA", "SEX"), function(target) {
+  score_char(g_pairs, target, generalized = "ignore")
+}))
+right <- score_containment(g_pairs, c("AGE", "AREA", "SEX"), hierarchy = hier)
+
+c(score_char_ignore = rate(wrong), score_containment = rate(right))
+```
+
+Issue #40 の実測は **0.1017 対 0.4450（約 1/4）**、上のフィクスチャでは
+0.0758 対 0.4400（約 1/6）です。**どちらもエラーは出ません。**
+この停止機能が入るまで、`score_char()` はこの数値を黙って返していました。
+
+正しい手法は、「この公開区画に入りうる RAW は何人か」を数えます。
+これは k 匿名性の実測そのものです。
+
+```{r containment-counts}
+head(containment_counts(g_pairs, c("AGE", "AREA", "SEX"), hierarchy = hier), 4)
+```
+
+> **カテゴリ的な一般化は構造的に検出できません。**
+> 「川崎市 → 神奈川県」は、文字列 `"神奈川県"` を見ても `"川崎市"` を含むとは
+> 分かりません。したがって `score_char("AREA")` は停止せず、低い数値を返します。
+> **階層を宣言して `score_containment()` を使うのは利用者の責任です。**
+
+## 3.3 尺度を揃えずに統合する
+
+複数の属性を足すときは、スコアの**尺度**を揃える必要があります。
+`combine_scores()` は設計上**正規化しません**（尺度合わせは呼び出し側の責任です）。
+揃えずに足すと、**幅の広い軸が順位を決め、他の軸はその同点を崩すだけ**になります。
+
+`SPEND_DIST`（支払額の分布列）にもノイズを加えたフィクスチャで測ります。
+
+```{r combine-fixture}
+c_raw  <- create_dummy_qi_data(people = 200, seed = 1)
+c_anon <- create_dummy_qi_data(people = 200, seed = 1)
+set.seed(42)
+c_anon$AGE <- c_anon$AGE + sample(c(-2, 0, 2), nrow(c_anon), replace = TRUE)
+set.seed(43)
+c_anon$SPEND_DIST <- vapply(
+  strsplit(c_anon$SPEND_DIST, ":", fixed = TRUE),
+  function(v) paste(as.numeric(v) + stats::rnorm(length(v), sd = 30),
+                    collapse = ":"),
+  character(1)
+)
+
+c_pairs <- join_raw_anon_data(c_raw, c_anon)
+s_zip <- score_char(c_pairs, "ZIP")
+s_age <- score_num(c_pairs,  "AGE")
+s_spd <- score_dist(c_pairs, "SPEND_DIST")
+
+## スコアの散らばりは 4 桁違う
+c(ZIP = stats::sd(s_zip$SCORE), AGE = stats::sd(s_age$SCORE),
+  SPEND_DIST = stats::sd(s_spd$SCORE))
+
+## 単独での成功率
+c(ZIP = rate(s_zip), AGE = rate(s_age), SPEND_DIST = rate(s_spd))
+```
+
+**`SPEND_DIST` は 3 軸で最も情報量に乏しく（単独 0.015）、
+最も散らばりが大きい（`ZIP` の 1.8 万倍）軸です。**
+これを正規化せずに足すとどうなるかを見ます。
+
+```{r combine-compare}
+c(
+  "ZIP のみ"                  = rate(s_zip),
+  "ZIP+AGE（正規化なし）"     = rate(combine_scores(list(s_zip, s_age),
+                                                    scale_check = "none")),
+  "3 軸（正規化なし）"        = rate(combine_scores(list(s_zip, s_age, s_spd),
+                                                    scale_check = "none")),
+  "3 軸（range 正規化）"      = rate(combine_scores(
+                                       normalize_scores(list(s_zip, s_age, s_spd),
+                                                        "range")))
+)
+```
+
+**属性を 2 つ足したのに、`ZIP` 単独の 0.20 を大きく下回りました。**
+正規化を挟めば 0.875 です。同じデータ・同じ属性・同じ攻撃者で、
+**尺度を揃えたかどうかだけで 58 倍**違います。
+
+利用者から見ると、これは「手がかりを増やしたのに数値が下がった」という
+現象として現れます。**下がった数値は疑われにくい**ので、この失敗は残ります。
+
+そこで `combine_scores()` は、重みをかけた後の各成分の標準偏差の比が
+10 倍を超えると警告します（Issue #57、閾値は実測で較正されています）。
+
+```{r combine-warn}
+invisible(tryCatch(
+  combine_scores(list(s_zip, s_age, s_spd)),
+  warning = function(w) cat(strwrap(conditionMessage(w), 76), sep = "\n")
+))
+```
+
+**軸診断ではこの問題を検出できません。** `axis_report()` は各軸が
+「情報を持つか」を見るので、「尺度」の問題は原理的に見えません。
+実際、3 軸すべてが informative と判定されます。
+
+```{r combine-axis}
+axis_report(score_multi(c_pairs, c(ZIP = "char", AGE = "num",
+                                   SPEND_DIST = "dist")))
+```
+
+情報量の検定を通ることと、統合してよいことは別です。
+
+## 3.4 無情報な軸を等重みで足す
+
+尺度を揃えても、**その軸に情報が無ければ**同じことが起きます。
+公開データに、識別とまったく関係のない列 `NOISE` が 1 つあるとします。
+
+```{r deadaxis-fixture}
+d_raw  <- create_dummy_qi_data(people = 200, seed = 1)
+d_anon <- d_raw
+set.seed(101)
+d_anon$AGE <- d_anon$AGE + sample(c(-2, 0, 2), nrow(d_anon), replace = TRUE)
+d_raw$NOISE  <- stats::rnorm(200)
+d_anon$NOISE <- stats::rnorm(200)   # RAW とは無関係
+d_pairs <- join_raw_anon_data(d_raw, d_anon)
+```
+
+`score_multi()` は既定（`screen = "warn"`）で軸診断を走らせ、警告します。
+
+```{r deadaxis-warn}
+combined <- withCallingHandlers(
+  score_multi(d_pairs, c(AGE = "num", ZIP = "char", NOISE = "num")),
+  warning = function(w) {
+    cat(strwrap(conditionMessage(w), 76), sep = "\n")
+    invokeRestart("muffleWarning")
+  }
+)
+axis_report(combined)
+```
+
+警告を無視すると何が起きるかを測ります。
+
+```{r deadaxis-compare}
+c(
+  "AGE+ZIP"              = rate(score_multi(d_pairs,
+                                            c(AGE = "num", ZIP = "char")),
+                                seeds = 1:5),
+  "+NOISE（等重み）"     = rate(combined, seeds = 1:5),
+  "+NOISE（screen=drop）" = rate(suppressWarnings(score_multi(
+                                  d_pairs,
+                                  c(AGE = "num", ZIP = "char", NOISE = "num"),
+                                  screen = "drop")), seeds = 1:5)
+)
+```
+
+**軸を 1 つ足したことで 0.785 が 0.590 に落ちました。**
+Issue #35 では、行動データのフィクスチャで 8 シード中 4 つがこの向きに落ちています。
+
+診断が示す `rank` 列（真のレコードが候補リストのどこに来るか。偶然なら 0.5）と
+`z` を見てください。`NOISE` は rank 0.510 / z −0.35 で、
+**当てずっぽうと区別がつきません。**
+
+`screen = "drop"` を既定にしなかったのは、利用者が知らないうちに軸が消えると
+「何を測ったのか」が入力次第で変わり、対外的な説明ができなくなるためです
+（`docs/default-changes.md`）。**既定は「気づかせる」で、判断は残します。**
+
+## 3.5 重なりが部分的なときの `match_optimal()`
+
+`match_greedy()` は ANON 1 件ごとに独立に最良の RAW を選びます。
+`match_optimal()` は「1 人は 1 人にしか対応しない」という制約を入れて
+総コストを最小化します（ハンガリアン法）。制約がある分だけ強い、と考えたく
+なりますが、**その制約は「相手が必ず居る」という仮定**です。
+
+RAW 150 人に対し、公開データには「RAW と共通の人」と「RAW に居ない人」が
+混ざっている条件で測ります。
+
+```{r optimal-fixture}
+set.seed(20260801)
+n <- 150
+o_raw <- data.frame(ROW_NUMBER = 1:n,
+                    A = stats::rnorm(n, 50, 30),
+                    B = stats::rnorm(n, 50, 30))
+
+jitter_rows <- function(df) {
+  df$A <- df$A + stats::rnorm(nrow(df), sd = 3)
+  df$B <- df$B + stats::rnorm(nrow(df), sd = 3)
+  df
+}
+
+overlap_table <- do.call(rbind, lapply(c(150, 120, 90, 30), function(shared) {
+  set.seed(1000 + shared)
+  ids <- sort(sample(n, shared))
+  strangers <- data.frame(ROW_NUMBER = seq.int(1001, length.out = n - shared),
+                          A = stats::rnorm(n - shared, 50, 30),
+                          B = stats::rnorm(n - shared, 50, 30))
+  o_anon <- rbind(jitter_rows(o_raw[ids, ]), strangers)
+  sc <- score_multi(join_raw_anon_data(o_raw, o_anon), c(A = "num", B = "num"))
+  data.frame(
+    shared  = shared,
+    greedy  = mean(vapply(1:20, function(s)
+                mean(match_greedy(sc, seed = s)$RESULT), numeric(1))),
+    optimal = mean(vapply(1:20, function(s)
+                mean(match_optimal(sc, seed = s)$RESULT), numeric(1)))
+  )
+}))
+overlap_table
+```
+
+**完全に 1 対 1 対応しているときだけ `match_optimal()` が勝ちます。**
+共通の人が 150 人中 120 人になった時点で逆転し、以後は差が開きます。
+1 対 1 制約は、RAW に居ない ANON レコードにも誰かを割り当ててしまい、
+その誰かは**正解のペアだったかもしれない**レコードだからです。
+
+Issue #15 の実測（別フィクスチャ、20 シード）は 120/150 で
+貪欲 0.437 対 最適 0.357、ダミー行によるパディングを入れても 0.401 でした。
+**パディングでは回復しません。**
+
+> **重なりが不明なら `match_greedy()` を参照値として併記してください。**
+> 過小報告方向の失敗なので、安全性評価としては危険な側です。
+
+---
+
+# 4. 結果の読み方 — 点推定だけを見てはいけない
+
+ここまでの失敗はすべて「1 つの数字」を見ていると気づけません。
+`reid_evaluate()` が 1 本のスコア表から複数の指標を同時に返すのは、
+**壊れていたら気づけるようにするため**です。
+
+```{r evaluate-read}
+reid_evaluate(score_num(pairs, "AGE"), seeds = 1:20)
+```
+
+この出力を上から読みます。
+
+## ベースライン — これを超えない攻撃は無意味
+
+`baseline: random 0.0050` は、候補からランダムに 1 件選んだときの成功率です。
+200 人なので 1/200 です。**成功率 0.1127 は「11% しか当たらない」ではなく、
+「当てずっぽうの 22.5 倍」です。**
+
+低い数値を見たときに最初に確かめるのはここです。lift が 1 倍付近なら、
+その手法はそのデータについて何も言っていません。
+逆にベースライン自体が高い出力（例えば候補が絞り込まれている場合）では、
+成功率が高くても意味がないことがあります。
+
+## ばらつき — 1 回の実行値を結論にしない
+
+`simulated mean 0.1108 sd 0.0221 range [0.0800, 0.1550]` は、
+同点の決着に使う乱数シードを 20 通り振った結果です。
+**範囲が 0.08〜0.155 なので、1 シードだけの値は簡単に 2 倍近く動きます。**
+
+`success rate: 0.1127 exact` は解析的な厳密値（同点を確率で数えた期待値）で、
+シミュレーションとは独立に計算されています。
+**両者が一致することが、実装が壊れていないことの検査になっています。**
+
+ばらつきだけを見たいときは `reid_stability()` が使えます。
+
+```{r stability}
+reid_stability(reid_by_num, pairs, "AGE", seeds = 1:20)
+```
+
+## レコード別リスク — 平均は最悪ケースを隠す
+
+`max per-record risk: 1.0000` は、**確実に特定されるレコードが存在する**
+ことを示しています。全体成功率 0.1127 の裏にこれがあります。
+
+平均が低いことは、誰も危険でないことを意味しません。
+分布を直接見てください。
+
+```{r per-record}
+per <- reid_evaluate(score_multi(pairs, qi), seeds = 1:20)$per_record
+summary(per$RISK)
+table("RISK == 1" = per$RISK == 1)
+```
+
+3 属性を使った攻撃では、200 人中 180 人が**リスク 1.0**、
+つまり確実に特定されます。
+
+## top-k — 完全特定でなくても漏洩は起きる
+
+`top-k hit rate: k=1 0.1127 k=5 0.3728 k=10 0.5363` は、
+候補を k 件まで絞れた割合です。**候補が 5 人に絞れた時点で、
+その 5 人に共通する属性（病名、収入帯）は既に漏れています。**
+k=1 だけを見て「特定されなかった」と結論しないでください。
+
+## 精度–再現率 — 攻撃者は全件を当てにこない
+
+現実の攻撃者は、全レコードについて主張する必要がありません。
+**自信のあるものだけを主張すれば、少数を高精度で特定できます。**
+PR 表は、攻撃者から見える確信度 `CONFIDENCE` に閾値を置いたときの
+攻撃件数・精度・再現率を並べたものです。
+
+上の AGE 単独の例では、最上位の 1 件を攻撃しても precision 0.0000 です
+（自信があっても外れる）。一方 §1 の 3 属性の例では、
+最上位から 5 件まで precision 1.0000 が続きます。
+**同じ「全体成功率」でも、リスクの形が違います。**
+
+> `CONFIDENCE`（既定は eccentricity）には**尺度の可搬性がありません。**
+> その記録自身の候補スコアの散らばりに対する比なので、値の範囲はスコア表の
+> 性質で決まります。**閾値をデータセット間で使い回さないでください。**
+> 必ず実測分布の分位点から取ります。
+
+```{r confidence-quantile}
+stats::quantile(reid_confidence(score_multi(pairs, qi))$CONFIDENCE,
+                c(0.5, 0.9, 1))
+```
+
+---
+
+# 5. ブロッキングを使うときの注意
+
+RAW × ANON の全ペアは n² で伸びます。n = 100,000 なら 10¹⁰ ペア・約 149 GB で、
+どんなに速い割当ソルバでもこの壁は越えられません。
+ブロッキングは「安いキーが一致するペアだけを候補にする」ことで n² を崩します。
+
+**ただし、捨てた候補の中に正解ペアが含まれていれば、そのレコードは
+永久に特定できなくなり、成功率は下がります。**
+これも過小報告方向の失敗です。
+
+`ZIP`（ANON 側で加工していない列）でブロックすると、正解ペアは 1 つも
+失われません。
+
+```{r blocking-good}
+cand <- block_candidates(raw, anon, keys = "ZIP")
+attr(cand, "blocking")
+```
+
+`AGE` は ANON 側でノイズを加えてあるので、完全一致でブロックすると壊れます。
+
+```{r blocking-bad}
+lossy <- block_candidates(raw, anon, keys = "AGE")
+attr(lossy, "blocking")
+```
+
+```{r blocking-compare}
+c("総当たり"       = rate(score_multi(pairs, qi, screen = "none")),
+  "ZIP でブロック" = rate(score_multi(cand,  qi, screen = "none")),
+  "AGE でブロック" = rate(score_multi(lossy, qi, screen = "none")))
+```
+
+（`screen = "none"` を渡しているのは、ブロッキングキーは**ブロック内では定数**に
+なるため、同じ列をスコアにも入れると軸診断が正しく「無情報」と警告するからです。
+§3.4 の検出が効いている、ということでもあります。）
+
+**キーの選び方だけで、リスクが 2.4 倍安全に見えます。**
+
+`block_candidates()` / `lsh_candidates()` / `top_k_candidates()` はいずれも
+**recall（正解ペアが候補に残った割合）を実測して記録し、1 を下回れば
+警告します。** `reid_evaluate()` も、渡された表が総当たりでないことを
+スコア表の行数から検出して出力の先頭に明示します。
+
+**使うときの規則は 3 つです。**
+
+1. `attr(candidates, "blocking")$recall` を必ず確認する
+2. recall が 1 でなければ、結果は**下界**として報告する
+3. **総当たりが可能な規模なら、絞らずに測る**
+
+3 が最も重要です。ブロッキングは計算量の対策であって、精度の改善ではありません。
+
+なお、候補ゼロになった ANON レコードは母数にすら入りません。
+recall が 1 でないときは、成功率の分母も変わっていることに注意してください
+（上の `AGE` の例では 200 人中 2 人が候補ゼロです）。
+
+---
+
+# 6. このツールで分からないこと
+
+**「このパッケージで測って低かった」は「安全である」ではありません。**
+測れていないものを列挙します。
+
+## 未実装の攻撃手法
+
+実装済みなのは、数値・文字列・順位・分布・集合・一般化・疎行列のスコア、
+IDF 重み、多属性統合（加重和とマハラノビス）、貪欲割当・大域最適割当・
+Scoreboard-RH、そして属性ユニシティと時空間ユニシティです。
+
+機械学習ベースのレコードリンケージ、軌跡データそのものへの攻撃、
+複数の公開データセットを跨いだ突合、差分プライバシの観点からの評価は
+**実装されていません**。実装候補の全体像は
+`docs/reid-method-candidates.md` にあります。
+
+**「破られなかった」は「その手法では破れなかった」という弱い主張です。**
+これが、手法に依存しないユニシティを併記すべき理由です。
+
+## 法令適合性
+
+個人情報保護法をはじめとする法令上の「匿名加工情報」「仮名加工情報」の
+基準を満たすかどうかの判断には使えません。
+**このパッケージは研究・検討用です。**
+
+## 攻撃者が実際に補助情報を入手できるか
+
+このパッケージは「補助情報があれば当たるか」を測ります。
+「その補助情報を現実に入手できるか」は測れません。
+§2 の知識モデルは、この前提を**書き残すための道具**であって、
+入手可能性を評価する道具ではありません。
+
+## 元データが正しいこと
+
+`containment_counts()` の `TRUTH_CONTAINED` のように、
+公開データと元データの整合を検査する仕組みは一部にありますが、
+元データ自体が不完全・不正確であれば、そこから測った数値も同じだけ歪みます。
+
+## まとめ — 数値を報告するときに一緒に書くこと
+
+| 項目 | なぜ必要か |
+|---|---|
+| 攻撃者知識の想定（W/M/S と可視列） | 数値は前提抜きでは解釈できない（§2） |
+| 使ったスコア関数と、なぜその関数か | 手法の誤用は低い数値として現れる（§3） |
+| ランダム割当ベースラインと lift | 攻撃が機能しているかの最低限の検査（§4） |
+| シードを振ったばらつき | 1 回の値は簡単に 2 倍動く（§4） |
+| `max per-record risk` と top-k | 平均は最悪ケースを隠す（§4） |
+| ブロッキングの recall | 1 未満なら数値は下界（§5） |
+| ユニシティ | 手法に依存しない下界（§1） |
+
+---
+
+## 参考
+
+- `docs/lessons-learned.md` — この文書の背骨になった失敗様式の記録
+- `docs/default-changes.md` — 既定値の変更履歴。過去の報告書と数値を比べる前に
+- `docs/reid-method-candidates.md` — 手法カタログ。実装済み・未実装の全体像
+- `docs/investigation/` — 各節が引用した実測の元になったベンチマークと実行ログ
+
+> Narayanan, A. and Shmatikov, V. (2008) Robust De-anonymization of Large
+> Sparse Datasets. *IEEE Symposium on Security and Privacy*, 111–125.
+>
+> de Montjoye, Y.-A. et al. (2013) Unique in the Crowd: The privacy bounds of
+> human mobility. *Scientific Reports* 3:1376.

@@ -1210,6 +1210,7 @@ recall が 1 を下回れば警告します。
 
 | ドキュメント | 内容 |
 |---|---|
+| [`vignettes/measuring-reidentification-risk.Rmd`](vignettes/measuring-reidentification-risk.Rmd) | **vignette「再識別リスクの測り方」。** README が「使い方」を書くのに対し、こちらは**なぜそう測るのか**と、**出た数値をどういう条件で信じてよいか**を書く。測り方の誤りが低い数値として現れる実測が中心 |
 | [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) | 再識別手法カタログ（24 件）と評価フレームの設計。実装済み・未実装の全体像 |
 | [`docs/default-changes.md`](docs/default-changes.md) | 既定値の変更履歴。同じデータで過去と違う数値が出る変更の記録 |
 | [`docs/implementation-plan.md`](docs/implementation-plan.md) | Issue 候補と依存関係、実装の進め方 |
@@ -1223,6 +1224,11 @@ recall が 1 を下回れば警告します。
 ?reid_evaluate
 help(package = "reidentify")
 ```
+
+vignette はインストール済みのパッケージから
+`vignette("measuring-reidentification-risk", package = "reidentify")` で開けます
+（ソースから入れる場合は `R CMD INSTALL --build-vignettes .`、
+`install.packages(..., build_vignettes = TRUE)`）。
 
 公開ページ: <https://gghatano.github.io/reidentify/>
 
