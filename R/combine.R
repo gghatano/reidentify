@@ -125,8 +125,22 @@ combine_scores <- function(scores, weights = NULL,
          "constant and every candidate would tie.", call. = FALSE)
   }
 
+  ## One code space over every table at once (Issue #73). The keys below are
+  ## compared *between* tables, so they have to mean the same thing in each;
+  ## codes assigned per table would not. See candidate_pair_key().
+  sizes <- vapply(scores, nrow, integer(1))
+  all_keys <- candidate_pair_key(
+    unlist(lapply(scores, function(s) as.character(s$ANON_ROW_NUMBER)),
+           use.names = FALSE),
+    unlist(lapply(scores, function(s) as.character(s$RAW_ROW_NUMBER)),
+           use.names = FALSE)
+  )
+  starts <- cumsum(sizes) - sizes + 1L
+  keys <- Map(function(from, n) all_keys[seq.int(from, length.out = n)],
+              starts, sizes)
+
   base <- scores[[1]]
-  key <- paste(base$ANON_ROW_NUMBER, base$RAW_ROW_NUMBER, sep = "\r")
+  key <- keys[[1]]
   if (anyDuplicated(key) > 0) {
     stop("`scores[[1]]` contains duplicated (ANON_ROW_NUMBER, ",
          "RAW_ROW_NUMBER) pairs; a score table must hold each candidate ",
@@ -143,7 +157,7 @@ combine_scores <- function(scores, weights = NULL,
 
   for (i in seq_along(scores)[-1]) {
     s <- scores[[i]]
-    k <- paste(s$ANON_ROW_NUMBER, s$RAW_ROW_NUMBER, sep = "\r")
+    k <- keys[[i]]
     if (anyDuplicated(k) > 0) {
       stop("`scores[[", i, "]]` contains duplicated (ANON_ROW_NUMBER, ",
            "RAW_ROW_NUMBER) pairs.", call. = FALSE)

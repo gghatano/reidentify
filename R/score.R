@@ -86,6 +86,50 @@ new_reid_scores <- function(raw_row_number, anon_row_number, score,
   out
 }
 
+#' collision-free identifier for a (ANON, RAW) candidate pair
+#'
+#' The score layer needs to say "these two rows name the same candidate pair"
+#' in three places: the duplicate-pair guard of [validate_unique_candidate_pairs()]
+#' and the two key builds inside [combine_scores()]. All three used to paste the
+#' two row numbers with `"\\r"` between them (Issue #73). Row numbers come out
+#' of the *user's* data, so that assumed something about a column this package
+#' does not own, and `("a", "b\\rc")` and `("a\\rb", "c")` pasted to the same
+#' string.
+#'
+#' The two directions this took were measured before the change:
+#'
+#' * in the guard, a collision **rejected a perfectly valid score table** and
+#'   named a pair that does not in fact repeat -- loud and wrong, but not the
+#'   dangerous direction;
+#' * in `combine_scores()`, it was the dangerous one. The guard there exists to
+#'   refuse two score tables built over *different* candidate sets, because
+#'   combining those "would silently drop candidates and under-report the
+#'   reidentification rate". A collision let exactly that through: two tables
+#'   agreeing on no pair at all were combined without complaint, pairing each
+#'   score with the wrong candidate.
+#'
+#' Coding is done over everything passed at once, so callers spanning several
+#' score tables must concatenate first and split the result afterwards -- codes
+#' assigned per table would not be comparable between tables, which is the same
+#' reason [blocking_pass_keys()] codes both sides together.
+#'
+#' `as.character()` comes first because the score layer has always compared row
+#' numbers as written: the two sides are supplied independently and routinely
+#' disagree on storage type (a factor against a character, an integer against a
+#' double).
+#'
+#' @param anon,raw the two row-number vectors, of equal length
+#'
+#' @return a character vector with one key per element
+#'
+#' @keywords internal
+candidate_pair_key <- function(anon, raw) {
+  reid_value_key(list(
+    reid_class_codes(as.character(anon)),
+    reid_class_codes(as.character(raw))
+  ))
+}
+
 #' check that `x` looks like a score table, and return its orientation
 #'
 #' Accepts any data frame carrying the three score-layer columns, so callers

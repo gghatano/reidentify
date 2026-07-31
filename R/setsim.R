@@ -455,6 +455,18 @@ band_keys <- function(sig, bands) {
   for (b in seq_len(bands)) {
     rows <- ((b - 1) * rows_per_band + 1):(b * rows_per_band)
     block <- sig[rows, , drop = FALSE]
+    ## The one place outside reid_value_key() that still joins with the
+    ## separator, deliberately (Issue #73). It cannot be reid_class_codes():
+    ## band_keys() is called once for the RAW matrix and once for the ANON
+    ## matrix, and lsh_candidates() then compares the two by `intersect()`.
+    ## Per-matrix codes would not be comparable, so genuinely matching bands
+    ## would stop colliding and true pairs would be dropped -- the
+    ## under-reporting direction. And there is nothing to fix: unlike the
+    ## user-supplied columns elsewhere, every part here is this package's own
+    ## output -- `b` is a band index and `sig` holds whole-valued doubles below
+    ## MINHASH_PRIME (2147483647, so at most 10 printed digits, well inside the
+    ## 15 that as.character() gives exactly). Neither part can contain the
+    ## separator or lose precision, so the join is injective.
     keys <- paste0(b, "\r", apply(block, 2L, function(v) paste(v, collapse = "\r")))
     keys[apply(block, 2L, anyNA)] <- NA_character_
     out[b, ] <- keys

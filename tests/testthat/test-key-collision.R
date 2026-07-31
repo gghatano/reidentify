@@ -175,6 +175,193 @@ test_that("a real two-parent edge is still rejected", {
   )
 })
 
+## ---------------------------------------------------------------------------
+## Issue #73 -- the two places #70 left behind
+##
+## MEASURED BEFORE THE FIX, because the assumption in the issue was wrong. The
+## report said spatiotemporal_unicity() pasted the *user's* place column with
+## the separator. It does not: coarsen_place() returns an integer and
+## coarsen_time() a double, so a carriage return in a place name never reaches
+## the paste, and a fixture built out of separators finds nothing.
+##
+## What does reach it is the second failure mode of unicity_key(): paste()
+## prints a double to 15 significant digits. coarsen_time() returns a double,
+## so on a microsecond clock (~1.75e15) every distinct instant printed as the
+## same "1.75e+15" and the points collapsed onto one -- and collapsed points
+## enlarge every anonymity set, so the reported unicity FALLS. That is the
+## under-reporting direction of docs/lessons-learned.md section 2.
+##
+## The score layer is the other way round. There the row numbers really are the
+## user's values, and both directions were measured:
+##   validate_unique_candidate_pairs() -- a collision REJECTED a valid table
+##       and named a pair that does not repeat. Loud, so not the dangerous one.
+##   combine_scores() -- the dangerous one. Its "different candidate sets"
+##       guard exists to stop a combination that would "silently drop
+##       candidates and under-report the reidentification rate", and a
+##       collision walked straight past it.
+## ---------------------------------------------------------------------------
+
+## Number of distinct (place, time) points, computed without any concatenation:
+## codes in 1..P are packed into one number by arithmetic, which cannot collide.
+distinct_points <- function(place, time) {
+  pc <- match(place, unique(place))
+  tc <- match(time, unique(time))
+  length(unique(pc + (tc - 1) * (max(pc) + 1)))
+}
+
+## A clock whose ticks are far enough apart to matter and large enough in
+## magnitude that as.character() cannot tell them apart. Microseconds since the
+## epoch -- what a Postgres timestamp holds -- are about 1.75e15, and 15
+## significant digits stop resolving just below that. The value is still an
+## exact double (2^53 is 9.0e15), so nothing here is floating-point noise: the
+## five instants really are five distinct numbers, and only their printed form
+## loses them.
+microsecond_trace <- function(n_people = 5, magnitude = 1.75e15) {
+  data.frame(
+    ID = paste0("i", seq_len(n_people)),
+    PLACE = rep("P001", n_people),
+    TIME = magnitude + seq_len(n_people),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("the microsecond fixture really would collide under a naive paste", {
+  ## Guards the guard, as above: without this the tests below could pass while
+  ## measuring nothing.
+  d <- microsecond_trace()
+  expect_equal(length(unique(d$TIME)), 5L)
+  naive <- paste(coarsen_place(d$PLACE, 1), coarsen_time(d$TIME, 1), sep = "\r")
+  expect_equal(length(unique(naive)), 1L)
+})
+
+test_that("spatio-temporal unicity survives a clock finer than 15 digits (#73)", {
+  d <- microsecond_trace()
+  out <- spatiotemporal_unicity(d, id = "ID", place = "PLACE", time = "TIME",
+                                k = 1, seed = 1)
+
+  ## Five people, five distinct instants, one place: every trace is unique.
+  ## Before the fix this reported n_points 1, unicity 0, anonymity set 5.
+  expect_equal(out$n_points, 5)
+  expect_equal(out$unicity, 1)
+  expect_equal(out$expected_id_rate, 1)
+  expect_equal(out$mean_anonymity_set, 1)
+})
+
+test_that("the reported point count matches the truth over a magnitude sweep", {
+  ## The generator is the point. Timestamps drawn from a plain runif() never
+  ## reach the digits where as.character() gives up, so an ordinary property
+  ## test finds nothing here -- the same way #58's first attempt found nothing.
+  ## This one sweeps the magnitude across the 15-digit boundary and puts the
+  ## separator at the start, the middle and the end of the place labels.
+  set.seed(73)
+  magnitudes <- c(1e2, 1e6, 1e12, 1e14, 1e15, 4e15, 8e15)
+  labels <- c("P1", "\rP2", "P\r3", "P4\r", "P5")
+
+  violations <- 0L
+  for (m in magnitudes) {
+    for (rep in 1:4) {
+      n <- 12L
+      d <- data.frame(
+        ID = paste0("i", sample.int(4L, n, replace = TRUE)),
+        PLACE = sample(labels, n, replace = TRUE),
+        TIME = m + sample.int(6L, n, replace = TRUE),
+        stringsAsFactors = FALSE
+      )
+      for (sr in c(1, 2)) {
+        for (tr in c(1, 3)) {
+          out <- spatiotemporal_unicity(d, id = "ID", place = "PLACE",
+                                        time = "TIME", k = 1,
+                                        space_resolution = sr,
+                                        time_resolution = tr, seed = 1)
+          truth <- distinct_points(coarsen_place(d$PLACE, sr),
+                                   coarsen_time(d$TIME, tr))
+          if (!isTRUE(all.equal(out$n_points, truth))) {
+            violations <- violations + 1L
+          }
+        }
+      }
+    }
+  }
+  ## 112 checks. Before the fix 24 failed, all of them at 1e15 and above and
+  ## every one reporting FEWER points than the data holds -- 24 under, 0 over.
+  ## The separators in `labels` contributed nothing on their own, which is the
+  ## measurement that corrected the issue's account of this defect; they are
+  ## kept so that the case stays covered if coarsen_place() ever stops
+  ## returning codes.
+  expect_equal(violations, 0L)
+})
+
+test_that("combine_scores still refuses tables whose pairs merely collide (#73)", {
+  ## The dangerous direction. These two tables share no candidate pair, but
+  ## ("a", "b\rc") and ("a\rb", "c") paste to the same string, so the naive key
+  ## made them look identical and the combination went through silently.
+  s1 <- reidentify:::new_reid_scores(raw_row_number  = c("b\rc", "y"),
+                                     anon_row_number = c("a", "x"),
+                                     score = c(10, 20))
+  s2 <- reidentify:::new_reid_scores(raw_row_number  = c("c", "y"),
+                                     anon_row_number = c("a\rb", "x"),
+                                     score = c(1, 2))
+  expect_error(combine_scores(list(s1, s2)), "does not cover the same")
+})
+
+test_that("combine_scores accepts a valid table whose row numbers hold separators", {
+  s <- reidentify:::new_reid_scores(raw_row_number  = c("b\rc", "c"),
+                                    anon_row_number = c("a", "a\rb"),
+                                    score = c(1, 2))
+  out <- combine_scores(list(s, s))
+  expect_equal(out$SCORE, c(2, 4))
+  expect_equal(out$RAW_ROW_NUMBER, c("b\rc", "c"))
+
+  ## and a genuine duplicate is still refused
+  dup <- reidentify:::new_reid_scores(raw_row_number  = c("r", "r"),
+                                      anon_row_number = c("a", "a"),
+                                      score = c(1, 2))
+  expect_error(combine_scores(list(dup, dup)), "duplicated")
+})
+
+test_that("the duplicate-pair guard neither invents nor misses a duplicate (#73)", {
+  ## Before the fix this rejected the valid table and blamed (ANON "a\rb",
+  ## RAW "c"), a pair appearing exactly once.
+  ok <- reidentify:::new_reid_scores(raw_row_number  = c("b\rc", "c"),
+                                     anon_row_number = c("a", "a\rb"),
+                                     score = c(1, 2))
+  expect_silent(reidentify:::validate_unique_candidate_pairs(ok, "demo"))
+
+  bad <- reidentify:::new_reid_scores(raw_row_number  = c("x\ry", "x\ry"),
+                                      anon_row_number = c("a", "a"),
+                                      score = c(1, 2))
+  expect_error(reidentify:::validate_unique_candidate_pairs(bad, "demo"),
+               "duplicated")
+})
+
+test_that("only reid_value_key and band_keys embed the key separator (#73)", {
+  ## THE RECURRENCE CHECK. The same defect has now been written four times in
+  ## four files (#58, #70, #73), so the package is asked directly rather than
+  ## the reviewer being asked to remember. Reading the namespace rather than
+  ## the R/ sources means this holds for the installed package too, and cannot
+  ## be fooled by a comment or a roxygen block that mentions the separator.
+  ns <- asNamespace("reidentify")
+  nms <- ls(ns, all.names = TRUE)
+  offenders <- Filter(function(n) {
+    obj <- get(n, envir = ns)
+    is.function(obj) && grepl("\\r", paste(deparse(obj), collapse = "\n"),
+                              fixed = TRUE)
+  }, nms)
+
+  ## reid_value_key() -- the one sanctioned key builder, joining integer codes
+  ##   whose decimal form cannot contain the separator.
+  ## band_keys()      -- justified in place in R/setsim.R: every part is this
+  ##   package's own bounded output, and the two sides are coded separately by
+  ##   necessity, so class codes are not available there.
+  ## Anything else means a value the user supplied is being pasted into a key.
+  ## Use reid_value_key() over reid_class_codes(), or record why not here.
+  expect_setequal(offenders, c("reid_value_key", "band_keys"))
+
+  ## The scan has to be looking at something: before Issue #73 this same scan
+  ## returned five names.
+  expect_gt(length(nms), 100L)
+})
+
 test_that("reid_value_key is injective where a paste of the values is not", {
   a <- c("a", "a\rb", "", "\r", "x")
   b <- c("b\rc", "c", "\r", "", "x")
