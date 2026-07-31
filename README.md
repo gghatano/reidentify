@@ -44,14 +44,14 @@ R 4.x と、依存パッケージ（`dplyr`, `magrittr`, `stringi`, `tibble`, `p
 必要です。**`devtools` は不要**です。
 
 `match_optimal()`（大域最適割当）を使う場合は `clue` も必要です。
-`score_minhash()` / `lsh_candidates()` は `openssl` を使います。
-どちらも無くても、他の機能はそのまま動きます。
+無くても、他の機能はそのまま動きます。
+`score_minhash()` / `lsh_candidates()` のハッシュは自前実装なので、追加の依存はありません。
 
 ### 方法 1: GitHub から直接（base R のみ、1 行）
 
 ```r
 install.packages(c("dplyr", "magrittr", "stringi", "tibble", "philentropy"))
-install.packages(c("clue", "openssl"))  # match_optimal() / minhash 系を使う場合
+install.packages("clue")  # match_optimal()（大域最適割当）を使う場合
 
 install.packages(
   "https://github.com/gghatano/reidentify/archive/refs/heads/master.tar.gz",
@@ -1151,7 +1151,7 @@ recall が 1 を下回れば警告します。
 
 | ドキュメント | 内容 |
 |---|---|
-| [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) | 再識別手法カタログ（22 件）と評価フレームの設計。実装済み・未実装の全体像 |
+| [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) | 再識別手法カタログ（24 件）と評価フレームの設計。実装済み・未実装の全体像 |
 | [`docs/default-changes.md`](docs/default-changes.md) | 既定値の変更履歴。同じデータで過去と違う数値が出る変更の記録 |
 | [`docs/implementation-plan.md`](docs/implementation-plan.md) | Issue 候補と依存関係、実装の進め方 |
 | [`docs/lessons-learned.md`](docs/lessons-learned.md) | 調査・修正・統合作業から得た知見 |

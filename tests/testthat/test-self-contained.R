@@ -228,8 +228,12 @@ test_that("the subprocess loaded the copy under test, not some other install (Is
   lib <- verified_library()
   res <- run_fresh_rscript(self_contained_script, lib)
 
-  loaded <- sub("^LIB:\\s*", "",
-                grep("^LIB:", strsplit(res$stdout, "\n")[[1]], value = TRUE)[1])
+  ## NB: cat() puts a space between its arguments, so the reported line ends
+  ## with a trailing space before the newline. Windows' normalizePath() strips
+  ## it via the Win32 API but Linux does not, so trim here rather than relying
+  ## on platform behaviour (see #55).
+  loaded <- trimws(sub("^LIB:\\s*", "",
+                       grep("^LIB:", strsplit(res$stdout, "\n")[[1]], value = TRUE)[1]))
   expect_false(is.na(loaded))
   expect_equal(normalizePath(loaded, winslash = "/", mustWork = FALSE), lib)
 })
@@ -294,7 +298,9 @@ test_that("an older copy earlier in the user's libraries does not win (Issue #39
   expect_equal(res$status, 0L, info = paste("stderr:\n", res$stderr))
 
   lines <- strsplit(res$stdout, "\n")[[1]]
-  loaded <- sub("^LIB:\\s*", "", grep("^LIB:", lines, value = TRUE)[1])
+  ## trimws() for the same reason as above (see #55): the VER: comparisons
+  ## below already trim, the LIB: one used to rely on normalizePath().
+  loaded <- trimws(sub("^LIB:\\s*", "", grep("^LIB:", lines, value = TRUE)[1]))
   version <- sub("^VER:\\s*", "", grep("^VER:", lines, value = TRUE)[1])
   expect_equal(normalizePath(loaded, winslash = "/", mustWork = FALSE), lib)
   expect_equal(trimws(version), real_version)
