@@ -4,12 +4,16 @@
 \alias{unicity_fraction}
 \title{fraction of records that are unique on a given set of columns}
 \usage{
-unicity_fraction(dat, columns)
+unicity_fraction(dat, columns, tolerance = reid_tie_tolerance())
 }
 \arguments{
 \item{dat}{a data frame with one row per individual (master form)}
 
 \item{columns}{character vector of column names}
+
+\item{tolerance}{relative tolerance for calling two numeric values the same,
+defaulting to the package-wide tie tolerance (see [reid_tie_tolerance()]);
+0 compares doubles exactly}
 }
 \value{
 the proportion of rows of `dat` that are unique on `columns`, in
@@ -21,12 +25,26 @@ A record is unique with respect to `columns` when no other record in `dat`
 carries exactly the same combination of values on those columns.
 }
 \details{
-"The same value" means R's own equality, as used by [match()]: two doubles
-are the same only if they are equal to the last bit (`0.1 + 0.2` and `0.3`
-are *different*), `NA` is its own value and is not the string `"NA"`, and no
-value is ever confused with another because of how it prints. This matches
-the score layer, where `score_num()` also gives `0.1 + 0.2` and `0.3` a
-non-zero distance.
+Non-numeric columns compare by R's own equality, as used by [match()]: `NA`
+is a value of its own and is not the string `"NA"`, and nothing is confused
+with anything else because of how it prints. Numeric columns compare up to
+the same relative `tolerance` the score and assignment layers use for ties
+(Issue #61), so `0.1 + 0.2` and `0.3` count as one value here just as
+[reid_evaluate()] counts them as tied. `tolerance = 0` restores exact
+comparison on both sides.
+
+Sharing the tolerance is load-bearing, not cosmetic. Unicity is documented
+as a *lower bound* on the success rate of a real attack. If unicity compared
+doubles bit-for-bit while the attack compared them within a tolerance,
+records that no attack can separate would be counted as unique and unicity
+would rise above the attack it is supposed to bound.
+
+The two are not the same test, and do not need to be: the tolerance applies
+to *values* here and to the *distances between them* in the score layer. On
+`c(1e15, 1e15 + 1)` unicity reports 0 while the attack reports 1, because
+the attack sees distances 0 and 1 rather than two values a relative 1e-15
+apart. Unicity is the more conservative of the two, which is the only
+direction its contract allows.
 
 Adding attributes can never lower the result: the equivalence classes of a
 larger attribute set refine those of a smaller one, and refining a class of

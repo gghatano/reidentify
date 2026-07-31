@@ -9,7 +9,8 @@ reid_evaluate(
   scores,
   seeds = 1:20,
   top_k = c(1, 5, 10),
-  confidence = c("margin", "tie")
+  confidence = c("margin", "tie"),
+  tolerance = reid_tie_tolerance()
 )
 }
 \arguments{
@@ -32,15 +33,31 @@ a single point equal to the overall success rate. `"margin"` gives a
 distinct threshold per record and is what makes "attack the top 10% and
 be right most of the time" visible. It is an ordering, not a probability
 (Issue #16), and its scale does not carry between data sets.}
+
+\item{tolerance}{relative tolerance for deciding that two candidate scores
+are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Every risk
+figure here is built out of "how many candidates are at least as good as
+the true one", so an exact `==` made them depend on the units the input
+happened to use: the same 200-record data set expressed in 1/10 units
+moved `max_risk` from 0.5 to 1.0 and grew `precision_recall` from 3 rows
+to 93. Pass `tolerance = 0` for the pre-#61 behaviour; see
+`docs/default-changes.md`.}
 }
 \value{
 an object of class "reid_evaluation": a list with
   \describe{
     \item{n_anon, n_raw, n_pairs}{size of the problem}
-    \item{n_pairs_full, candidate_coverage, blocked, n_true_missing}{whether
-      the candidate set is the full cross join, what fraction of it is
-      present, and for how many ANON records the true RAW record is not a
-      candidate at all}
+    \item{n_pairs_full, candidate_coverage}{the size of the full cross join
+      **over the records present in the score table**, and what fraction of
+      it is present. A record dropped entirely is invisible to these two,
+      which is why the next three exist beside them}
+    \item{n_true_missing, truth_coverage, truth_measurable}{for how many ANON
+      records the true RAW record is not a candidate at all, the complementary
+      fraction, and whether at least one ANON record could have been
+      reidentified}
+    \item{blocked}{TRUE when the candidate set is not the full cross join,
+      by either test: fewer rows than `n_anon * n_raw`, **or**
+      `n_true_missing > 0`}
     \item{confidence}{which confidence measure the sweep thresholded on}
     \item{success_analytic}{exact expected single-guess success rate}
     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -108,6 +125,20 @@ table itself rather than from an attribute the caller has to remember to
 pass on, and reported as `blocked` / `candidate_coverage` /
 `n_true_missing`, which the print method shows above the success rate
 (Issue #36).
+
+The row-count test alone is not enough, because `n_anon` and `n_raw` are
+counted from the score table and so only see the records that survived. When
+every surviving ANON record was offered every surviving RAW record the table
+is a **complete rectangle over a subset**, `nrow(scores) == n_anon * n_raw`
+holds, and the shape test cannot fire -- which is what a release published as
+a single region, year or category produces. So `n_true_missing` (and
+`truth_coverage`) is measured against the ground truth, is treated as
+independent evidence of a filtered candidate set, and is printed whether or
+not the shape test fired (Issue #56).
+
+When `n_true_missing == n_anon` **nothing at all was measured**: no ANON
+record could have been reidentified, so every rate is 0 by construction. That
+prints identically to a genuinely safe release, so this warns.
 }
 
 \examples{

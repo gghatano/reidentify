@@ -4,7 +4,14 @@
 \alias{unicity}
 \title{measure unicity as a function of the number of known attributes}
 \usage{
-unicity(dat, attributes, p = seq_along(attributes), n_samples = 100, seed = 0L)
+unicity(
+  dat,
+  attributes,
+  p = seq_along(attributes),
+  n_samples = 100,
+  seed = 0L,
+  tolerance = reid_tie_tolerance()
+)
 }
 \arguments{
 \item{dat}{a data frame with one row per individual (master form)}
@@ -20,6 +27,9 @@ from 1 to `length(attributes)`)}
 
 \item{seed}{integer seed for the subset sampling (default 0L, so a plain
 call is reproducible); NULL uses the ambient RNG stream}
+
+\item{tolerance}{relative tolerance for calling two numeric values the same,
+passed to [unicity_fraction()]}
 }
 \value{
 a data frame with one row per value of `p` and columns

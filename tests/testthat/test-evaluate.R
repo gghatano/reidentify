@@ -358,3 +358,225 @@ test_that("reid_result() is untouched: it still returns the same text", {
   expect_length(txt, 1)
   expect_match(txt, "5 / 5", fixed = TRUE)
 })
+
+## ---------------------------------------------------------------------------
+## Issue #56: a complete rectangle over a SUBSET is not a full join, and
+## "measured nothing" is not "measured zero"
+##
+## The row-count test (nrow(scores) == n_anon * n_raw) counts n_anon and n_raw
+## from the score table, so it only sees survivors. Blocking on a key the
+## release collapsed -- a file published as one prefecture -- leaves every
+## surviving ANON record paired with every surviving RAW record, the equality
+## holds, and the count of ANON records whose true counterpart is missing was
+## computed but never shown.
+## ---------------------------------------------------------------------------
+
+make_collapsed_key <- function(n = 40, seed = 11) {
+  ## RAW is half A, half B; ANON publishes everybody as A. Blocking on PREF
+  ## therefore keeps a complete n x (n/2) rectangle and loses half the truth.
+  set.seed(seed)
+  raw <- data.frame(
+    ROW_NUMBER = seq_len(n),
+    PREF = rep(c("A", "B"), each = n / 2),
+    AGE = sample(20:70, n, replace = TRUE),
+    stringsAsFactors = FALSE
+  )
+  anon <- raw
+  anon$PREF <- "A"
+  list(raw = raw, anon = anon)
+}
+
+test_that("a complete rectangle over a subset defeats the row-count test (#56)", {
+  f <- make_collapsed_key()
+  cand <- suppressWarnings(block_candidates(f$raw, f$anon, keys = "PREF"))
+  e <- reid_evaluate(score_num(cand, "AGE"), seeds = 1:3)
+
+  ## The blind spot itself: the shape test cannot fire here.
+  expect_equal(e$n_pairs, e$n_anon * e$n_raw)
+  expect_equal(e$candidate_coverage, 1)
+
+  ## ... but half the ANON records have no true counterpart on offer.
+  expect_equal(e$n_true_missing, 20)
+  expect_equal(e$truth_coverage, 0.5)
+  expect_true(e$truth_measurable)
+  ## and that alone is enough to mark the candidate set as filtered (#56).
+  expect_true(e$blocked)
+})
+
+test_that("the missing-truth count is printed even when the shape test is silent (#56)", {
+  f <- make_collapsed_key()
+  cand <- suppressWarnings(block_candidates(f$raw, f$anon, keys = "PREF"))
+  e <- reid_evaluate(score_num(cand, "AGE"), seeds = 1:3)
+  out <- paste(capture.output(print(e)), collapse = "\n")
+
+  expect_match(out, "ground truth")
+  expect_match(out, "20/40 ANON record(s)", fixed = TRUE)
+  expect_match(out, "LOWER bound")
+  ## The old "BLOCKED -- x% of the full join kept" banner would be a lie here:
+  ## 100% of the join over the surviving records *is* present.
+  expect_false(grepl("BLOCKED", out))
+})
+
+test_that("no ANON record with its true RAW record on offer is reported as NOT MEASURABLE (#56)", {
+  ## Row numbers renumbered on release -- a plain CSV-handling accident. The
+  ## candidate table is the full cross join, every rate is 0, and before #56
+  ## that printed exactly like a perfectly safe release.
+  raw <- data.frame(ROW_NUMBER = 1:8, V = c(10, 20, 30, 40, 50, 60, 70, 80))
+  anon <- raw
+  anon$ROW_NUMBER <- raw$ROW_NUMBER + 1000L
+  s <- score_num(join_raw_anon_data(raw, anon), "V")
+
+  expect_warning(e <- reid_evaluate(s, seeds = 1:3), regexp = "ABSENCE OF A MEASUREMENT")
+
+  expect_equal(e$n_true_missing, e$n_anon)
+  expect_equal(e$truth_coverage, 0)
+  expect_false(e$truth_measurable)
+  expect_true(e$blocked)
+  expect_equal(e$success_analytic, 0)
+  expect_equal(e$max_risk, 0)
+
+  out <- paste(capture.output(print(e)), collapse = "\n")
+  expect_match(out, "NOT MEASURABLE")
+  expect_match(out, "not evidence that the release is safe")
+})
+
+test_that("an ordinary full join stays silent -- no false positive (#56)", {
+  e <- reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:3)
+  out <- paste(capture.output(print(e)), collapse = "\n")
+
+  expect_false(e$blocked)
+  expect_equal(e$n_true_missing, 0)
+  expect_equal(e$truth_coverage, 1)
+  expect_true(e$truth_measurable)
+  expect_false(grepl("BLOCKED", out))
+  expect_false(grepl("ground truth", out))
+  expect_false(grepl("NOT MEASURABLE", out))
+  expect_silent(reid_evaluate(score_num(make_uniq3_tied3(), "V"), seeds = 1:3))
+})
+
+test_that("a genuinely blocked set still prints the #36 banner unchanged (#56)", {
+  ## #56 must not cost the shape test its output: the two symptoms are
+  ## reported independently, not one instead of the other.
+  raw <- data.frame(
+    ROW_NUMBER = 1:8,
+    ZIP = c("A", "A", "B", "B", "C", "C", "D", "D"),
+    V = c(10, 20, 30, 40, 50, 60, 70, 80),
+    stringsAsFactors = FALSE
+  )
+  cand <- block_candidates(raw, raw, keys = "ZIP")
+  e <- reid_evaluate(score_num(cand, "V"), seeds = 1:3)
+  out <- paste(capture.output(print(e)), collapse = "\n")
+
+  expect_true(e$blocked)
+  expect_lt(e$candidate_coverage, 1)
+  expect_equal(e$n_true_missing, 0)
+  expect_match(out, "BLOCKED")
+  expect_false(grepl("NOT MEASURABLE", out))
+})
+
+## ---------------------------------------------------------------------------
+## Issue #60: a duplicated candidate pair breaks the tie model, and breaks it
+## in the one way the package's own self-check cannot see
+##
+## An attacker's candidate list is a set. Listing (ANON 1, RAW 2) twice must
+## not give RAW 2 two thirds of the draw. The analytic path counts rows
+## (reid_per_anon: sum(v == true_score)), the simulated path shuffles rows
+## (resolve_min_distance_ties), and the random baseline is 1 / N_CANDIDATES --
+## all three read the same inflated multiset, so all three move together and
+## `lift` does not budge. Measured on the two-record fixture below:
+##
+##            analytic  simulated(200 seeds)  ANON1 RISK
+##   correct    0.5000        0.4925            0.5000
+##   +1 dup     0.4167        0.3950            0.3333   <- both "agree"
+##
+## The correct answer for ANON1 is 1/2: the candidate SET is {RAW1, RAW2}.
+## ---------------------------------------------------------------------------
+
+make_two_way_tie <- function() {
+  ## ANON 1 and 2 both sit exactly between RAW 1 and RAW 2, so every candidate
+  ## ties and every record's true risk is 1/2.
+  raw <- data.frame(ROW_NUMBER = 1:2, V = c(0, 10))
+  anon <- data.frame(ROW_NUMBER = 1:2, V = c(5, 5))
+  score_num(join_raw_anon_data(raw, anon), "V")
+}
+
+duplicate_pair <- function(s, anon_row, raw_row) {
+  extra <- s[s$ANON_ROW_NUMBER == anon_row & s$RAW_ROW_NUMBER == raw_row, ,
+             drop = FALSE]
+  out <- rbind(as.data.frame(s), extra)
+  attr(out, "score_type") <- attr(s, "score_type") %||% "distance"
+  class(out) <- unique(c("reid_scores", class(out)))
+  out
+}
+
+test_that("reid_evaluate() refuses a duplicated candidate pair (#60)", {
+  s <- make_two_way_tie()
+  ## the correct answer, for the record
+  e <- reid_evaluate(s, seeds = 1:20, top_k = 1)
+  expect_equal(e$success_analytic, 0.5)
+  expect_equal(e$per_record$RISK[e$per_record$ANON_ROW_NUMBER == 1], 0.5)
+
+  bad <- duplicate_pair(s, anon_row = 1, raw_row = 2)
+  expect_error(reid_evaluate(bad, seeds = 1:20, top_k = 1), regexp = "duplicated")
+  expect_error(reid_evaluate(bad, seeds = 1:20, top_k = 1), regexp = "SET")
+})
+
+test_that("match_greedy() refuses a duplicated candidate pair (#60)", {
+  s <- make_two_way_tie()
+  expect_s3_class(match_greedy(s), "data.frame")
+  expect_error(match_greedy(duplicate_pair(s, 1, 2)), regexp = "duplicated")
+})
+
+test_that("reid_confidence() refuses a duplicated candidate pair (#60)", {
+  s <- make_two_way_tie()
+  expect_s3_class(reid_confidence(s), "data.frame")
+  expect_error(reid_confidence(duplicate_pair(s, 1, 2)), regexp = "duplicated")
+})
+
+test_that("the four entry points now agree on the same contract (#60)", {
+  ## match_optimal / combine_scores / reid_result already refused this; the
+  ## point of #60 is that reid_evaluate / match_greedy did not.
+  s <- make_two_way_tie()
+  bad <- duplicate_pair(s, 1, 2)
+
+  expect_error(match_optimal(bad), regexp = "duplicated")
+  expect_error(combine_scores(list(bad)), regexp = "duplicated")
+  expect_error(reid_evaluate(bad, seeds = 1:3), regexp = "duplicated")
+  expect_error(match_greedy(bad), regexp = "duplicated")
+})
+
+test_that("duplicated ROW_NUMBER in the input data is caught at evaluation (#60)", {
+  ## The score_* route: nothing between join_raw_anon_data() and reid_evaluate()
+  ## looked at row-number uniqueness, so repeated row numbers -- a routine CSV
+  ## accident -- reached the tie model as duplicated candidate pairs.
+  raw <- data.frame(ROW_NUMBER = c(1, 2, 3, 3, 4, 5), V = c(10, 20, 30, 31, 40, 50))
+  anon <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+  s <- score_num(join_raw_anon_data(raw, anon), "V")
+
+  expect_gt(sum(duplicated(paste(s$ANON_ROW_NUMBER, s$RAW_ROW_NUMBER))), 0)
+  expect_error(reid_evaluate(s, seeds = 1:3), regexp = "duplicated")
+  expect_error(match_greedy(s), regexp = "duplicated")
+
+  ## The ANON side too, where the old code silently evaluated 4 records
+  ## instead of 5 and reported a success rate of 1.
+  raw2 <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))
+  anon2 <- data.frame(ROW_NUMBER = c(1, 2, 3, 3, 4), V = c(10, 20, 30, 31, 40))
+  s2 <- score_num(join_raw_anon_data(raw2, anon2), "V")
+  expect_error(reid_evaluate(s2, seeds = 1:3), regexp = "duplicated")
+})
+
+test_that("an ordinary score table is not rejected -- no false positive (#60)", {
+  for (s in list(score_num(make_uniq3_tied3(), "V"),
+                 score_num(make_all_tied(), "V"),
+                 score_num(make_unique(7), "V"))) {
+    expect_s3_class(reid_evaluate(s, seeds = 1:3), "reid_evaluation")
+    expect_s3_class(match_greedy(s), "data.frame")
+    expect_s3_class(reid_confidence(s), "data.frame")
+  }
+  ## and a legitimately blocked (sparse) candidate set is still fine
+  raw <- data.frame(ROW_NUMBER = 1:6, ZIP = c("A", "A", "B", "B", "C", "C"),
+                    V = c(1, 2, 3, 4, 5, 6), stringsAsFactors = FALSE)
+  cand <- block_candidates(raw, raw, keys = "ZIP")
+  expect_s3_class(reid_evaluate(score_num(cand, "V"), seeds = 1:3),
+                  "reid_evaluation")
+})

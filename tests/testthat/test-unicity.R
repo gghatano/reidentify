@@ -273,27 +273,86 @@ test_that("a value containing the field separator does not collide", {
   expect_equal(unicity_fraction(non_ascii, c("A", "B")), 1)
 })
 
-test_that("doubles that print the same are still distinct records", {
-  ## as.character() prints 15 significant digits, so both pairs printed
-  ## identically and every record looked non-unique.
-  expect_equal(unicity_fraction(data.frame(V = c(0.1 + 0.2, 0.3)), "V"), 1)
-  expect_equal(unicity_fraction(data.frame(V = c(1e15, 1e15 + 1)), "V"), 1)
+test_that("doubles are compared as numbers, not as their printed form", {
+  ## as.character() prints 15 significant digits, so distinct doubles that
+  ## printed the same were merged no matter how far apart they were. Whether
+  ## two doubles count as the same is now a question about the numbers and the
+  ## tolerance, and nothing else.
+  expect_equal(
+    unicity_fraction(data.frame(V = c(0.1 + 0.2, 0.3)), "V", tolerance = 0), 1)
+  expect_equal(
+    unicity_fraction(data.frame(V = c(1e15, 1e15 + 1)), "V", tolerance = 0), 1)
 
-  ## exactly equal values are still a tie, of course
+  ## both pairs are within the default relative tolerance (5.6e-17 and 1e-15
+  ## relative, against 1.5e-8), so by default they are the same value
+  expect_equal(unicity_fraction(data.frame(V = c(0.1 + 0.2, 0.3)), "V"), 0)
+  expect_equal(unicity_fraction(data.frame(V = c(1e15, 1e15 + 1)), "V"), 0)
+
+  ## a gap far outside the tolerance is a difference under either setting
+  expect_equal(unicity_fraction(data.frame(V = c(1, 2)), "V"), 1)
+
+  ## exactly equal values are a tie, of course
   expect_equal(unicity_fraction(data.frame(V = c(0.3, 0.3)), "V"), 0)
 })
 
-test_that("unicity agrees with the score layer on what \"the same value\" means", {
+test_that("unicity uses the same tie tolerance as the score layer", {
   ## The package must not hold two definitions of equality that disagree on
-  ## real data: reid_evaluate() called these two records distinguishable
-  ## (TIE_SIZE 1, success 1) while unicity_fraction() called them a tie.
-  v <- c(0.1 + 0.2, 0.3)
+  ## real data. Before #58 it did, in one direction (unicity flattened
+  ## 0.1 + 0.2 and 0.3 by printing them, while the score layer separated them);
+  ## after #61 gave the score layer a relative tie tolerance it would have
+  ## disagreed in the other, and unicity would have risen above the attack it
+  ## is documented to bound.
+  v <- c(0.1 + 0.2, 0.3)          # 5.6e-17 apart: inside the tie tolerance
   d <- data.frame(ROW_NUMBER = 1:2, V = v)
   j <- join_raw_anon_data(d, d)
 
-  expect_equal(unicity_fraction(data.frame(V = v), "V"), 1)
+  expect_equal(unicity_fraction(data.frame(V = v), "V"), 0)
+  expect_equal(reid_evaluate(score_num(j, "V"), seeds = 1:2)$success_analytic, 0.5)
+  expect_equal(reid_confidence(score_num(j, "V"))$TIE_SIZE, c(2, 2))
+
+  ## ... and switching the tolerance off moves both layers together
+  expect_equal(unicity_fraction(data.frame(V = v), "V", tolerance = 0), 1)
+  expect_equal(
+    reid_evaluate(score_num(j, "V"), seeds = 1:2, tolerance = 0)$success_analytic, 1)
+})
+
+test_that("unicity's equality is at least as coarse as the attack's, never finer", {
+  ## The two layers apply the tolerance to different quantities: unicity to the
+  ## values, the score layer to the distances between them. So they are not
+  ## identical, and they must not be -- what has to hold is that unicity never
+  ## separates a pair the attack cannot, or it would stop being a lower bound.
+  ##
+  ## c(1e15, 1e15 + 1) is the case where they differ: 1e-15 apart relatively,
+  ## so unicity calls them one value, while the attack sees distances 0 and 1
+  ## and tells them apart. Unicity is then the more conservative of the two,
+  ## which is the direction its contract allows.
+  d <- data.frame(ROW_NUMBER = 1:2, V = c(1e15, 1e15 + 1))
+  j <- join_raw_anon_data(d, d)
+
+  expect_equal(unicity_fraction(d["V"], "V"), 0)
   expect_equal(reid_evaluate(score_num(j, "V"), seeds = 1:2)$success_analytic, 1)
-  expect_equal(reid_confidence(score_num(j, "V"))$TIE_SIZE, c(1, 1))
+})
+
+test_that("unicity stays a lower bound on the attack it is supposed to bound", {
+  ## R/unicity.R's header promises unicity <= the success rate of an attack on
+  ## the same columns. That only holds while both layers call the same pairs of
+  ## values equal: if unicity compared doubles bit-for-bit while the attack
+  ## compared them within a tolerance, records no attack can separate would be
+  ## counted as unique and unicity would climb above the attack.
+  set.seed(58)
+  n <- 40
+  base <- rnorm(n)
+  ## half the records carry a twin that differs only by representation noise
+  v <- c(base[1:20], base[1:20] + base[1:20] * 1e-12)
+  d <- data.frame(ROW_NUMBER = seq_len(n), V = v)
+  j <- join_raw_anon_data(d, d)
+
+  u <- unicity_fraction(d, "V")
+  attack <- reid_evaluate(score_num(j, "V"), seeds = 1:5)$success_analytic
+
+  expect_lte(u, attack + 1e-9)
+  ## the twins really are inside the tolerance, so neither layer separates them
+  expect_lt(u, 1)
 })
 
 test_that("NA is not the string \"NA\"", {

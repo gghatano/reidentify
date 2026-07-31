@@ -29,15 +29,21 @@
 #' @param confidence which confidence measure to put in the CONFIDENCE
 #'   column, `"margin"` (default since Issue #44) or `"tie"`. See
 #'   [reid_confidence()].
+#' @param tolerance relative tie tolerance (Issue #61), see
+#'   [reid_confidence()]. `N_BETTER`, `TRUE_TIE_SIZE`, `TRUE_RANK` and
+#'   `BEST_TIE_SIZE` are all counts of "how many candidates are as good as, or
+#'   better than, this one", so all four depend on it.
 #'
 #' @return a data frame with one row per ANON record and columns
 #'   ANON_ROW_NUMBER, N_CANDIDATES, BEST_SCORE, BEST_TIE_SIZE, CONFIDENCE,
 #'   MARGIN, ECCENTRICITY, TRUE_SCORE, N_BETTER, TRUE_TIE_SIZE and TRUE_RANK.
 #'
 #' @keywords internal
-reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
+reid_per_anon <- function(scores, confidence = c("margin", "tie"),
+                          tolerance = reid_tie_tolerance()) {
   confidence <- match.arg(confidence)
   score_type <- validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "reid_per_anon")
 
   value <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
   if (anyNA(value)) {
@@ -52,7 +58,10 @@ reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
 
   rows <- lapply(seq_along(groups), function(i) {
     idx <- groups[[i]]
-    v <- value[idx]
+    ## Issue #61: every comparison below is a tie test ("as good as", "better
+    ## than"), so they all run on tie-snapped values. snap_tied_values()
+    ## preserves min(), so BEST_SCORE is unchanged.
+    v <- snap_tied_values(value[idx], tolerance)
     this_anon <- levels_anon[i]
 
     best <- min(v)
@@ -91,7 +100,7 @@ reid_per_anon <- function(scores, confidence = c("margin", "tie")) {
   ## MARGIN / ECCENTRICITY are reported whichever measure was asked for, so a
   ## reader can see why the threshold sweep has the resolution it has without
   ## rerunning anything (Issue #16).
-  conf <- reid_confidence(scores, method = confidence)
+  conf <- reid_confidence(scores, method = confidence, tolerance = tolerance)
   ord <- match(out$ANON_ROW_NUMBER, conf$ANON_ROW_NUMBER)
   out$MARGIN <- conf$MARGIN[ord]
   out$ECCENTRICITY <- conf$ECCENTRICITY[ord]
@@ -180,6 +189,14 @@ top_k_probability <- function(n_better, tie_size, k) {
 #'   distinct threshold per record and is what makes "attack the top 10% and
 #'   be right most of the time" visible. It is an ordering, not a probability
 #'   (Issue #16), and its scale does not carry between data sets.
+#' @param tolerance relative tolerance for deciding that two candidate scores
+#'   are tied, default `sqrt(.Machine$double.eps)` (Issue #61). Every risk
+#'   figure here is built out of "how many candidates are at least as good as
+#'   the true one", so an exact `==` made them depend on the units the input
+#'   happened to use: the same 200-record data set expressed in 1/10 units
+#'   moved `max_risk` from 0.5 to 1.0 and grew `precision_recall` from 3 rows
+#'   to 93. Pass `tolerance = 0` for the pre-#61 behaviour; see
+#'   `docs/default-changes.md`.
 #'
 #' @section Changed defaults:
 #'
@@ -205,13 +222,34 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' `n_true_missing`, which the print method shows above the success rate
 #' (Issue #36).
 #'
+#' The row-count test alone is not enough, because `n_anon` and `n_raw` are
+#' counted from the score table and so only see the records that survived. When
+#' every surviving ANON record was offered every surviving RAW record the table
+#' is a **complete rectangle over a subset**, `nrow(scores) == n_anon * n_raw`
+#' holds, and the shape test cannot fire -- which is what a release published as
+#' a single region, year or category produces. So `n_true_missing` (and
+#' `truth_coverage`) is measured against the ground truth, is treated as
+#' independent evidence of a filtered candidate set, and is printed whether or
+#' not the shape test fired (Issue #56).
+#'
+#' When `n_true_missing == n_anon` **nothing at all was measured**: no ANON
+#' record could have been reidentified, so every rate is 0 by construction. That
+#' prints identically to a genuinely safe release, so this warns.
+#'
 #' @return an object of class "reid_evaluation": a list with
 #'   \describe{
 #'     \item{n_anon, n_raw, n_pairs}{size of the problem}
-#'     \item{n_pairs_full, candidate_coverage, blocked, n_true_missing}{whether
-#'       the candidate set is the full cross join, what fraction of it is
-#'       present, and for how many ANON records the true RAW record is not a
-#'       candidate at all}
+#'     \item{n_pairs_full, candidate_coverage}{the size of the full cross join
+#'       **over the records present in the score table**, and what fraction of
+#'       it is present. A record dropped entirely is invisible to these two,
+#'       which is why the next three exist beside them}
+#'     \item{n_true_missing, truth_coverage, truth_measurable}{for how many ANON
+#'       records the true RAW record is not a candidate at all, the complementary
+#'       fraction, and whether at least one ANON record could have been
+#'       reidentified}
+#'     \item{blocked}{TRUE when the candidate set is not the full cross join,
+#'       by either test: fewer rows than `n_anon * n_raw`, **or**
+#'       `n_true_missing > 0`}
 #'     \item{confidence}{which confidence measure the sweep thresholded on}
 #'     \item{success_analytic}{exact expected single-guess success rate}
 #'     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -236,9 +274,16 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' @importFrom stats sd
 #' @export
 reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
-                          confidence = c("margin", "tie")) {
+                          confidence = c("margin", "tie"),
+                          tolerance = reid_tie_tolerance()) {
   confidence <- match.arg(confidence)
   validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "reid_evaluate")
+  ## Issue #60: this has to be checked here and not left to the cross-check
+  ## between success_analytic and success_mean, because a duplicated candidate
+  ## pair moves both of them the same way. See
+  ## validate_unique_candidate_pairs().
+  validate_unique_candidate_pairs(scores, "reid_evaluate")
 
   if (length(seeds) < 2) {
     stop("reid_evaluate(): need at least 2 seeds to report a standard ",
@@ -248,7 +293,8 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
     stop("reid_evaluate(): `seeds` must not contain duplicates.", call. = FALSE)
   }
 
-  per_anon <- reid_per_anon(scores, confidence = confidence)
+  per_anon <- reid_per_anon(scores, confidence = confidence,
+                            tolerance = tolerance)
   n_anon <- nrow(per_anon)
   n_raw <- length(unique(scores$RAW_ROW_NUMBER))
 
@@ -258,7 +304,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
 
   ## ---- simulated success rate, for the variance and as a cross-check ------
   per_seed <- do.call(rbind, lapply(seeds, function(s) {
-    m <- match_greedy(scores, seed = s)
+    m <- match_greedy(scores, seed = s, tolerance = tolerance)
     data.frame(seed = s, success = sum(m$RESULT), trial = nrow(m))
   }))
   per_seed$rate <- per_seed$success / per_seed$trial
@@ -279,6 +325,10 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   } else {
     scores$SCORE
   }
+  ## Snapped for the same reason as everywhere else (Issue #61): "is this
+  ## candidate one of the best ones" is a tie test, and the mode baseline is
+  ## what the measured rate has to beat, so it must not move with the units.
+  value <- snap_tied_values_by_group(value, scores$ANON_ROW_NUMBER, tolerance)
   best_mask <- value == per_anon$BEST_SCORE[
     match(scores$ANON_ROW_NUMBER, per_anon$ANON_ROW_NUMBER)
   ]
@@ -326,7 +376,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   hit_counts <- rep(0, n_anon)
   names(hit_counts) <- as.character(per_anon$ANON_ROW_NUMBER)
   for (s in seeds) {
-    m <- match_greedy(scores, seed = s)
+    m <- match_greedy(scores, seed = s, tolerance = tolerance)
     hit_counts[as.character(m$ANON_ROW_NUMBER)] <-
       hit_counts[as.character(m$ANON_ROW_NUMBER)] + as.integer(m$RESULT)
   }
@@ -353,8 +403,36 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   ## nobody questions (docs/lessons-learned.md section 2, Issue #36). A full
   ## join has exactly n_anon * n_raw rows, so anything smaller was filtered --
   ## by lsh_candidates(), block_candidates(), top_k_candidates() or by hand.
+  ##
+  ## That test has a blind spot, and Issue #56 is it. n_anon and n_raw are
+  ## counted from the score table, so they only see the records that survived.
+  ## If every surviving ANON record was offered every surviving RAW record --
+  ## which is exactly what blocking on a key the release collapsed produces,
+  ## e.g. a file published as one prefecture -- the candidate table is a
+  ## *complete rectangle over a subset*, the equality holds, and the shape test
+  ## says nothing. The number of ANON records whose true RAW record is not a
+  ## candidate at all is measured against the ground truth instead, does not
+  ## share that blind spot, and is therefore treated as independent evidence.
   n_pairs_full <- as.numeric(n_anon) * as.numeric(n_raw)
   n_true_missing <- sum(is.na(per_anon$TRUE_RANK))
+  truth_coverage <- if (n_anon > 0) 1 - n_true_missing / n_anon else NA_real_
+
+  ## "Nothing was found" and "nothing could have been found" print identically
+  ## -- 0.0000 everywhere -- and only one of them is good news. Say which one
+  ## it is before the reader reads the zeros (Issue #56). block_candidates()
+  ## and axis_informativeness() already say "not measurable" in this
+  ## situation; reid_evaluate() used to be the one that stayed quiet.
+  if (n_anon > 0 && n_true_missing == n_anon) {
+    warning(
+      "reid_evaluate(): the true RAW record is absent from the candidate set ",
+      "of every one of the ", n_anon, " ANON record(s), so every rate ",
+      "reported below is 0 by construction. This is the ABSENCE OF A ",
+      "MEASUREMENT, not evidence that the release is safe. Check that RAW and ",
+      "ANON share a `row_number` column with matching values, and that ",
+      "blocking did not discard every true pair.",
+      call. = FALSE
+    )
+  }
 
   structure(
     list(
@@ -362,9 +440,14 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
       n_raw = n_raw,
       n_pairs = nrow(scores),
       n_pairs_full = n_pairs_full,
+      ## Relative to the records *present in the score table*: a record that was
+      ## dropped entirely is invisible here, which is why truth_coverage exists
+      ## next to it rather than instead of it.
       candidate_coverage = if (n_pairs_full > 0) nrow(scores) / n_pairs_full else NA_real_,
       n_true_missing = n_true_missing,
-      blocked = nrow(scores) < n_pairs_full,
+      truth_coverage = truth_coverage,
+      truth_measurable = n_anon > 0 && n_true_missing < n_anon,
+      blocked = nrow(scores) < n_pairs_full || n_true_missing > 0,
       confidence = confidence,
       success_analytic = success_analytic,
       success_mean = mean(per_seed$rate),
@@ -401,24 +484,52 @@ print.reid_evaluation <- function(x, ...) {
     "reid evaluation: %d ANON x %d RAW record(s), %d candidate pair(s)\n",
     x$n_anon, x$n_raw, x$n_pairs
   ))
-  ## Only printed when the candidate set is incomplete, so the ordinary
-  ## full-join output is unchanged -- but when it is incomplete, it is printed
-  ## before the success rate, not after it (Issue #36).
-  if (isTRUE(x$blocked)) {
+  ## Only printed when something is wrong, so the ordinary full-join output is
+  ## unchanged -- but when something is wrong, it is printed before the success
+  ## rate, not after it (Issue #36).
+  ##
+  ## Two independent symptoms, reported independently (Issue #56): the *shape*
+  ## of the candidate table, and the *ground truth* missing from it. The shape
+  ## test is blind to a complete rectangle over a subset; the missing-truth
+  ## count is not. Gating the second on the first meant that in exactly the
+  ## case the shape test cannot see, nothing at all was printed -- while the
+  ## count sat in the object, computed and unshown.
+  n_missing <- x$n_true_missing %||% 0L
+  if (length(n_missing) != 1L || is.na(n_missing)) {
+    n_missing <- 0L
+  }
+  shape_blocked <- isTRUE(x$n_pairs < x$n_pairs_full)
+
+  if (shape_blocked) {
     cat(sprintf(
       "  candidate set  : BLOCKED -- %.4g%% of the full %.0f-pair join kept\n",
       100 * x$candidate_coverage, x$n_pairs_full
     ))
     cat(sprintf(
       "    true RAW record absent from the candidates of %d/%d ANON record(s)%s\n",
-      x$n_true_missing, x$n_anon,
-      if (x$n_true_missing > 0) "" else " (recall 1.0 on the records shown)"
+      n_missing, x$n_anon,
+      if (n_missing > 0) "" else " (recall 1.0 on the records shown)"
     ))
-    if (x$n_true_missing > 0) {
+    if (n_missing > 0) {
       cat("    -> the success rate below is a LOWER bound. ANON records that ",
           "were left\n       with no candidate at all are not counted here at ",
           "all.\n", sep = "")
     }
+  } else if (n_missing > 0) {
+    cat(sprintf(
+      "  ground truth   : true RAW record absent from the candidates of %d/%d ANON record(s)\n",
+      n_missing, x$n_anon
+    ))
+    cat("    -> the candidate table has exactly n_anon x n_raw rows, so the ",
+        "row-count\n       test cannot see this. Those records can never be ",
+        "reidentified: the\n       success rate below is a LOWER bound.\n", sep = "")
+  }
+  if (n_missing > 0 && n_missing >= x$n_anon) {
+    cat("  ! NOT MEASURABLE: no ANON record has its true RAW record among its ",
+        "candidates.\n    Every rate below is 0 by construction. That is the ",
+        "absence of a measurement,\n    not evidence that the release is safe. ",
+        "Check that RAW and ANON share a\n    matching row-number column, and ",
+        "that blocking did not discard every true pair.\n", sep = "")
   }
   cat(sprintf(
     "  success rate   : %.4f exact | simulated mean %.4f sd %.4f range [%.4f, %.4f] over %d seeds\n",

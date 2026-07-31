@@ -14,7 +14,8 @@ match_optimal(
   warn_size = 1000L,
   max_size = 5000L,
   confidence = c("margin", "tie"),
-  min_confidence = 0
+  min_confidence = 0,
+  tolerance = reid_tie_tolerance()
 )
 }
 \arguments{
@@ -62,6 +63,13 @@ its first choice still reports the confidence of that first choice under
 
 \item{min_confidence}{decline to guess below this confidence (default 0).
 Applied on top of any declining the padding already did.}
+
+\item{tolerance}{relative tolerance for tie detection in the reported
+CONFIDENCE, default `sqrt(.Machine$double.eps)` (Issue #61), so that
+`match_optimal()` and [match_greedy()] agree on what "tied" means. The
+**assignment** is unaffected: the solver minimises the raw costs, and
+perturbing them to make the report unit-invariant could change which
+assignment is chosen. Pass 0 for the exact comparison used before #61.}
 }
 \value{
 a data frame with the same four columns as [match_greedy()] --

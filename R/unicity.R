@@ -23,12 +23,26 @@
 #' A record is unique with respect to `columns` when no other record in `dat`
 #' carries exactly the same combination of values on those columns.
 #'
-#' "The same value" means R's own equality, as used by [match()]: two doubles
-#' are the same only if they are equal to the last bit (`0.1 + 0.2` and `0.3`
-#' are *different*), `NA` is its own value and is not the string `"NA"`, and no
-#' value is ever confused with another because of how it prints. This matches
-#' the score layer, where `score_num()` also gives `0.1 + 0.2` and `0.3` a
-#' non-zero distance.
+#' Non-numeric columns compare by R's own equality, as used by [match()]: `NA`
+#' is a value of its own and is not the string `"NA"`, and nothing is confused
+#' with anything else because of how it prints. Numeric columns compare up to
+#' the same relative `tolerance` the score and assignment layers use for ties
+#' (Issue #61), so `0.1 + 0.2` and `0.3` count as one value here just as
+#' [reid_evaluate()] counts them as tied. `tolerance = 0` restores exact
+#' comparison on both sides.
+#'
+#' Sharing the tolerance is load-bearing, not cosmetic. Unicity is documented
+#' as a *lower bound* on the success rate of a real attack. If unicity compared
+#' doubles bit-for-bit while the attack compared them within a tolerance,
+#' records that no attack can separate would be counted as unique and unicity
+#' would rise above the attack it is supposed to bound.
+#'
+#' The two are not the same test, and do not need to be: the tolerance applies
+#' to *values* here and to the *distances between them* in the score layer. On
+#' `c(1e15, 1e15 + 1)` unicity reports 0 while the attack reports 1, because
+#' the attack sees distances 0 and 1 rather than two values a relative 1e-15
+#' apart. Unicity is the more conservative of the two, which is the only
+#' direction its contract allows.
 #'
 #' Adding attributes can never lower the result: the equivalence classes of a
 #' larger attribute set refine those of a smaller one, and refining a class of
@@ -38,6 +52,9 @@
 #'
 #' @param dat a data frame with one row per individual (master form)
 #' @param columns character vector of column names
+#' @param tolerance relative tolerance for calling two numeric values the same,
+#'   defaulting to the package-wide tie tolerance (see [reid_tie_tolerance()]);
+#'   0 compares doubles exactly
 #'
 #' @return the proportion of rows of `dat` that are unique on `columns`, in
 #'   \[0, 1\]. With `columns` empty, every record looks identical and the
@@ -49,10 +66,12 @@
 #' unicity_fraction(dat, c("A", "B"))
 #'
 #' @export
-unicity_fraction <- function(dat, columns) {
+unicity_fraction <- function(dat, columns,
+                             tolerance = reid_tie_tolerance()) {
   if (!is.data.frame(dat)) {
     stop("`dat` must be a data frame with one row per individual.", call. = FALSE)
   }
+  validate_tie_tolerance(tolerance, "unicity_fraction")
   missing_cols <- setdiff(columns, names(dat))
   if (length(missing_cols) > 0) {
     stop("column(s) not found in `dat`: ", paste(missing_cols, collapse = ", "),
@@ -68,7 +87,7 @@ unicity_fraction <- function(dat, columns) {
     return(as.numeric(nrow(dat) == 1))
   }
 
-  key <- unicity_key(dat, columns)
+  key <- unicity_key(dat, columns, tolerance)
   mean(!(duplicated(key) | duplicated(key, fromLast = TRUE)))
 }
 
@@ -96,22 +115,30 @@ unicity_fraction <- function(dat, columns) {
 #' returns small integers whose decimal representation cannot contain the
 #' separator -- so joining the codes is injective.
 #'
-#' This also makes "two values are the same" mean the same thing here as it
-#' does in the score layer: `score_num()` gives `0.1 + 0.2` and `0.3` a
-#' non-zero distance, and now so does `unicity_fraction()`.
+#' Numeric columns go through [snap_tied_values()] first, so that near-equal
+#' doubles land in one class -- the same rule the score and assignment layers
+#' apply to ties (Issue #61). Without it, unicity would count records as
+#' distinguishable that `reid_evaluate()` treats as tied, and would then report
+#' *more* uniqueness than the attack it is meant to lower-bound.
 #'
 #' @param dat a data frame
 #' @param columns character vector of column names, at least one
+#' @param tolerance relative tolerance for numeric columns; 0 compares exactly
 #'
 #' @return a character vector with one key per row of `dat`
 #'
 #' @keywords internal
-unicity_key <- function(dat, columns) {
+unicity_key <- function(dat, columns, tolerance = reid_tie_tolerance()) {
   codes <- lapply(columns, function(cn) {
     v <- dat[[cn]]
     if (!is.null(dim(v))) {
       stop("column `", cn, "` is a matrix or data frame column; unicity needs ",
            "one value per record.", call. = FALSE)
+    }
+    ## Integers and logicals are exact already; snapping them would only cost
+    ## time. Factors and characters have no notion of "near".
+    if (is.double(v)) {
+      v <- snap_tied_values(v, tolerance)
     }
     match(v, unique(v))
   })
@@ -141,6 +168,8 @@ unicity_key <- function(dat, columns) {
 #'   (default 100)
 #' @param seed integer seed for the subset sampling (default 0L, so a plain
 #'   call is reproducible); NULL uses the ambient RNG stream
+#' @param tolerance relative tolerance for calling two numeric values the same,
+#'   passed to [unicity_fraction()]
 #'
 #' @return a data frame with one row per value of `p` and columns
 #'   \describe{
@@ -160,7 +189,8 @@ unicity_key <- function(dat, columns) {
 #' @importFrom utils combn
 #' @export
 unicity <- function(dat, attributes, p = seq_along(attributes),
-                    n_samples = 100, seed = 0L) {
+                    n_samples = 100, seed = 0L,
+                    tolerance = reid_tie_tolerance()) {
   if (!is.data.frame(dat)) {
     stop("`dat` must be a data frame with one row per individual.", call. = FALSE)
   }
@@ -209,7 +239,7 @@ unicity <- function(dat, attributes, p = seq_along(attributes),
 
       values <- vapply(
         subsets,
-        function(idx) unicity_fraction(dat, attributes[idx]),
+        function(idx) unicity_fraction(dat, attributes[idx], tolerance),
         numeric(1)
       )
 

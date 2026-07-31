@@ -4,12 +4,14 @@
 \alias{unicity_key}
 \title{collision-free key for a combination of column values}
 \usage{
-unicity_key(dat, columns)
+unicity_key(dat, columns, tolerance = reid_tie_tolerance())
 }
 \arguments{
 \item{dat}{a data frame}
 
 \item{columns}{character vector of column names, at least one}
+
+\item{tolerance}{relative tolerance for numeric columns; 0 compares exactly}
 }
 \value{
 a character vector with one key per row of `dat`
@@ -38,8 +40,10 @@ rather than their printed form, keeps `NA` as a class of its own, and
 returns small integers whose decimal representation cannot contain the
 separator -- so joining the codes is injective.
 
-This also makes "two values are the same" mean the same thing here as it
-does in the score layer: `score_num()` gives `0.1 + 0.2` and `0.3` a
-non-zero distance, and now so does `unicity_fraction()`.
+Numeric columns go through [snap_tied_values()] first, so that near-equal
+doubles land in one class -- the same rule the score and assignment layers
+apply to ties (Issue #61). Without it, unicity would count records as
+distinguishable that `reid_evaluate()` treats as tied, and would then report
+*more* uniqueness than the attack it is meant to lower-bound.
 }
 \keyword{internal}
