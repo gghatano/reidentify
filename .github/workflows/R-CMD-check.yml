@@ -9,6 +9,13 @@ name: R checks
 #   check 111 秒しかかからないので、全変更で回す方が安い。
 #   (パスフィルタで実行されなかった workflow は required check として "pending" の
 #   まま止まる、という GitHub の挙動を避ける意味もある。)
+#
+# なぜジョブを 2 つに分けるか:
+#   最初は 1 ジョブに 2 つのステップとして書いたが、PR #53 (README を 1 行だけ
+#   壊す negative test) で、先に R CMD check が落ちると README ハーネス側の
+#   判定ステップが暗黙の success() 条件で skip され、**どちらが原因か判別
+#   できなくなる**ことが分かった。独立した 2 ジョブなら、2 つの検査結果が
+#   互いを隠さない。並列に走るので所要時間も伸びない。
 on:
   push:
     branches: [master]
@@ -24,20 +31,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  # README の全コードブロックを 1 セッションで実行し、`#>` を順序込みで厳密比較
+  # する。エクスポート関数の README 未記載も同時に検出する。差分があれば
+  # ハーネスが非ゼロ終了し、このジョブが落ちる。
+  readme-examples:
     runs-on: ubuntu-latest
-    name: README harness + R CMD check
+    name: README examples
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      R_KEEP_PKG_SOURCE: yes
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r@v2
         with:
           r-version: release
           # RSPM の Linux バイナリを使う。philentropy は C++ を含むので、
@@ -45,27 +52,47 @@ jobs:
           use-public-rspm: true
 
       # DESCRIPTION の Imports / Suggests を解決し、pak のキャッシュを
-      # actions/cache に載せる (依存が変わらない限り再インストールしない)。
-      # pkgload  : docs/verify-readme-examples.R が load_all() で使う
-      # rcmdcheck: check-r-package が使う
-      - name: Install dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
+      # actions/cache に載せる。extra-packages は R CMD check ジョブと同じ
+      # 並びにしてある — キャッシュキーが一致し、2 ジョブで 1 回の
+      # インストールを共有できる。
+      - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgload, any::rcmdcheck
           needs: check
 
-      # README の全コードブロックを 1 セッションで実行し、`#>` を順序込みで
-      # 厳密比較する。差分があれば非ゼロ終了する。エクスポート関数の
-      # README 未記載も同時に検出する。
-      # 失敗しても次の R CMD check の結果は見たいので continue-on-error にし、
-      # 最後にまとめて落とす。
       - name: Verify README examples
-        id: readme
-        continue-on-error: true
         run: Rscript docs/verify-readme-examples.R .
 
-      - name: R CMD check
-        uses: r-lib/actions/check-r-package@v2
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error file=README.md::README の #> 出力が実際の出力と一致しないか、"\
+               "エクスポート関数が README に載っていません。"\
+               "上のステップのログの MISMATCH 節に、どのブロックのどの行がずれたかが出ています。"\
+               "出力の再生成: Rscript docs/verify-readme-examples.R . --rewrite"
+
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    name: R CMD check
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgload, any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
         with:
           # --as-cran は付けない。tests/ が pkgload を使っているが DESCRIPTION の
           # Suggests に無いため "'::' or ':::' import not declared from: 'pkgload'"
@@ -74,13 +101,3 @@ jobs:
           args: 'c("--no-manual")'
           error-on: '"warning"'
           upload-snapshots: true
-
-      # README ハーネスが落ちていたら、R CMD check が通っていてもジョブを失敗させる。
-      - name: Fail if the README harness failed
-        if: steps.readme.outcome == 'failure'
-        run: |
-          echo "::error file=README.md::README の #> 出力が実際の出力と一致しません。" \
-               "上の 'Verify README examples' ステップのログに、どのブロックのどの行が" \
-               "ずれたかが MISMATCH として出ています。" \
-               "ローカルでの再生成: Rscript docs/verify-readme-examples.R . --rewrite"
-          exit 1
