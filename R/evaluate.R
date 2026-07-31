@@ -205,13 +205,34 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' `n_true_missing`, which the print method shows above the success rate
 #' (Issue #36).
 #'
+#' The row-count test alone is not enough, because `n_anon` and `n_raw` are
+#' counted from the score table and so only see the records that survived. When
+#' every surviving ANON record was offered every surviving RAW record the table
+#' is a **complete rectangle over a subset**, `nrow(scores) == n_anon * n_raw`
+#' holds, and the shape test cannot fire -- which is what a release published as
+#' a single region, year or category produces. So `n_true_missing` (and
+#' `truth_coverage`) is measured against the ground truth, is treated as
+#' independent evidence of a filtered candidate set, and is printed whether or
+#' not the shape test fired (Issue #56).
+#'
+#' When `n_true_missing == n_anon` **nothing at all was measured**: no ANON
+#' record could have been reidentified, so every rate is 0 by construction. That
+#' prints identically to a genuinely safe release, so this warns.
+#'
 #' @return an object of class "reid_evaluation": a list with
 #'   \describe{
 #'     \item{n_anon, n_raw, n_pairs}{size of the problem}
-#'     \item{n_pairs_full, candidate_coverage, blocked, n_true_missing}{whether
-#'       the candidate set is the full cross join, what fraction of it is
-#'       present, and for how many ANON records the true RAW record is not a
-#'       candidate at all}
+#'     \item{n_pairs_full, candidate_coverage}{the size of the full cross join
+#'       **over the records present in the score table**, and what fraction of
+#'       it is present. A record dropped entirely is invisible to these two,
+#'       which is why the next three exist beside them}
+#'     \item{n_true_missing, truth_coverage, truth_measurable}{for how many ANON
+#'       records the true RAW record is not a candidate at all, the complementary
+#'       fraction, and whether at least one ANON record could have been
+#'       reidentified}
+#'     \item{blocked}{TRUE when the candidate set is not the full cross join,
+#'       by either test: fewer rows than `n_anon * n_raw`, **or**
+#'       `n_true_missing > 0`}
 #'     \item{confidence}{which confidence measure the sweep thresholded on}
 #'     \item{success_analytic}{exact expected single-guess success rate}
 #'     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -353,8 +374,36 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   ## nobody questions (docs/lessons-learned.md section 2, Issue #36). A full
   ## join has exactly n_anon * n_raw rows, so anything smaller was filtered --
   ## by lsh_candidates(), block_candidates(), top_k_candidates() or by hand.
+  ##
+  ## That test has a blind spot, and Issue #56 is it. n_anon and n_raw are
+  ## counted from the score table, so they only see the records that survived.
+  ## If every surviving ANON record was offered every surviving RAW record --
+  ## which is exactly what blocking on a key the release collapsed produces,
+  ## e.g. a file published as one prefecture -- the candidate table is a
+  ## *complete rectangle over a subset*, the equality holds, and the shape test
+  ## says nothing. The number of ANON records whose true RAW record is not a
+  ## candidate at all is measured against the ground truth instead, does not
+  ## share that blind spot, and is therefore treated as independent evidence.
   n_pairs_full <- as.numeric(n_anon) * as.numeric(n_raw)
   n_true_missing <- sum(is.na(per_anon$TRUE_RANK))
+  truth_coverage <- if (n_anon > 0) 1 - n_true_missing / n_anon else NA_real_
+
+  ## "Nothing was found" and "nothing could have been found" print identically
+  ## -- 0.0000 everywhere -- and only one of them is good news. Say which one
+  ## it is before the reader reads the zeros (Issue #56). block_candidates()
+  ## and axis_informativeness() already say "not measurable" in this
+  ## situation; reid_evaluate() used to be the one that stayed quiet.
+  if (n_anon > 0 && n_true_missing == n_anon) {
+    warning(
+      "reid_evaluate(): the true RAW record is absent from the candidate set ",
+      "of every one of the ", n_anon, " ANON record(s), so every rate ",
+      "reported below is 0 by construction. This is the ABSENCE OF A ",
+      "MEASUREMENT, not evidence that the release is safe. Check that RAW and ",
+      "ANON share a `row_number` column with matching values, and that ",
+      "blocking did not discard every true pair.",
+      call. = FALSE
+    )
+  }
 
   structure(
     list(
@@ -362,9 +411,14 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
       n_raw = n_raw,
       n_pairs = nrow(scores),
       n_pairs_full = n_pairs_full,
+      ## Relative to the records *present in the score table*: a record that was
+      ## dropped entirely is invisible here, which is why truth_coverage exists
+      ## next to it rather than instead of it.
       candidate_coverage = if (n_pairs_full > 0) nrow(scores) / n_pairs_full else NA_real_,
       n_true_missing = n_true_missing,
-      blocked = nrow(scores) < n_pairs_full,
+      truth_coverage = truth_coverage,
+      truth_measurable = n_anon > 0 && n_true_missing < n_anon,
+      blocked = nrow(scores) < n_pairs_full || n_true_missing > 0,
       confidence = confidence,
       success_analytic = success_analytic,
       success_mean = mean(per_seed$rate),
@@ -401,24 +455,52 @@ print.reid_evaluation <- function(x, ...) {
     "reid evaluation: %d ANON x %d RAW record(s), %d candidate pair(s)\n",
     x$n_anon, x$n_raw, x$n_pairs
   ))
-  ## Only printed when the candidate set is incomplete, so the ordinary
-  ## full-join output is unchanged -- but when it is incomplete, it is printed
-  ## before the success rate, not after it (Issue #36).
-  if (isTRUE(x$blocked)) {
+  ## Only printed when something is wrong, so the ordinary full-join output is
+  ## unchanged -- but when something is wrong, it is printed before the success
+  ## rate, not after it (Issue #36).
+  ##
+  ## Two independent symptoms, reported independently (Issue #56): the *shape*
+  ## of the candidate table, and the *ground truth* missing from it. The shape
+  ## test is blind to a complete rectangle over a subset; the missing-truth
+  ## count is not. Gating the second on the first meant that in exactly the
+  ## case the shape test cannot see, nothing at all was printed -- while the
+  ## count sat in the object, computed and unshown.
+  n_missing <- x$n_true_missing %||% 0L
+  if (length(n_missing) != 1L || is.na(n_missing)) {
+    n_missing <- 0L
+  }
+  shape_blocked <- isTRUE(x$n_pairs < x$n_pairs_full)
+
+  if (shape_blocked) {
     cat(sprintf(
       "  candidate set  : BLOCKED -- %.4g%% of the full %.0f-pair join kept\n",
       100 * x$candidate_coverage, x$n_pairs_full
     ))
     cat(sprintf(
       "    true RAW record absent from the candidates of %d/%d ANON record(s)%s\n",
-      x$n_true_missing, x$n_anon,
-      if (x$n_true_missing > 0) "" else " (recall 1.0 on the records shown)"
+      n_missing, x$n_anon,
+      if (n_missing > 0) "" else " (recall 1.0 on the records shown)"
     ))
-    if (x$n_true_missing > 0) {
+    if (n_missing > 0) {
       cat("    -> the success rate below is a LOWER bound. ANON records that ",
           "were left\n       with no candidate at all are not counted here at ",
           "all.\n", sep = "")
     }
+  } else if (n_missing > 0) {
+    cat(sprintf(
+      "  ground truth   : true RAW record absent from the candidates of %d/%d ANON record(s)\n",
+      n_missing, x$n_anon
+    ))
+    cat("    -> the candidate table has exactly n_anon x n_raw rows, so the ",
+        "row-count\n       test cannot see this. Those records can never be ",
+        "reidentified: the\n       success rate below is a LOWER bound.\n", sep = "")
+  }
+  if (n_missing > 0 && n_missing >= x$n_anon) {
+    cat("  ! NOT MEASURABLE: no ANON record has its true RAW record among its ",
+        "candidates.\n    Every rate below is 0 by construction. That is the ",
+        "absence of a measurement,\n    not evidence that the release is safe. ",
+        "Check that RAW and ANON share a\n    matching row-number column, and ",
+        "that blocking did not discard every true pair.\n", sep = "")
   }
   cat(sprintf(
     "  success rate   : %.4f exact | simulated mean %.4f sd %.4f range [%.4f, %.4f] over %d seeds\n",
