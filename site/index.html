@@ -212,6 +212,40 @@
     <strong>加工の手順ではなく、残ったデータの性質が結果を決めます。</strong>
     だからこそ、加工後のデータそのものを対象に測る必要があります。
   </p>
+
+  <p>
+    これは外部の研究に限った話ではありません。同じことを、このツール自身で測ってみました。
+  </p>
+
+  <figure>
+    <p class="fig-title">年齢を 10 歳刻みに、住所を都道府県単位に粗くした 200 人分のデータ</p>
+    <div class="bars">
+      <div class="bar-row">
+        <div class="bar-label">年齢・地域・性別だけを手がかりに特定できた人の割合</div>
+        <div class="bar-track">
+          <div class="bar" style="width:100%"></div>
+          <span class="bar-val">45.5%</span>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">当てずっぽうに当てた場合（比較の基準）</div>
+        <div class="bar-track">
+          <div class="bar" style="width:1.1%"></div>
+          <span class="bar-val">0.5%</span>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      「30代」「東京都」のように値を粗くする加工は、実務でごく一般的に行われます。
+      それでも残った 3 項目だけで、<strong>7 割の人が 3 人以下にまで絞り込まれ</strong>、
+      <strong>17% の人は他の誰とも重ならない一人</strong>でした。
+      当てずっぽうの 91 倍です。
+      <span class="src">出典: 本リポジトリでの実測（Issue #20 / #40。スクリプトと実行ログ:
+      <code>docs/investigation/site-figures.R</code>）。200 人分の合成データ。
+      年齢は 10 歳刻み、住所は市区町村から都道府県へ粗くしたもの。
+      絞り込み後の候補数は中央値 3 人、最大 6 人。</span>
+    </figcaption>
+  </figure>
 </section>
 
 <section class="wrap">
@@ -301,6 +335,44 @@
     </figcaption>
   </figure>
 
+  <p>
+    そして、これは道具の不具合だけの話ではありません。
+    <strong>道具が正しくても、測り方の選択を誤れば同じことが起きます。</strong>
+    先ほどの「10 歳刻み・都道府県単位」のデータを、もう一度測ってみます。
+  </p>
+
+  <figure>
+    <p class="fig-title">同じデータ・同じ攻撃者で、測り方だけを変えたとき</p>
+    <div class="bars">
+      <div class="bar-row">
+        <div class="bar-label">「30代」に入りうる人を数える（この加工に合った測り方）</div>
+        <div class="bar-track">
+          <div class="bar" style="width:100%"></div>
+          <span class="bar-val">45.5%</span>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">「37」と「30代」の文字の違いを測る（合っていない測り方）</div>
+        <div class="bar-track">
+          <div class="bar" style="width:25.7%"></div>
+          <span class="bar-val">11.7%</span>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      同じデータ、同じ手がかり、同じ攻撃者です。違うのは測り方だけで、
+      報告される危険度は <strong>実際の約 4 分の 1</strong> になりました。
+      しかも低いほうの数値は、エラーも警告もなく、もっともらしい形で出てきます。
+      集合データ（買い物かごや訪問先など）では差はさらに大きく、
+      同一データで <strong>7.0% と 94.5%、13 倍以上</strong>の開きが出ました。
+      <span class="src">出典: 本リポジトリでの実測（Issue #40 / #18。スクリプトと実行ログ:
+      <code>docs/investigation/site-figures.R</code>）。
+      現在は、この取り違えが起きる組み合わせを検出して処理を止めるようにしています。
+      ただし「千代田区 → 東京都」のような置き換えは構造上検出できず、
+      止められません。</span>
+    </figcaption>
+  </figure>
+
   <div class="callout">
     <p>
       <strong>ここが本質的な点です。</strong>
@@ -319,8 +391,8 @@
   <h2>現在の状況</h2>
 
   <p>
-    このパッケージは 2019 年に作られたもので、現在は評価の土台を作り直している段階です。
-    直近の作業で以下を確認・修正しました。
+    このパッケージは 2019 年に作られたもので、まず評価の土台を作り直し、
+    その上に測り方を積み増してきました。
   </p>
 
   <table>
@@ -328,22 +400,38 @@
       <tr><th>項目</th><th>状況</th></tr>
     </thead>
     <tbody>
-      <tr><td>自動テスト</td><td class="num">410 件（全て成功）</td></tr>
-      <tr><td>R の標準チェック</td><td class="num">警告・注意ともに 0</td></tr>
-      <tr><td>修正した不具合</td><td class="num">10 件</td></tr>
+      <tr><td>自動テスト</td><td class="num">2,009 件（全て成功）</td></tr>
+      <tr><td>R の標準チェック</td><td class="num">エラー・警告・注意ともに 0</td></tr>
+      <tr><td>対応を終えた課題</td><td class="num">33 件</td></tr>
     </tbody>
   </table>
+
+  <p>この間に、扱える加工の種類も増えました。</p>
+
+  <ul>
+    <li><strong>粗くした値</strong>（「30代」「東京都」）を含むデータ — 上の図はこの機能で測ったものです</li>
+    <li><strong>複数の項目を同時に使う攻撃</strong> — 現実の攻撃者は項目を 1 つずつは使いません</li>
+    <li><strong>集合として持つ情報</strong>（買った商品、訪れた場所）と<strong>位置・時刻の履歴</strong></li>
+    <li><strong>珍しい値ほど強い手がかりになる</strong>ことを織り込んだ測り方</li>
+    <li><strong>攻撃者が何を知っている前提か</strong>を明示して比較するしくみ</li>
+  </ul>
 
   <div class="status">
     <h3>正直にお伝えしたいこと</h3>
     <p>
       これは<strong>研究・検討用のツールであり、法令適合や安全性を保証するものではありません</strong>。
-      現時点で実装されているのは基礎的な手法に限られ、
-      一般化された値（「30代」「東京都」など）を含むデータへの対応など、実務で必要な機能はこれからです。
+      個人情報保護法上の「匿名加工情報」の基準を満たすかどうかの判断には使えません。
     </p>
     <p>
       得られる数値は「この手法では、この条件で、これだけ特定できた」という一つの観測であって、
       安全性の証明ではありません。<strong>特定されなかったことは、安全であることを意味しません。</strong>
+      ここで試していない手法で破られる可能性は、このツールでは測れないからです。
+    </p>
+    <p>
+      上で見たとおり、<strong>測り方が対象に合っていなければ数値は小さく出ます</strong>。
+      低い数値が出たときこそ、手法の選択が正しかったかを疑ってください。
+      機械学習を使ったより強い突き合わせや、移動の軌跡そのものを狙う攻撃には、
+      まだ対応していません。
     </p>
   </div>
 </section>
@@ -353,6 +441,7 @@
   <ul>
     <li><a href="https://github.com/gghatano/reidentify">リポジトリ（GitHub）</a> — ソースコードと課題管理</li>
     <li><a href="https://github.com/gghatano/reidentify/blob/master/docs/lessons-learned.md">今回の作業で学んだこと</a> — 評価ツールの検証で分かったことと、その手順化</li>
+    <li><a href="https://github.com/gghatano/reidentify/blob/master/docs/investigation/site-figures.R">このページの図の元になった計算</a> — 「粗くした値」の図と「測り方を変えたとき」の図の数値を再現するスクリプト</li>
     <li><a href="https://github.com/gghatano/reidentify/issues">Issue 一覧</a> — 進行中の作業と既知の問題</li>
   </ul>
 </section>
@@ -363,6 +452,7 @@
   <div class="wrap">
     <p>reidentify — 匿名加工データの再識別リスク評価（MIT License）</p>
     <p>本ページに掲載した数値は、いずれも本リポジトリ上での実測に基づきます。外部の研究結果には出典を併記しています。</p>
+    <p>最終更新: 2026-07-31（自動テスト 2,009 件時点）</p>
   </div>
 </footer>
 
