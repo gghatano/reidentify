@@ -20,6 +20,13 @@
 ##      against the same file;
 ##   6. checks that every exported function is named somewhere in README.md.
 ##
+## Direction matters in 6: it is one-way. This header used to also claim "and
+## that the README names no function that is not exported", which the code
+## never computed (#67). The reverse check is not implemented because the
+## README legitimately names functions from base R, dplyr and testthat, so it
+## would be mostly false positives; the claim was removed rather than the
+## check added.
+##
 ## Comparison is whitespace-normalised but otherwise exact: an omitted line is
 ## a mismatch, not a pass. (The #10 version tested "does every README line
 ## appear somewhere in the log", which silently accepted truncated output.)

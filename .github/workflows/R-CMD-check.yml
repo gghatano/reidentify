@@ -107,6 +107,11 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      # "checking for future file timestamps" は外部の時刻 API に問い合わせる。
+      # 到達できないと "unable to verify current time" という NOTE になり、
+      # error-on: note と組み合わせるとパッケージと無関係にジョブが落ちる。
+      # 検査したいのはパッケージであってランナーの疎通ではないので無効化する。
+      _R_CHECK_SYSTEM_CLOCK_: false
 
     steps:
       - uses: actions/checkout@v4
@@ -123,10 +128,15 @@ jobs:
 
       - uses: r-lib/actions/check-r-package@v2
         with:
-          # --as-cran は付けない。tests/ が pkgload を使っているが DESCRIPTION の
-          # Suggests に無いため "'::' or ':::' import not declared from: 'pkgload'"
-          # で WARNING になる (ローカルで確認済み)。リポジトリがこれまで通して
-          # きた基準は --no-manual なので、それに揃える。
-          args: 'c("--no-manual")'
-          error-on: '"warning"'
+          # --as-cran を付ける (#67)。以前のコメントは「tests/ が pkgload を
+          # 使っているが Suggests に無いため WARNING になる」と書いていたが、
+          # pkgload は 48e2f82 で Suggests に入っており、その理由はもう無い。
+          # 実測 (R 4.6.1): --as-cran --no-manual で Status: OK。
+          args: 'c("--no-manual", "--as-cran")'
+          # NOTE でも落とす (#67)。リポジトリが掲げ、site/index.html が
+          # 「エラー・警告・注意ともに 0」と書いている基準は NOTE 0 である。
+          # "warning" のままでは、掲げた基準を CI が強制していない状態になる。
+          # 宣言と実装を一致させる方を選んだ。基準を緩めるより、NOTE が出たら
+          # その場で見る方が安い (現状 NOTE は 0 件)。
+          error-on: '"note"'
           upload-snapshots: true
