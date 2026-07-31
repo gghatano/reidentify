@@ -1,0 +1,103 @@
+name: R checks
+
+# README の記載と実装のずれ (#47) と、パッケージ本体の健全性を自動で検出する。
+#
+# なぜパスフィルタを付けないか:
+#   docs/verify-readme-examples.R は README.md / R/ / NAMESPACE の 3 者を突き合わせ、
+#   R CMD check は tests/ / man/ / DESCRIPTION / data/ にも依存する。対象パスを
+#   列挙すると、列挙し忘れた 1 つの変更で検査が静かに飛ぶ。実測で harness 21 秒 /
+#   check 111 秒しかかからないので、全変更で回す方が安い。
+#   (パスフィルタで実行されなかった workflow は required check として "pending" の
+#   まま止まる、という GitHub の挙動を避ける意味もある。)
+#
+# なぜジョブを 2 つに分けるか:
+#   最初は 1 ジョブに 2 つのステップとして書いたが、PR #53 (README を 1 行だけ
+#   壊す negative test) で、先に R CMD check が落ちると README ハーネス側の
+#   判定ステップが暗黙の success() 条件で skip され、**どちらが原因か判別
+#   できなくなる**ことが分かった。独立した 2 ジョブなら、2 つの検査結果が
+#   互いを隠さない。並列に走るので所要時間も伸びない。
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同じ PR に続けて push したら、古い実行は捨てる。master は捨てない。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # README の全コードブロックを 1 セッションで実行し、`#>` を順序込みで厳密比較
+  # する。エクスポート関数の README 未記載も同時に検出する。差分があれば
+  # ハーネスが非ゼロ終了し、このジョブが落ちる。
+  readme-examples:
+    runs-on: ubuntu-latest
+    name: README examples
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          # RSPM の Linux バイナリを使う。philentropy は C++ を含むので、
+          # ソースビルドだと毎回数分持っていかれる。
+          use-public-rspm: true
+
+      # DESCRIPTION の Imports / Suggests を解決し、pak のキャッシュを
+      # actions/cache に載せる。extra-packages は R CMD check ジョブと同じ
+      # 並びにしてある — キャッシュキーが一致し、2 ジョブで 1 回の
+      # インストールを共有できる。
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgload, any::rcmdcheck
+          needs: check
+
+      - name: Verify README examples
+        run: Rscript docs/verify-readme-examples.R .
+
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error file=README.md::README の #> 出力が実際の出力と一致しないか、"\
+               "エクスポート関数が README に載っていません。"\
+               "上のステップのログの MISMATCH 節に、どのブロックのどの行がずれたかが出ています。"\
+               "出力の再生成: Rscript docs/verify-readme-examples.R . --rewrite"
+
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    name: R CMD check
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgload, any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          # --as-cran は付けない。tests/ が pkgload を使っているが DESCRIPTION の
+          # Suggests に無いため "'::' or ':::' import not declared from: 'pkgload'"
+          # で WARNING になる (ローカルで確認済み)。リポジトリがこれまで通して
+          # きた基準は --no-manual なので、それに揃える。
+          args: 'c("--no-manual")'
+          error-on: '"warning"'
+          upload-snapshots: true
