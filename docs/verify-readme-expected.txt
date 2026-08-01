@@ -12,13 +12,13 @@
 #   Rscript docs/verify-readme-examples.R . --rewrite
 # で再生成する。手で編集してもよいが、減らす方向の編集は理由を書くこと。
 
-blocks_run: 36
+blocks_run: 37
 blocks_skipped: 4
 output_units: 47
 
 # 実行中に signal される警告・メッセージ。順序込みで完全一致を要求する。
 # ここに無い警告が出ても、ここにある警告が出なくても落ちる。
-condition: README.md:248 +2 | WARNING: combine_scores(): the components are on very different scales -- scores[[1]] has 26.1x the weighted spread of scores[[2]] (sd 13.8 vs 0.531). The widest component decides the ranking and the others only break its ties. That is harmless when the dominant component is also the most informative, but when it is not, adding attributes LOWERS the measured reidentification rate and the result understates the risk. Put the components on a common scale first -- combine_scores(normalize_scores(scores, "range")) or score_multi() -- or set weights to compensate. Pass scale_check = "none" if the scale gap is intended.
-condition: README.md:511 +1 | WARNING: block_candidates(): blocking discarded 122 of 200 true pair(s) (recall 0.39). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking").
-condition: README.md:551 +1 | WARNING: block_candidates(): blocking discarded 24 of 200 true pair(s) (recall 0.88). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking").
-condition: README.md:566 +1 | WARNING: lsh_candidates(): blocking discarded 23 of 200 true pair(s) (recall 0.885). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking").
+condition: README.md:372 +1 | WARNING: block_candidates(): blocking discarded 122 of 200 true pair(s) (recall 0.39). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking").
+condition: README.md:412 +1 | WARNING: block_candidates(): blocking discarded 24 of 200 true pair(s) (recall 0.88). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking").
+condition: README.md:427 +1 | WARNING: lsh_candidates(): blocking discarded 23 of 200 true pair(s) (recall 0.885). Any reidentification rate measured on this candidate set is a LOWER bound. See attr(x, "blocking").
+condition: README.md:714 +2 | WARNING: combine_scores(): the components are on very different scales -- scores[[1]] has 26.1x the weighted spread of scores[[2]] (sd 13.8 vs 0.531). The widest component decides the ranking and the others only break its ties. That is harmless when the dominant component is also the most informative, but when it is not, adding attributes LOWERS the measured reidentification rate and the result understates the risk. Put the components on a common scale first -- combine_scores(normalize_scores(scores, "range")) or score_multi() -- or set weights to compensate. Pass scale_check = "none" if the scale gap is intended.
