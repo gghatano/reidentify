@@ -16,6 +16,31 @@ name: R checks
 #   判定ステップが暗黙の success() 条件で skip され、**どちらが原因か判別
 #   できなくなる**ことが分かった。独立した 2 ジョブなら、2 つの検査結果が
 #   互いを隠さない。並列に走るので所要時間も伸びない。
+#
+# なぜ R CMD check だけをマトリクス化するか (#85):
+#   #85 の指摘どおり、それまで全ジョブが ubuntu-latest / release の 1 環境
+#   だけだった。#55 では「テスト 2009 件すべて成功」が Windows 限定で、Linux
+#   では 2 件落ちていた (cat() の末尾空白を Windows の normalizePath() が
+#   Win32 API 経由で除去していた)。いまは逆で、開発は Windows 上、検証は
+#   Linux だけという構造になっている。
+#
+#   マトリクスに載せたのは R CMD check ジョブだけで、README examples と
+#   source-tree tests は ubuntu-latest / release のままにした。理由は
+#   **1 ジョブあたりのプラットフォーム情報量**で決めている:
+#
+#     - R CMD check は tests/testthat をそのまま走らせる (実測 2453 件)。
+#       vignette のビルドと examples の実行、--as-cran の各検査も通る。
+#       プラットフォーム差が出るとしたらここに最も広く出る。
+#     - source-tree tests が追加で通すのは 4 件 (2457 - 2453) だけで、
+#       残りは R CMD check と同じテストである。実測 26 分かかった実績が
+#       あり (#63 当時)、直近の master でも 4 分 44 秒。これを 5 環境に
+#       広げても、増える情報は 4 件分にとどまる。
+#     - README examples が照合するのは README.md の `#>` と NAMESPACE で、
+#       どちらもプラットフォームに依存しない成果物である。
+#
+#   fail-fast: false にしてあるので、1 環境が落ちても他は最後まで走る。
+#   #55 のような「1 プラットフォームだけ落ちる」事象は、他が中断すると
+#   どこまでが共通の問題か分からなくなる。
 on:
   push:
     branches: [master]
@@ -53,8 +78,10 @@ jobs:
 
       # DESCRIPTION の Imports / Suggests を解決し、pak のキャッシュを
       # actions/cache に載せる。extra-packages は R CMD check ジョブと同じ
-      # 並びにしてある — キャッシュキーが一致し、2 ジョブで 1 回の
-      # インストールを共有できる。
+      # 並びにしてある — キャッシュキーが一致し、1 回のインストールを
+      # 共有できる。キャッシュキーには OS と R のバージョンが入るので、
+      # 共有できるのは R CMD check の ubuntu-latest / release の脚だけで、
+      # windows / macos / 4.1 / devel はそれぞれ自前のキャッシュを持つ。
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgload, any::rcmdcheck
@@ -101,8 +128,40 @@ jobs:
         run: Rscript docs/run-source-tests.R . --check-figures
 
   R-CMD-check:
-    runs-on: ubuntu-latest
-    name: R CMD check
+    runs-on: ${{ matrix.config.os }}
+    name: R CMD check (${{ matrix.config.os }} / R ${{ matrix.config.r }})
+
+    strategy:
+      # 1 環境の失敗で他を打ち切らない (#85)。落ちた環境がどれかではなく、
+      # 「どの環境で落ちてどの環境で通ったか」が知りたい情報である。
+      fail-fast: false
+      matrix:
+        config:
+          # 現行の基準線。ここが落ちたらプラットフォーム固有ではない。
+          - { os: ubuntu-latest,  r: 'release' }
+          # 開発環境。#55 と同型 (プラットフォーム依存の暗黙の挙動) の再発検出。
+          - { os: windows-latest, r: 'release' }
+          # 3 つ目の OS。ファイルシステムと locale の既定が Linux/Windows の
+          # どちらとも違うので、両者に共通の前提が紛れていれば出る。
+          - { os: macos-latest,   r: 'release' }
+          # DESCRIPTION の `Depends: R (>= 4.1.0)` は #77 で dplyr 1.2.1 の
+          # 要求を継承して書いた数字で、実際に 4.1 で動くかは一度も試されて
+          # いない。宣言を検証するのはこのジョブである。
+          # 初回実測 (PR #87): R 4.1.3 で Status: OK / PASS 2453。依存は
+          # dplyr 1.2.1, tibble 3.3.1, testthat 3.3.2 ... と **すべて現行の
+          # CRAN 版**が入った (4.1 対応の古い版に落ちてはいない)。10 分 01 秒。
+          - { os: ubuntu-latest,  r: '4.1' }
+          # 将来の R での破壊を早期に検知する。http-user-agent: release は
+          # r-lib/actions の標準レシピで、P3M に release 向けの Linux
+          # バイナリを返させる意図のもの。ただし初回実測 (PR #87) では
+          # **効いておらず、依存 61 個すべてがソースビルドになった**。
+          # このためキャッシュが無い初回は 17 分 09 秒かかり、その回では
+          # マトリクス中で最長だった (2 回目はキャッシュが効いて 8 分 35 秒)。
+          # キャッシュキーには r-devel の svn revision が入るので、devel の
+          # スナップショットが更新されるたびにこの 17 分が戻ってくる。
+          # 消しても速くはならないので残すが、「binary が来る」と当てには
+          # しないこと。
+          - { os: ubuntu-latest,  r: 'devel', http-user-agent: 'release' }
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -118,13 +177,16 @@ jobs:
 
       - uses: r-lib/actions/setup-r@v2
         with:
-          r-version: release
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
       # vignette (rmarkdown::html_vignette) のビルドに pandoc が要る (#75)。
       # ubuntu-latest のイメージには元から入っているが、それは
       # "checking top-level files" が README.md を読むための偶然の前提だった。
       # vignette が入った以上、無いとビルドそのものが落ちるので明示する。
+      # マトリクス化で windows / macos も回るようになり、ランナーイメージに
+      # 何が入っているかを当てにできなくなったので、なおさら明示が要る。
       - uses: r-lib/actions/setup-pandoc@v2
 
       - uses: r-lib/actions/setup-r-dependencies@v2
