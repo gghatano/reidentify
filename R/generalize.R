@@ -51,6 +51,10 @@
 ## Numbers accepted at interval endpoints.
 GEN_NUM <- "[-+]?[0-9]+(?:\\.[0-9]+)?"
 
+## Unsigned endpoints, used wherever a leading "-" could not be told apart from
+## the range separator.
+GEN_UNSIGNED <- "[0-9]+(?:\\.[0-9]+)?"
+
 ## Characters used as a range separator: ASCII hyphen and tilde, en/em dash,
 ## and the two Japanese wave dashes U+301C / U+FF5E (which look identical and
 ## are both in circulation).
@@ -65,15 +69,91 @@ GEN_DASH <- paste0("[-~", intToUtf8(c(0x2013, 0x2014, 0x301C, 0xFF5E)), "]")
 
 ## Suffixes recognised on the ANON side.
 GEN_DECADE <- intToUtf8(0x4EE3)              # dai   "the thirties"
+GEN_BAND <- intToUtf8(0x53F0)                # dai   "in the 3000s" (magnitude)
 GEN_OR_MORE <- intToUtf8(c(0x4EE5, 0x4E0A))  # ijou  "or more"
 GEN_OR_LESS <- intToUtf8(c(0x4EE5, 0x4E0B))  # ika   "or less"
 GEN_UNDER <- intToUtf8(c(0x672A, 0x6E80))    # miman "under"
+GEN_OVER <- intToUtf8(0x8D85)                # chou  "over", endpoint excluded
+GEN_WITHIN <- intToUtf8(c(0x4EE5, 0x5185))   # inai  "within"
+GEN_ONWARD <- intToUtf8(c(0x4EE5, 0x964D))   # ikou  "from ... onwards"
+GEN_EARLIER <- intToUtf8(c(0x4EE5, 0x524D))  # izen  "up to and including"
+GEN_UPTO <- intToUtf8(c(0x307E, 0x3067))     # made  "up to"
+GEN_FROM <- intToUtf8(c(0x304B, 0x3089))     # kara  "from"
+GEN_FULL <- intToUtf8(0x6E80)                # man   prefix in "満20歳以上"
+GEN_EARLY <- intToUtf8(c(0x524D, 0x534A))    # zenhan "early" half of a decade
+GEN_LATE <- intToUtf8(c(0x5F8C, 0x534A))     # kouhan "late"  half of a decade
+
+## Bound markers, grouped by whether the endpoint itself is inside the region.
+## The two halves are kept apart because "以下" and "未満" differ by exactly one
+## record's worth of candidates at every band edge.
+GEN_LOWER_CLOSED <- paste0("\\+|", GEN_OR_MORE, "|", GEN_ONWARD)
+GEN_LOWER_OPEN <- GEN_OVER
+GEN_UPPER_CLOSED <- paste0(GEN_OR_LESS, "|", GEN_WITHIN, "|", GEN_EARLIER,
+                           "|", GEN_UPTO)
+GEN_UPPER_OPEN <- GEN_UNDER
+
+## Myriad grouping. Japanese writes large numbers in powers of 10^4, so a
+## release says "5万円未満" and not "50000円未満"; read literally the first is
+## not a number at all and the column falls through every interval form.
+GEN_SCALE_CHAR <- vapply(c(0x767E, 0x5343, 0x4E07, 0x5104, 0x5146),
+                         intToUtf8, character(1))  # 百 千 万 億 兆
+GEN_SCALE_VALUE <- c(1e2, 1e3, 1e4, 1e8, 1e12)
+GEN_SCALE_ALT <- paste(GEN_SCALE_CHAR, collapse = "|")
+
+## Fullwidth forms, mapped to their ASCII equivalents before anything is
+## parsed. A Japanese release mixes the two freely -- "６５歳以上" and
+## "65歳以上" are the same band -- and a form that is only recognised in one
+## width is a form the guard misses half the time.
+GEN_NORM_FROM <- vapply(
+  c(0xFF10:0xFF19,                       # ０ .. ９
+    0xFF0B, 0xFF0D, 0x2212, 0x2010,      # ＋ － − ‐
+    0xFF0E, 0xFF0C, 0x3000,              # ． ， ideographic space
+    0xFF08, 0xFF09, 0xFF3B, 0xFF3D),     # （ ） ［ ］
+  intToUtf8, character(1)
+)
+GEN_NORM_TO <- c(as.character(0:9),
+                 "+", "-", "-", "-",
+                 ".", ",", " ",
+                 "(", ")", "[", "]")
+
+## The patterns are assembled once, at namespace load. They depend only on the
+## constants above, and rebuilding them inside the parser made paste0() one of
+## its three most expensive calls -- the parser runs once per distinct value of
+## a column, which on a wide candidate table is tens of thousands of times.
+GEN_RE_BRACKET <- paste0("^([[(])\\s*(", GEN_NUM, ")?\\s*,\\s*(", GEN_NUM,
+                         ")?\\s*([])])$")
+GEN_RE_MAN_PREFIX <- paste0("^", GEN_FULL, "([0-9])")
+GEN_RE_KARA <- paste0("([0-9])\\s*", GEN_FROM)
+GEN_RE_SCALE_TOKEN <- paste0("(?:", GEN_UNSIGNED, "\\s*(?:", GEN_SCALE_ALT,
+                             "))+(?:", GEN_UNSIGNED, ")?")
+GEN_RE_SCALE_HEAD <- paste0("^(", GEN_UNSIGNED, ")\\s*(", GEN_SCALE_ALT, ")")
+GEN_RE_DECADE <- paste0("^(", GEN_NUM, ")\\s*", GEN_DECADE, "\\s*(", GEN_EARLY,
+                        "|", GEN_LATE, ")?$")
+GEN_RE_DECADE_ASCII <- paste0("^(", GEN_NUM, ")\\s*s$")
+GEN_RE_BAND <- paste0("^(", GEN_UNSIGNED, ")\\s*", GEN_BAND, "$")
+GEN_RE_VALUE <- paste0("^", GEN_NUM, "$")
+GEN_RE_TWO_SIDED <- paste0("^(", GEN_UNSIGNED, ")\\s*(", GEN_LOWER_CLOSED, "|",
+                           GEN_LOWER_OPEN, ")\\s*(", GEN_UNSIGNED, ")\\s*(",
+                           GEN_UPPER_CLOSED, "|", GEN_UPPER_OPEN, ")$")
+GEN_RE_LOWER_CLOSED <- paste0("^(", GEN_NUM, ")\\s*(", GEN_LOWER_CLOSED, ")$")
+GEN_RE_LOWER_OPEN <- paste0("^(", GEN_NUM, ")\\s*(", GEN_LOWER_OPEN, ")$")
+GEN_RE_UPPER_CLOSED <- paste0("^(", GEN_NUM, ")\\s*(", GEN_UPPER_CLOSED, ")$")
+GEN_RE_UPPER_OPEN <- paste0("^(", GEN_NUM, ")\\s*(", GEN_UPPER_OPEN, ")$")
+GEN_RE_RANGE <- paste0("^(", GEN_UNSIGNED, ")\\s*", GEN_DASH, "\\s*(",
+                       GEN_UNSIGNED, ")\\s*(", GEN_UPTO, ")?$")
+GEN_RE_RANGE_FROM <- paste0("^(", GEN_UNSIGNED, ")\\s*", GEN_DASH, "$")
+GEN_RE_RANGE_TO <- paste0("^", GEN_DASH, "\\s*(", GEN_UNSIGNED, ")$")
 
 #' units that may follow a number in a generalised value
 #'
 #' A generalised value is often written with its unit attached -- "30-39歳",
-#' "1000-1999円". The unit has to be stripped before the endpoints can be read,
-#' but stripping *any* trailing text would misread a categorical code such as
+#' "1000-1999円", "65歳以上". The unit has to be removed before the endpoints
+#' can be read, and it is removed wherever it sits directly after a number, not
+#' only at the end of the value: "65歳以上" is the ordinary Japanese form and
+#' reading only "65以上" left the commonest top-coded band invisible
+#' (Issue #92).
+#'
+#' Stripping *any* text after a number would misread a categorical code such as
 #' "3S" as the number 3, so only these known units are removed. Pass your own
 #' vector to `score_containment(units = )` to extend the list.
 #'
@@ -86,9 +166,14 @@ GEN_UNDER <- intToUtf8(c(0x672A, 0x6E80))    # miman "under"
 generalization_units <- function() {
   c(
     ## sai (years old), sai (informal), nen (year), en (yen), nin (people),
-    ## ken (cases), kai (times), nichi (days), getsu (months), fullwidth %
+    ## ken (cases), kai (times), nichi (days), getsu (months), fullwidth %,
+    ## jikan (hours), fun (minutes), byou (seconds), do (degrees),
+    ## ten (points), ko (items), mei (people, formal)
+    intToUtf8(c(0x6642, 0x9593)),  # jikan "hours", before the single 時
     vapply(c(0x6B73, 0x624D, 0x5E74, 0x5186, 0x4EBA,
-             0x4EF6, 0x56DE, 0x65E5, 0x6708, 0xFF05),
+             0x4EF6, 0x56DE, 0x65E5, 0x6708, 0xFF05,
+             0x6642, 0x5206, 0x79D2, 0x5EA6,
+             0x70B9, 0x500B, 0x540D),
            intToUtf8, character(1)),
     "%", "yr", "yrs", "y", "years", "kg", "km", "cm", "m", "g"
   )
@@ -105,41 +190,301 @@ is_generalization_wildcard <- function(x) {
   is.na(x) | !nzchar(trimws(x)) | grepl("^\\*+$", trimws(x))
 }
 
+## ---------------------------------------------------------------------------
+## reading a Japanese generalised value (Issue #92)
+##
+## The unit used to be stripped only off the *end* of the value, so "65以上"
+## was read and "65歳以上" was not -- and "65歳以上" is how a Japanese release
+## actually writes a top-coded age band. The consequence was not a parse error
+## but silence: is_generalized_value() returned FALSE, the Issue #40 guard did
+## not fire, and score_char() went ahead and edit-distanced "37" against
+## "65歳以上" -- measuring the printed shape of the band and reporting a
+## success rate 1.8x below the one score_containment() gets on the same data
+## (docs/investigation/japanese-generalization-benchmark-log.txt). The unit
+## therefore has to be removed wherever it sits between a number and what
+## follows it, not only at the end.
+##
+## FALSE POSITIVES ARE THE BINDING CONSTRAINT. Issue #40 already found that a
+## detector which is too eager stops working analyses: reading "8s" as [8, 18)
+## made the check fire on a column of random two-character codes. Everything
+## added here is therefore either non-ASCII (Japanese suffixes, fullwidth
+## digits, myriad grouping) or requires a character that
+## `stringi::stri_rand_strings()`'s default alphabet cannot produce ("+", "-",
+## "~"). The one ASCII form, the "30s" decade, is deliberately still read on
+## the *unstripped* string: allowing units inside it would turn "0ms" into a
+## decade. See docs/investigation/japanese-generalization-benchmark.R for the
+## measured rates.
+## ---------------------------------------------------------------------------
+
+#' is this string made only of ASCII characters?
+#'
+#' Used to skip every Japanese-specific reading for a value that cannot
+#' possibly contain one. That is not only a speed question: it is the
+#' guarantee that an ASCII column is treated exactly as it was before Issue
+#' #92, and therefore that the false-positive rate Issue #40 calibrated on
+#' random alphanumeric strings cannot have moved.
+#'
+#' Written with [utf8ToInt()] rather than a regular expression because a
+#' bracket range such as `[ -~]` is collation-dependent, and this file has to
+#' behave identically under every locale the CI matrix runs.
+#'
+#' @param v a single string
+#'
+#' @return TRUE or FALSE; FALSE if the string cannot be read as UTF-8
+#'
+#' @keywords internal
+gen_is_ascii <- function(v) {
+  cp <- suppressWarnings(utf8ToInt(v))
+  !anyNA(cp) && all(cp < 128L)
+}
+
+#' map fullwidth characters onto their ASCII equivalents
+#'
+#' @param v a single string
+#'
+#' @return the string with fullwidth digits and punctuation replaced
+#'
+#' @keywords internal
+gen_normalize <- function(v) {
+  if (gen_is_ascii(v)) {
+    ## Nothing to map, and every existing ASCII form must come out of this
+    ## function byte for byte unchanged.
+    return(v)
+  }
+  for (i in seq_along(GEN_NORM_FROM)) {
+    v <- gsub(GEN_NORM_FROM[i], GEN_NORM_TO[i], v, fixed = TRUE)
+  }
+  v
+}
+
+#' remove the thousands separators inside a number
+#'
+#' Only a comma with exactly three digits after it and a digit before it, so
+#' the comma of an explicit interval (`"[1,000)"` is parsed before this runs)
+#' and a list such as `"1,2"` are left alone.
+#'
+#' @param v a single string
+#'
+#' @return the string with `"1,000"` rewritten as `"1000"`
+#'
+#' @keywords internal
+gen_strip_thousands <- function(v) {
+  repeat {
+    w <- sub("([0-9]),([0-9]{3})($|[^0-9])", "\\1\\2\\3", v)
+    if (identical(w, v)) {
+      return(v)
+    }
+    v <- w
+  }
+}
+
+#' escape a literal string for use inside a regular expression
+#'
+#' @param v character vector
+#'
+#' @return `v` with the regex metacharacters backslash-escaped
+#'
+#' @keywords internal
+gen_escape_regex <- function(v) {
+  gsub("([][{}()*+?.\\\\^$|-])", "\\\\\\1", v)
+}
+
+#' add up a run of myriad-grouped numbers
+#'
+#' `"5万"` is 50000 and `"1億2000万"` is 120000000: each number multiplies the
+#' scale character that follows it, and a trailing number with no scale is
+#' added as it stands.
+#'
+#' @param tok the matched run, e.g. `"1億2000万"`
+#'
+#' @return a numeric value
+#'
+#' @keywords internal
+gen_scale_sum <- function(tok) {
+  total <- 0
+  repeat {
+    m <- regmatches(tok, regexec(GEN_RE_SCALE_HEAD, tok))[[1]]
+    if (length(m) != 3L) {
+      break
+    }
+    total <- total +
+      as.numeric(m[2]) * GEN_SCALE_VALUE[match(m[3], GEN_SCALE_CHAR)]
+    tok <- substring(tok, nchar(m[1]) + 1L)
+  }
+  if (nzchar(tok)) {
+    total <- total + as.numeric(tok)
+  }
+  total
+}
+
+#' render a number without scientific notation
+#'
+#' `format()` would print 1e8 as "1e+08" and round 1234567.8 to seven
+#' significant digits; either would be re-read as the wrong endpoint.
+#'
+#' @param x a single numeric value
+#'
+#' @return a string
+#'
+#' @keywords internal
+gen_format_number <- function(x) {
+  if (!is.finite(x)) {
+    return("")
+  }
+  if (isTRUE(x == round(x)) && abs(x) < 1e15) {
+    return(sprintf("%.0f", x))
+  }
+  sub("\\.?0+$", "", sprintf("%.6f", x))
+}
+
+#' rewrite myriad-grouped numbers as plain digits
+#'
+#' @param v a single string
+#'
+#' @return the string with `"5万円"` rewritten as `"50000円"`
+#'
+#' @keywords internal
+gen_expand_scale <- function(v) {
+  m <- gregexpr(GEN_RE_SCALE_TOKEN, v)[[1]]
+  if (m[1] < 0) {
+    return(v)
+  }
+  starts <- as.integer(m)
+  lens <- attr(m, "match.length")
+  out <- character(0)
+  pos <- 1L
+  for (i in seq_along(starts)) {
+    out <- c(out,
+             substring(v, pos, starts[i] - 1L),
+             gen_format_number(gen_scale_sum(
+               substring(v, starts[i], starts[i] + lens[i] - 1L)
+             )))
+    pos <- starts[i] + lens[i]
+  }
+  paste0(paste(out, collapse = ""), substring(v, pos, nchar(v)))
+}
+
+#' the two unit patterns, built once per distinct `units` vector
+#'
+#' The units are alternated longest-first so that `"yrs"` is not read as
+#' `"y"` + `"rs"` under either leftmost-longest or leftmost-first matching, and
+#' the result is cached: [parse_generalized_interval()] is called once per
+#' distinct value of a column, and rebuilding a 30-branch alternation each time
+#' dominated the cost.
+#'
+#' @param units unit strings, see [generalization_units()]
+#'
+#' @return a list with `trailing` and `after_digit` regular expressions, or
+#'   NULL when `units` is empty
+#'
+#' @keywords internal
+gen_unit_patterns <- local({
+  last_units <- NULL
+  last_value <- NULL
+  function(units) {
+    if (!is.null(last_units) && identical(units, last_units)) {
+      return(last_value)
+    }
+    u <- units[!is.na(units) & nzchar(units)]
+    out <- NULL
+    if (length(u) > 0) {
+      u <- gen_escape_regex(u[order(nchar(u), decreasing = TRUE)])
+      alt <- paste(u, collapse = "|")
+      out <- list(
+        trailing = paste0("\\s*(?:", alt, ")$"),
+        after_digit = paste0("([0-9])\\s*(?:", alt, ")")
+      )
+    }
+    last_units <<- units
+    last_value <<- out
+    out
+  }
+})
+
+#' remove the known units from a generalised value
+#'
+#' Two passes: the unit is taken off the end of the value (which is all the old
+#' implementation did, and is what reads `"30+yrs"`), and it is also removed
+#' wherever it sits directly after a digit -- the `"歳"` of `"65歳以上"` and
+#' both of the `"歳"`s of `"20歳～29歳"`.
+#'
+#' The digit anchor is what keeps a categorical code intact: `"3S"` has no
+#' unit, and `"千代田区"` has no digit before its `"千"`.
+#'
+#' @param v a single string
+#' @param units unit strings, see [generalization_units()]
+#'
+#' @return the string with its units removed
+#'
+#' @keywords internal
+gen_strip_units <- function(v, units) {
+  pat <- gen_unit_patterns(units)
+  if (is.null(pat)) {
+    return(v)
+  }
+  v <- trimws(sub(pat$trailing, "", v))
+  gsub(pat$after_digit, "\\1", v)
+}
+
 #' parse a generalised value into a numeric interval
 #'
 #' Recognises, in this order:
 #' \describe{
 #'   \item{`[a,b)` `(a,b]` `[a,b]` `(a,b)`}{explicit intervals; an omitted
 #'     endpoint is infinite, so `[65,)` is "65 and over"}
-#'   \item{`30代`, `30s`}{a decade: `[30, 40)`}
-#'   \item{`35`, `35歳`}{a single value: the degenerate interval `[35, 35]`}
-#'   \item{`30-39`, `30〜39`, `30-39歳`}{an inclusive range `[30, 39]`}
-#'   \item{`30-`, `30以上`, `30+`}{`[30, Inf)`}
-#'   \item{`〜39`, `39以下`}{`(-Inf, 39]`; `39未満` is `(-Inf, 39)`}
+#'   \item{`30代`, `30歳代`, `30s`}{a decade: `[30, 40)`. `30代前半` is
+#'     `[30, 35)` and `30代後半` is `[35, 40)`, and `1990年代` is
+#'     `[1990, 2000)`}
+#'   \item{`3000円台`}{a magnitude band: `[3000, 4000)`, the step being the
+#'     place value of the leading digit}
+#'   \item{`35`, `35歳`, `5万円`}{a single value: the degenerate interval
+#'     `[35, 35]`}
+#'   \item{`20歳以上30歳未満`}{a two-sided band, `[20, 30)`}
+#'   \item{`30-39`, `30〜39`, `30歳～39歳`, `30歳から39歳`}{an inclusive range
+#'     `[30, 39]`}
+#'   \item{`30-`, `30以上`, `30歳以上`, `30+`, `2020年以降`}{`[30, Inf)`;
+#'     `30歳超` is `(30, Inf)`}
+#'   \item{`〜39`, `39以下`, `39歳まで`, `39日以内`}{`(-Inf, 39]`; `39未満` is
+#'     `(-Inf, 39)`}
 #' }
+#'
+#' Fullwidth digits and punctuation are read as their ASCII equivalents,
+#' thousands separators are ignored (`"1,000円以上"`), and myriad grouping is
+#' expanded (`"5万円未満"` is `(-Inf, 50000)`).
 #'
 #' The bare number is tried **before** the range forms, so `"-39"` is the
 #' number -39 and not "up to 39". Write "up to 39" as `"〜39"`, `"39以下"` or
 #' `"(,39]"`. A dash range with a negative endpoint is likewise unreadable and
 #' must use the bracket form.
 #'
+#' Every pattern is anchored at both ends. A band wrapped in prose
+#' (`"65歳以上の方"`) and a number written in kanji digits (`"三十歳以上"`) are
+#' therefore not read, and a column written that way is a gap the Issue #40
+#' guard cannot close; matching a band anywhere inside a string would instead
+#' read one out of every sentence that mentions an age.
+#'
 #' @param x a single character value
 #' @param units unit strings that may follow the numbers
 #'
-#' @return a list with `lower`, `upper`, `lower_closed`, `upper_closed`, or
-#'   NULL if `x` is not an interval
+#' @return a list with `lower`, `upper`, `lower_closed`, `upper_closed` and
+#'   `form` (which of the readings above matched), or NULL if `x` is not an
+#'   interval
 #'
 #' @keywords internal
 parse_generalized_interval <- function(x, units = generalization_units()) {
   if (is.na(x)) {
     return(NULL)
   }
-  s <- trimws(as.character(x))
+  s <- trimws(gen_normalize(as.character(x)))
   if (!nzchar(s)) {
     return(NULL)
   }
 
   num <- function(v) if (!nzchar(v)) NA_real_ else as.numeric(v)
+  iv <- function(lower, upper, lower_closed, upper_closed, form) {
+    list(lower = lower, upper = upper, lower_closed = lower_closed,
+         upper_closed = upper_closed, form = form)
+  }
 
   ## --- explicit bracket interval -------------------------------------------
   ## NB the bracket classes are written "[[(]" and "[])]", not "[\\[\\(]" and
@@ -147,95 +492,143 @@ parse_generalized_interval <- function(x, units = generalization_units()) {
   ## expression as a literal backslash, so "[\\]" is the class containing "\"
   ## and the following "]" *closes* it -- the pattern then silently matches
   ## nothing at all and every interval is misread as a category.
-  m <- regmatches(s, regexec(
-    paste0("^([[(])\\s*(", GEN_NUM, ")?\\s*,\\s*(", GEN_NUM, ")?\\s*([])])$"),
-    s
-  ))[[1]]
+  m <- regmatches(s, regexec(GEN_RE_BRACKET, s))[[1]]
   if (length(m) == 5) {
     lo <- num(m[3])
     hi <- num(m[4])
-    return(list(
+    return(iv(
       lower = if (is.na(lo)) -Inf else lo,
       upper = if (is.na(hi)) Inf else hi,
       lower_closed = m[2] == "[",
-      upper_closed = m[5] == "]"
+      upper_closed = m[5] == "]",
+      form = "bracket"
     ))
   }
 
-  ## Strip a known unit, longest first so "yrs" is not read as "y" + "rs".
-  strip_unit <- function(v) {
-    u <- units[order(nchar(units), decreasing = TRUE)]
-    for (one in u) {
-      if (nzchar(one) && endsWith(v, one)) {
-        return(trimws(substr(v, 1L, nchar(v) - nchar(one))))
+  ## Everything below is read on a copy with the notation removed: thousands
+  ## separators, the "満" of "満20歳以上", myriad grouping, the units, and
+  ## "から" written out as a wave dash.
+  ##
+  ## The Japanese-only steps and readings are skipped outright for a value that
+  ## holds no non-ASCII character. That is what makes it verifiable, and not
+  ## merely likely, that an ASCII column behaves exactly as it did before this
+  ## change -- including the false-positive rate Issue #40 calibrated.
+  ascii <- gen_is_ascii(s)
+  su <- s
+  if (grepl(",", su, fixed = TRUE)) {
+    su <- gen_strip_thousands(su)
+  }
+  if (!ascii) {
+    su <- sub(GEN_RE_MAN_PREFIX, "\\1", su)
+    su <- gen_expand_scale(su)
+  }
+  su <- gen_strip_units(su, units)
+  if (!ascii) {
+    su <- gsub(GEN_RE_KARA, "\\1~", su)
+  }
+  su <- trimws(su)
+
+  if (!ascii) {
+    ## --- decade: "30代", "20歳代", "20代前半" ------------------------------
+    m <- regmatches(su, regexec(GEN_RE_DECADE, su))[[1]]
+    if (length(m) == 3) {
+      lo <- as.numeric(m[2])
+      if (identical(m[3], GEN_EARLY)) {
+        return(iv(lo, lo + 5, TRUE, FALSE, "decade"))
+      }
+      if (identical(m[3], GEN_LATE)) {
+        return(iv(lo + 5, lo + 10, TRUE, FALSE, "decade"))
+      }
+      return(iv(lo, lo + 10, TRUE, FALSE, "decade"))
+    }
+  }
+
+  ## --- decade, ASCII: "30s" -------------------------------------------------
+  ## Read on `s`, not `su`: with the units removed "0ms" would become "0s" and
+  ## a column of random codes would start reporting decades. This is the only
+  ## region form an alphanumeric string can reach, so it is the only one whose
+  ## input is deliberately not normalised any further.
+  m <- regmatches(s, regexec(GEN_RE_DECADE_ASCII, s))[[1]]
+  if (length(m) == 2) {
+    lo <- as.numeric(m[2])
+    return(iv(lo, lo + 10, TRUE, FALSE, "decade_ascii"))
+  }
+
+  if (!ascii) {
+    ## --- magnitude band: "3000円台" -> [3000, 4000) ------------------------
+    ## The step is the place value of the leading digit, which is what the
+    ## notation means at every magnitude: "20万円台" is [200000, 300000) and
+    ## "20台" is [20, 30), the same band "20代" names.
+    m <- regmatches(su, regexec(GEN_RE_BAND, su))[[1]]
+    if (length(m) == 2) {
+      lo <- as.numeric(m[2])
+      if (isTRUE(lo > 0)) {
+        return(iv(lo, lo + 10^floor(log10(lo)), TRUE, FALSE, "band"))
       }
     }
-    v
-  }
-  su <- strip_unit(s)
-
-  ## --- decade: "30代" / "30s" ----------------------------------------------
-  m <- regmatches(s, regexec(
-    paste0("^(", GEN_NUM, ")\\s*(", GEN_DECADE, "|s)$"), s
-  ))[[1]]
-  if (length(m) == 3) {
-    lo <- as.numeric(m[2])
-    return(list(lower = lo, upper = lo + 10, lower_closed = TRUE, upper_closed = FALSE))
   }
 
-  ## --- bare number: "35", "35歳" -------------------------------------------
-  if (grepl(paste0("^", GEN_NUM, "$"), su)) {
+  ## --- bare number: "35", "35歳", "5万円" ----------------------------------
+  if (grepl(GEN_RE_VALUE, su)) {
     v <- as.numeric(su)
-    return(list(lower = v, upper = v, lower_closed = TRUE, upper_closed = TRUE))
+    return(iv(v, v, TRUE, TRUE, "value"))
   }
 
-  ## --- "a 以上" / "a+" -----------------------------------------------------
-  m <- regmatches(su, regexec(
-    paste0("^(", GEN_NUM, ")\\s*(\\+|", GEN_OR_MORE, ")$"), su
-  ))[[1]]
-  if (length(m) == 3) {
-    return(list(lower = as.numeric(m[2]), upper = Inf,
-                lower_closed = TRUE, upper_closed = FALSE))
+  if (!ascii) {
+    ## --- two-sided band: "20歳以上30歳未満" --------------------------------
+    ## This is the commonest way a Japanese release writes an age bin, and no
+    ## one-sided pattern would match it: both are anchored at both ends.
+    m <- regmatches(su, regexec(GEN_RE_TWO_SIDED, su))[[1]]
+    if (length(m) == 5) {
+      return(iv(as.numeric(m[2]), as.numeric(m[4]),
+                !identical(m[3], GEN_LOWER_OPEN),
+                !identical(m[5], GEN_UPPER_OPEN),
+                "band"))
+    }
   }
 
-  ## --- "a 以下" / "a 未満" -------------------------------------------------
-  m <- regmatches(su, regexec(
-    paste0("^(", GEN_NUM, ")\\s*(", GEN_OR_LESS, ")$"), su
-  ))[[1]]
+  ## --- "a 以上" / "a+" / "a 以降" ------------------------------------------
+  m <- regmatches(su, regexec(GEN_RE_LOWER_CLOSED, su))[[1]]
   if (length(m) == 3) {
-    return(list(lower = -Inf, upper = as.numeric(m[2]),
-                lower_closed = FALSE, upper_closed = TRUE))
+    return(iv(as.numeric(m[2]), Inf, TRUE, FALSE, "lower"))
   }
-  m <- regmatches(su, regexec(
-    paste0("^(", GEN_NUM, ")\\s*(", GEN_UNDER, ")$"), su
-  ))[[1]]
-  if (length(m) == 3) {
-    return(list(lower = -Inf, upper = as.numeric(m[2]),
-                lower_closed = FALSE, upper_closed = FALSE))
+
+  if (!ascii) {
+    ## --- "a 超": the endpoint itself is outside ----------------------------
+    m <- regmatches(su, regexec(GEN_RE_LOWER_OPEN, su))[[1]]
+    if (length(m) == 3) {
+      return(iv(as.numeric(m[2]), Inf, FALSE, FALSE, "lower"))
+    }
+
+    ## --- "a 以下" / "a 以内" / "a 以前" / "a まで" -------------------------
+    m <- regmatches(su, regexec(GEN_RE_UPPER_CLOSED, su))[[1]]
+    if (length(m) == 3) {
+      return(iv(-Inf, as.numeric(m[2]), FALSE, TRUE, "upper"))
+    }
+
+    ## --- "a 未満": the endpoint itself is outside --------------------------
+    m <- regmatches(su, regexec(GEN_RE_UPPER_OPEN, su))[[1]]
+    if (length(m) == 3) {
+      return(iv(-Inf, as.numeric(m[2]), FALSE, FALSE, "upper"))
+    }
   }
 
   ## --- inclusive range "a-b" ------------------------------------------------
   ## Endpoints are unsigned here: a leading "-" cannot be told apart from the
   ## separator. Signed endpoints must use the bracket form.
-  unsigned <- "[0-9]+(?:\\.[0-9]+)?"
-  m <- regmatches(su, regexec(
-    paste0("^(", unsigned, ")\\s*", GEN_DASH, "\\s*(", unsigned, ")$"), su
-  ))[[1]]
-  if (length(m) == 3) {
-    return(list(lower = as.numeric(m[2]), upper = as.numeric(m[3]),
-                lower_closed = TRUE, upper_closed = TRUE))
+  m <- regmatches(su, regexec(GEN_RE_RANGE, su))[[1]]
+  if (length(m) == 4) {
+    return(iv(as.numeric(m[2]), as.numeric(m[3]), TRUE, TRUE, "range"))
   }
 
   ## --- open-ended range "a-" / "-b" ----------------------------------------
-  m <- regmatches(su, regexec(paste0("^(", unsigned, ")\\s*", GEN_DASH, "$"), su))[[1]]
+  m <- regmatches(su, regexec(GEN_RE_RANGE_FROM, su))[[1]]
   if (length(m) == 2) {
-    return(list(lower = as.numeric(m[2]), upper = Inf,
-                lower_closed = TRUE, upper_closed = FALSE))
+    return(iv(as.numeric(m[2]), Inf, TRUE, FALSE, "range"))
   }
-  m <- regmatches(su, regexec(paste0("^", GEN_DASH, "\\s*(", unsigned, ")$"), su))[[1]]
+  m <- regmatches(su, regexec(GEN_RE_RANGE_TO, su))[[1]]
   if (length(m) == 2) {
-    return(list(lower = -Inf, upper = as.numeric(m[2]),
-                lower_closed = FALSE, upper_closed = TRUE))
+    return(iv(-Inf, as.numeric(m[2]), FALSE, TRUE, "range"))
   }
 
   NULL
@@ -349,14 +742,16 @@ is_generalization_mask <- function(x) {
 #' `NA` is `FALSE`. A missing value can mean anything, and treating it as a
 #' generalisation would flag every column that merely has a gap in it.
 #'
-#' The `"30代"` / `"30s"` decade form is only accepted for a multiple of ten.
+#' The ASCII `"30s"` decade form is only accepted for a multiple of ten.
 #' [parse_generalized_interval()] reads `"8s"` as `[8, 18)`, which is right for
 #' containment (a hierarchy may legitimately declare such a node) but wrong
 #' here: over 200,000 random two-character strings, 0.256% were of the form
 #' digit + `"s"` and every one of them was reported as a generalisation --
 #' which is how this check first stopped a passing test that had nothing to do
 #' with generalisation. Requiring a multiple of ten drops the rate to 0.0245%,
-#' and nobody writes "the 8s" for a decade.
+#' and nobody writes "the 8s" for a decade. The restriction is on the ASCII
+#' form only: `"8代"` needs a character no alphanumeric string can produce, so
+#' it costs nothing to read it as written (Issue #92).
 #'
 #' A *categorical* generalisation cannot be recognised this way: nothing about
 #' the string `"東京都"` says it contains `"千代田区"`. That relationship lives
@@ -390,14 +785,13 @@ is_generalized_value <- function(x, units = generalization_units()) {
   u <- unique(s)
   hit <- is_generalization_mask(u)
 
-  ## "8s" parses as [8, 18); see the note above for why that does not count
-  ## as a generalisation here.
-  odd_decade <- grepl(paste0("^(", GEN_NUM, ")\\s*(", GEN_DECADE, "|s)$"), u) &
-    !grepl(paste0("^[-+]?[0-9]*0\\s*(", GEN_DECADE, "|s)$"), u)
-
-  for (i in which(!hit & !odd_decade)) {
+  for (i in which(!hit)) {
     iv <- parse_generalized_interval(u[i], units)
-    hit[i] <- !is.null(iv) && isTRUE(iv$lower < iv$upper)
+    ## "8s" parses as [8, 18); see the note above for why that does not count
+    ## as a generalisation here.
+    odd_decade <- identical(iv$form, "decade_ascii") &&
+      !isTRUE(iv$lower %% 10 == 0)
+    hit[i] <- !is.null(iv) && isTRUE(iv$lower < iv$upper) && !odd_decade
   }
 
   out[known] <- hit[match(s, u)]

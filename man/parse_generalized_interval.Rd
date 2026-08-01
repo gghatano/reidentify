@@ -12,25 +12,45 @@ parse_generalized_interval(x, units = generalization_units())
 \item{units}{unit strings that may follow the numbers}
 }
 \value{
-a list with `lower`, `upper`, `lower_closed`, `upper_closed`, or
-  NULL if `x` is not an interval
+a list with `lower`, `upper`, `lower_closed`, `upper_closed` and
+  `form` (which of the readings above matched), or NULL if `x` is not an
+  interval
 }
 \description{
 Recognises, in this order:
 \describe{
   \item{`[a,b)` `(a,b]` `[a,b]` `(a,b)`}{explicit intervals; an omitted
     endpoint is infinite, so `[65,)` is "65 and over"}
-  \item{`30代`, `30s`}{a decade: `[30, 40)`}
-  \item{`35`, `35歳`}{a single value: the degenerate interval `[35, 35]`}
-  \item{`30-39`, `30〜39`, `30-39歳`}{an inclusive range `[30, 39]`}
-  \item{`30-`, `30以上`, `30+`}{`[30, Inf)`}
-  \item{`〜39`, `39以下`}{`(-Inf, 39]`; `39未満` is `(-Inf, 39)`}
+  \item{`30代`, `30歳代`, `30s`}{a decade: `[30, 40)`. `30代前半` is
+    `[30, 35)` and `30代後半` is `[35, 40)`, and `1990年代` is
+    `[1990, 2000)`}
+  \item{`3000円台`}{a magnitude band: `[3000, 4000)`, the step being the
+    place value of the leading digit}
+  \item{`35`, `35歳`, `5万円`}{a single value: the degenerate interval
+    `[35, 35]`}
+  \item{`20歳以上30歳未満`}{a two-sided band, `[20, 30)`}
+  \item{`30-39`, `30〜39`, `30歳～39歳`, `30歳から39歳`}{an inclusive range
+    `[30, 39]`}
+  \item{`30-`, `30以上`, `30歳以上`, `30+`, `2020年以降`}{`[30, Inf)`;
+    `30歳超` is `(30, Inf)`}
+  \item{`〜39`, `39以下`, `39歳まで`, `39日以内`}{`(-Inf, 39]`; `39未満` is
+    `(-Inf, 39)`}
 }
 }
 \details{
+Fullwidth digits and punctuation are read as their ASCII equivalents,
+thousands separators are ignored (`"1,000円以上"`), and myriad grouping is
+expanded (`"5万円未満"` is `(-Inf, 50000)`).
+
 The bare number is tried **before** the range forms, so `"-39"` is the
 number -39 and not "up to 39". Write "up to 39" as `"〜39"`, `"39以下"` or
 `"(,39]"`. A dash range with a negative endpoint is likewise unreadable and
 must use the bracket form.
+
+Every pattern is anchored at both ends. A band wrapped in prose
+(`"65歳以上の方"`) and a number written in kanji digits (`"三十歳以上"`) are
+therefore not read, and a column written that way is a gap the Issue #40
+guard cannot close; matching a band anywhere inside a string would instead
+read one out of every sentence that mentions an age.
 }
 \keyword{internal}

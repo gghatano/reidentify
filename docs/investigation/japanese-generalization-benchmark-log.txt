@@ -1,0 +1,122 @@
+R: R version 4.6.1 (2026-06-24 ucrt) 
+date: 2026-08-01 22:42:12 
+stringi: 1.8.7 
+
+== notations recognised ==
+  65歳以上            -> [65,Inf)         (want [65,Inf))  ok  region=TRUE
+  30歳未満            -> (-Inf,30)        (want (-Inf,30)) ok  region=TRUE
+  65歳以下            -> (-Inf,65]        (want (-Inf,65]) ok  region=TRUE
+  65歳超               -> (65,Inf)         (want (65,Inf))  ok  region=TRUE
+  20歳〜29歳          -> [20,29]          (want [20,29])   ok  region=TRUE
+  20歳-29歳            -> [20,29]          (want [20,29])   ok  region=TRUE
+  20代                  -> [20,30)          (want [20,30))   ok  region=TRUE
+  20歳代               -> [20,30)          (want [20,30))   ok  region=TRUE
+  20代前半            -> [20,25)          (want [20,25))   ok  region=TRUE
+  20代後半            -> [25,30)          (want [25,30))   ok  region=TRUE
+  1990年代             -> [1990,2000)      (want [1990,2000)) ok  region=TRUE
+  30歳+                 -> [30,Inf)         (want [30,Inf))  ok  region=TRUE
+  30歳＋               -> [30,Inf)         (want [30,Inf))  ok  region=TRUE
+  20才以上            -> [20,Inf)         (want [20,Inf))  ok  region=TRUE
+  満20歳以上         -> [20,Inf)         (want [20,Inf))  ok  region=TRUE
+  20歳以上30歳未満 -> [20,30)          (want [20,30))   ok  region=TRUE
+  20歳以上29歳以下 -> [20,29]          (want [20,29])   ok  region=TRUE
+  20歳から29歳       -> [20,29]          (want [20,29])   ok  region=TRUE
+  20歳から29歳まで -> [20,29]          (want [20,29])   ok  region=TRUE
+  29歳まで            -> (-Inf,29]        (want (-Inf,29]) ok  region=TRUE
+  65歳〜               -> [65,Inf)         (want [65,Inf))  ok  region=TRUE
+  〜64歳               -> (-Inf,64]        (want (-Inf,64]) ok  region=TRUE
+  1000円以上          -> [1000,Inf)       (want [1000,Inf)) ok  region=TRUE
+  1,000円以上         -> [1000,Inf)       (want [1000,Inf)) ok  region=TRUE
+  5万円未満          -> (-Inf,50000)     (want (-Inf,50000)) ok  region=TRUE
+  1億円以上          -> [1e+08,Inf)      (want [1e+08,Inf)) ok  region=TRUE
+  1億2000万円以上   -> [1.2e+08,Inf)    (want [1.2e+08,Inf)) ok  region=TRUE
+  3000円台             -> [3000,4000)      (want [3000,4000)) ok  region=TRUE
+  20万円台            -> [2e+05,3e+05)    (want [2e+05,3e+05)) ok  region=TRUE
+  100人以上           -> [100,Inf)        (want [100,Inf)) ok  region=TRUE
+  30日以内            -> (-Inf,30]        (want (-Inf,30]) ok  region=TRUE
+  2020年以降          -> [2020,Inf)       (want [2020,Inf)) ok  region=TRUE
+  2020年以前          -> (-Inf,2020]      (want (-Inf,2020]) ok  region=TRUE
+  10%以上              -> [10,Inf)         (want [10,Inf))  ok  region=TRUE
+  10％以上            -> [10,Inf)         (want [10,Inf))  ok  region=TRUE
+  ６５歳以上        -> [65,Inf)         (want [65,Inf))  ok  region=TRUE
+  ３０代              -> [30,40)          (want [30,40))   ok  region=TRUE
+  ２０歳～２９歳  -> [20,29]          (want [20,29])   ok  region=TRUE
+  [30,40)                -> [30,40)          (want [30,40))   ok  region=TRUE
+  30s                    -> [30,40)          (want [30,40))   ok  region=TRUE
+  30-39                  -> [30,39]          (want [30,39])   ok  region=TRUE
+  30+                    -> [30,Inf)         (want [30,Inf))  ok  region=TRUE
+  30+yrs                 -> [30,Inf)         (want [30,Inf))  ok  region=TRUE
+  30-39kg                -> [30,39]          (want [30,39])   ok  region=TRUE
+  44 of 44 notations parse as expected
+
+== notations deliberately NOT read as regions ==
+  37             region=FALSE  interval=[37,37]
+  37.0           region=FALSE  interval=[37,37]
+  -5             region=FALSE  interval=[-5,-5]
+  M              region=FALSE  interval=-
+  F              region=FALSE  interval=-
+  3S             region=FALSE  interval=-
+  30S            region=FALSE  interval=-
+  Z001           region=FALSE  interval=-
+  8s             region=FALSE  interval=[8,18)
+  7s             region=FALSE  interval=[7,17)
+  1:2:3          region=FALSE  interval=-
+  a-b            region=FALSE  interval=-
+  30kg           region=FALSE  interval=[30,30]
+  35             region=FALSE  interval=[35,35]
+  東京都      region=FALSE  interval=-
+  不明         region=FALSE  interval=-
+  その他      region=FALSE  interval=-
+  三十歳以上 region=FALSE  interval=-
+  65歳以上の方 region=FALSE  interval=-
+  3月15日      region=FALSE  interval=[315,315]
+  2024年        region=FALSE  interval=[2024,2024]
+
+== per-value false-positive rate on random strings ==
+   (stri_rand_strings default alphabet [A-Za-z0-9])
+  length 2 (n = 200000):  before 0.0220%   after 0.0220%   unchanged
+  length 3 (n =  50000):  before 0.0000%   after 0.0000%   unchanged
+  length 4 (n =  50000):  before 0.0000%   after 0.0000%   unchanged
+  length 6 (n =  50000):  before 0.0000%   after 0.0000%   unchanged
+
+== per-value false-positive rate on a wider alphabet ==
+   (letters, digits and the punctuation an interval could use)
+  length 2 (n = 200000):  before 2.3300%   after 2.3300%   delta +0.0000 pp
+  length 3 (n =  50000):  before 1.7140%   after 1.7360%   delta +0.0220 pp
+  length 4 (n =  50000):  before 1.5660%   after 1.5840%   delta +0.0180 pp
+  length 6 (n =  50000):  before 1.4080%   after 1.4120%   delta +0.0040 pp
+
+== per-value false-positive rate on random Japanese text ==
+   (hiragana, katakana and common kanji -- a categorical column written
+    in Japanese, which is the surface this fix newly touches)
+  length 2 (n =  50000):  before 0.0000%   after 0.0360%   delta +0.0360 pp
+  length 3 (n =  50000):  before 0.0000%   after 0.0080%   delta +0.0080 pp
+  length 4 (n =  50000):  before 0.0000%   after 0.0000%   delta +0.0000 pp
+
+== per-column share, the quantity the guard thresholds on ==
+   (2000 draws of 40 two-character strings, as create_dummy_master_data()
+    produces; the guard needs a share of at least 0.2)
+  before: max share 0.0250  mean 0.000275  columns over threshold 0
+  after : max share 0.0250  mean 0.000275  columns over threshold 0
+
+== the fixture columns the rest of the suite uses ==
+  ID             share flagged = 0.0000
+  AGE            share flagged = 0.0000
+  ZIP            share flagged = 0.0000
+  SEX            share flagged = 0.0000
+  VISIT_COUNT    share flagged = 0.0000
+  SPEND_MEAN     share flagged = 0.0000
+  SPEND_DIST     share flagged = 0.0000
+  FINGERPRINT    share flagged = 0.0000
+  ID             share flagged = 0.0000
+  NUM            share flagged = 0.0000
+  BIN            share flagged = 0.0000
+  CHAR           share flagged = 0.0000
+
+== the under-report Issue #40 closed, on a Japanese-written release ==
+  sample published values: 30歳以上35歳未満, 20歳以上25歳未満, 35歳以上40歳未満
+  detected as regions (before the fix): 0
+  detected as regions (after the fix):  1
+  score_char(AGE) now: stopped -- score_char(): column "AGE" is generalised on the ANON side (100% of its published values a ...
+  score_containment  success = 0.0800
+  score_char (misuse) success = 0.0450  -> 1.8x under-report
