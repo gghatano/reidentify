@@ -96,6 +96,44 @@ test_that("a single candidate has nothing to be confused with", {
   expect_equal(reid_confidence(sc, method = "tie")$CONFIDENCE, 1)
 })
 
+test_that("two candidates are two candidates: the Inf case is only the one-candidate case", {
+  ## `Inf` is reserved for "there is no runner-up at all". Widening that test by
+  ## one -- `n_candidates <= 2` instead of `< 2`, and the matching bounds on
+  ## SECOND_SCORE and SD_SCORE -- makes every record that has been narrowed to
+  ## a straight coin flip report the *highest possible* confidence. Nothing
+  ## errors: the precision-recall sweep in reid_evaluate() simply puts those
+  ## records at the top of the ranking, where they are right half the time.
+  sc <- new_reid_scores(raw_row_number = 1:2, anon_row_number = c(1L, 1L),
+                        score = c(2, 8))
+  cf <- reid_confidence(sc, method = "margin")
+
+  expect_equal(cf$N_CANDIDATES, 2)
+  expect_equal(cf$SECOND_SCORE, 8)
+  expect_equal(cf$SD_SCORE, stats::sd(c(2, 8)))
+  expect_equal(cf$ECCENTRICITY, 6 / stats::sd(c(2, 8)))
+  expect_true(is.finite(cf$ECCENTRICITY))
+
+  ## and a two-way tie at two candidates is the coin flip, not a certainty
+  tied <- reid_confidence(new_reid_scores(1:2, c(1L, 1L), c(4, 4)),
+                          method = "margin")
+  expect_equal(tied$ECCENTRICITY, 0)
+  expect_equal(reid_confidence(new_reid_scores(1:2, c(1L, 1L), c(4, 4)),
+                               method = "tie")$CONFIDENCE, 0.5)
+})
+
+test_that("reid_confidence() returns one row per ANON record in ANON_ROW_NUMBER order", {
+  ## The documented return contract. match_greedy(), match_optimal() and
+  ## reid_per_anon() all re-align by ANON_ROW_NUMBER, so a reordering here does
+  ## not break them -- which is exactly why nothing would notice.
+  sc <- new_reid_scores(
+    raw_row_number = rep(1:3, times = 3),
+    anon_row_number = rep(c(30L, 10L, 20L), each = 3),
+    score = c(1, 5, 9, 2, 6, 8, 3, 4, 7)
+  )
+  cf <- reid_confidence(sc)
+  expect_equal(cf$ANON_ROW_NUMBER, c(10L, 20L, 30L))
+})
+
 test_that("confidence does not depend on whether the score is stored as a distance or a similarity", {
   fx <- make_noisy_pair(40, 3, seed = 2)
   sc <- two_attribute_scores(fx$raw, fx$anon)
@@ -247,12 +285,44 @@ test_that("min_confidence declines low-confidence records without dropping their
   cf <- reid_confidence(sc, method = "margin")
   thr <- stats::quantile(cf$CONFIDENCE, 0.7, names = FALSE)
 
-  m <- match_greedy(sc, seed = 1, confidence = "margin", min_confidence = thr)
+  ## The "rejected every one of" warning below says the result is "an
+  ## unconditional zero rather than a measurement". If it also fired on an
+  ## ordinary partial decline it would be noise, and a reader who has learned
+  ## to ignore it would miss the case it exists for.
+  expect_no_warning(
+    m <- match_greedy(sc, seed = 1, confidence = "margin", min_confidence = thr)
+  )
 
   expect_equal(nrow(m), 80)                 # trial count untouched
   expect_gt(sum(is.na(m$RAW_ROW_NUMBER)), 0)
   expect_true(all(!m$RESULT[is.na(m$RAW_ROW_NUMBER)]))
   expect_true(all(m$CONFIDENCE[!is.na(m$RAW_ROW_NUMBER)] >= thr))
+})
+
+test_that("a record sitting exactly on min_confidence is attacked, not declined", {
+  ## `min_confidence` is documented as "records scoring below this decline to
+  ## guess". Off by one in the *inclusive* direction (`<=` instead of `<`)
+  ## drops the record at the threshold, so the attacker makes one fewer claim
+  ## and the measured reidentification rate comes out lower than the attack
+  ## really achieves -- with no error, on a threshold the caller chose from the
+  ## observed values exactly as the documentation tells them to
+  ## (docs/lessons-learned.md section 2).
+  fx <- make_noisy_pair(40, 5, seed = 21)
+  sc <- two_attribute_scores(fx$raw, fx$anon)
+  cf <- reid_confidence(sc, method = "margin")
+
+  ## an observed value, so a record really does sit on the threshold
+  thr <- sort(cf$CONFIDENCE)[10]
+  on_thr <- cf$ANON_ROW_NUMBER[cf$CONFIDENCE == thr]
+  expect_gte(length(on_thr), 1)
+
+  m <- match_greedy(sc, seed = 1, confidence = "margin", min_confidence = thr)
+  expect_true(all(!is.na(m$RAW_ROW_NUMBER[m$ANON_ROW_NUMBER %in% on_thr])))
+  ## ... and the records just below it really were declined, so the assertion
+  ## above is not passing because the threshold did nothing
+  below <- cf$ANON_ROW_NUMBER[cf$CONFIDENCE < thr]
+  expect_gt(length(below), 0)
+  expect_true(all(is.na(m$RAW_ROW_NUMBER[m$ANON_ROW_NUMBER %in% below])))
 })
 
 test_that("declining raises precision among the records still guessed", {

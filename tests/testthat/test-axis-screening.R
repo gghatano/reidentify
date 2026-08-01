@@ -297,6 +297,47 @@ test_that("the report is NA, not zero, when no ANON record has a RAW counterpart
   expect_equal(r$n_anon, 5)
 })
 
+test_that("records whose truth was blocked away are skipped by the rank test, not counted as failures", {
+  ## The half-way case between the two above, and the one #56 says a real
+  ## release produces: *some* ANON records still have their true RAW record
+  ## among the candidates and some do not. covr says nothing in the suite ever
+  ## reached the branch that skips them (R/multiattr.R line 750, 0 hits).
+  ##
+  ## It matters because `informative` is what score_multi(screen = "drop")
+  ## acts on. A truthless record has no rank to contribute; counting it as a
+  ## record where the axis failed would drag z down, and an informative axis
+  ## judged dead is dropped from the combination -- fewer attributes, a lower
+  ## measured reidentification rate, and no error anywhere
+  ## (docs/lessons-learned.md section 2).
+  j <- synthetic_axes(n = 60)
+  s_full <- score_num(j, "SIGNAL")
+
+  ## take the true pair away from the second half of the ANON records
+  blocked <- !(s_full$ANON_ROW_NUMBER > 30 &
+                 s_full$RAW_ROW_NUMBER == s_full$ANON_ROW_NUMBER)
+  s_part <- s_full[blocked, , drop = FALSE]
+  attr(s_part, "score_type") <- attr(s_full, "score_type")
+
+  ## the same table restricted to the records that can still be measured
+  s_meas <- s_full[s_full$ANON_ROW_NUMBER <= 30, , drop = FALSE]
+  attr(s_meas, "score_type") <- attr(s_full, "score_type")
+
+  rk <- axis_rank_statistic(s_part)
+  expect_equal(rk$n_used, 30)
+  ## the rank evidence comes from the measurable records and from nowhere else
+  expect_equal(rk, axis_rank_statistic(s_meas))
+
+  r <- axis_informativeness(list(SIGNAL = s_part))
+  expect_equal(r$n_anon, 60)
+  expect_true(r$informative)
+  expect_lt(r$mean_rank_pct, 0.1)
+
+  ## success and baseline are the reporting columns and *are* diluted by the
+  ## records that can no longer be hit -- that is the documented lower bound,
+  ## and it is why the verdict is not taken from them.
+  expect_lt(r$success, axis_informativeness(list(SIGNAL = s_meas))$success)
+})
+
 test_that("a similarity-oriented score is read the right way round", {
   ## A similarity that is a monotone reversal of a distance must produce the
   ## same verdict; reading the orientation wrongly would turn every informative

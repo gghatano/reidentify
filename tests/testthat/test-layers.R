@@ -313,6 +313,33 @@ test_that("combine_scores() refuses to silently drop candidate pairs", {
   expect_error(combine_scores(list(sv, sw_wrong)), regexp = "unmatched")
 })
 
+test_that("combine_scores() names the table that repeats a candidate pair", {
+  ## A repeated pair is the #60 defect on the combine layer: the pair is
+  ## counted twice in the sum and match() silently resolves it to whichever
+  ## copy came first. The check on scores[[1]] was already exercised; the loop
+  ## over the remaining tables was not (covr: R/combine.R line 162, 0 hits),
+  ## and it is the one that has to name *which* input is at fault.
+  d <- make_unique_join()
+  sv <- score_num(d, "V")
+  sw <- score_num(d, "W")
+  sv_dup <- rbind(sv, sv[1, ])
+  sw_dup <- rbind(sw, sw[1, ])
+
+  ## Both tables repeat the same pair, so every pair still matches every pair
+  ## and the pair-coverage check has nothing to complain about: without the
+  ## duplicate guard this combines quietly, with one candidate contributing
+  ## twice to the sum.
+  expect_error(combine_scores(list(sv_dup, sw_dup)),
+               regexp = "exactly once")
+  expect_error(combine_scores(list(sv_dup, sw_dup)),
+               regexp = "scores\\[\\[1\\]\\]")
+
+  ## and when only a later table repeats a pair, the message has to name that
+  ## table rather than the first one
+  expect_error(combine_scores(list(sv, sw_dup)),
+               regexp = "`scores\\[\\[2\\]\\]` contains duplicated")
+})
+
 test_that("combine_scores() validates its arguments", {
   d <- make_unique_join()
   s <- score_num(d, "V")
@@ -321,6 +348,13 @@ test_that("combine_scores() validates its arguments", {
   expect_error(combine_scores(list()), regexp = "at least one")
   expect_error(combine_scores(list(s), weights = c(1, 2)), regexp = "one entry per score table")
   expect_error(combine_scores(list(s), weights = -1), regexp = "non-negative")
+  ## a *mixed* vector too: with only the all-negative case covered, a check
+  ## written as all(weights < 0) passes c(1, -1), and a negative weight
+  ## reverses that component's orientation -- "far apart" becomes "good match"
+  expect_error(combine_scores(list(s, s), weights = c(1, -1)),
+               regexp = "non-negative")
+  expect_error(combine_scores(list(s, s), weights = c(1, NA)),
+               regexp = "non-negative")
   expect_error(combine_scores(list(s), weights = 0), regexp = "all zero")
 
   sim <- s

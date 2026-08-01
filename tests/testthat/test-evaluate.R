@@ -109,6 +109,27 @@ test_that("the mode baseline names a single RAW record, so it can identify at mo
   }
 })
 
+test_that("the mode baseline names the RAW record that is best most often, not least often", {
+  ## The two fixtures above cannot see this. In both of them every RAW record
+  ## that is ever among the best is also somebody's true match, so naming the
+  ## rarest one instead of the commonest one lands on a different record with
+  ## the same score, and 1/6 comes out either way.
+  ##
+  ## Here RAW 1 is the best candidate of three ANON records and RAW 99 of one,
+  ## and only RAW 1 is an ANON record's true match. "Best most often" gives
+  ## 1/4; "best least often" gives 0. The mode baseline is the strongest attack
+  ## that ignores which ANON record it is looking at, and it is what the
+  ## measured rate has to beat to mean anything -- an understated baseline
+  ## makes a worthless attack look informative.
+  s <- new_reid_scores(
+    raw_row_number  = c(1, 99, 1, 99, 1, 99, 1, 99),
+    anon_row_number = c(1,  1, 2,  2, 3,  3, 4,  4),
+    score           = c(0,  5, 0,  5, 0,  5, 5,  0)
+  )
+  e <- reid_evaluate(s, seeds = 1:5)
+  expect_equal(e$baseline$rate[e$baseline$method == "mode"], 1 / 4)
+})
+
 test_that("the mode baseline is 0 when the record it names has no ANON counterpart", {
   ## The other side of the old disjunction, pinned on its own fixture rather
   ## than left as an alternative that any value could satisfy (Issue #65).

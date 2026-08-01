@@ -189,6 +189,19 @@ test_that("block_candidates validates its arguments", {
     block_candidates(f$raw, f$anon, keys = "ZIP", transform = list(ZIP = 1)),
     "not a function"
   )
+  ## An unnamed transform cannot be matched to a key, so it would be applied to
+  ## nothing at all: blocking would silently run on the untransformed key, keep
+  ## fewer pairs than the caller asked for, and lower the recall without saying
+  ## so. Refuse it rather than ignore it.
+  expect_error(
+    block_candidates(f$raw, f$anon, keys = "ZIP",
+                     transform = list(function(x) substr(x, 1, 1))),
+    "named list of functions"
+  )
+  expect_error(
+    block_candidates(f$raw, f$anon, keys = "ZIP", transform = "toupper"),
+    "named list of functions"
+  )
   expect_error(
     block_candidates(f$raw, f$anon, keys = "ZIP", max_pairs = 0),
     "positive number"
@@ -527,6 +540,12 @@ test_that("blocking_recall validates its input", {
   cand <- block_candidates(f$raw, f$anon, keys = "ZIP")
   expect_error(blocking_recall(cand, f$raw[, "ZIP", drop = FALSE], f$anon),
                "not found in `raw`")
+  ## the same on the ANON side. `anon` sets n_anon and n_true_pairs -- the
+  ## denominators recall is measured against -- so falling back to "infer the
+  ## totals from the candidate table" here would count only the records that
+  ## survived blocking and report a recall that cannot see what was lost.
+  expect_error(blocking_recall(cand, f$raw, f$anon[, "ZIP", drop = FALSE]),
+               "not found in `anon`")
 
   ## half a pair of columns is not a pair: RAW_ID without ANON_ID must be
   ## refused, not silently completed from whatever else is lying around
