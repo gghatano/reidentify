@@ -147,10 +147,17 @@ jobs:
           # DESCRIPTION の `Depends: R (>= 4.1.0)` は #77 で dplyr 1.2.1 の
           # 要求を継承して書いた数字で、実際に 4.1 で動くかは一度も試されて
           # いない。宣言を検証するのはこのジョブである。
+          # 初回実測 (PR #87): R 4.1.3 で Status: OK / PASS 2453。依存は
+          # dplyr 1.2.1, tibble 3.3.1, testthat 3.3.2 ... と **すべて現行の
+          # CRAN 版**が入った (4.1 対応の古い版に落ちてはいない)。10 分 01 秒。
           - { os: ubuntu-latest,  r: '4.1' }
           # 将来の R での破壊を早期に検知する。http-user-agent: release は
           # r-lib/actions の標準レシピで、P3M に release 向けの Linux
-          # バイナリを返させて devel のソースビルドを避けるためのもの。
+          # バイナリを返させる意図のもの。ただし初回実測 (PR #87) では
+          # **効いておらず、依存 61 個すべてがソースビルドになった**。
+          # このためこの脚だけ 17 分 09 秒かかり、マトリクス中で最も長い。
+          # 消しても速くはならないので残すが、「binary が来る」と当てには
+          # しないこと。
           - { os: ubuntu-latest,  r: 'devel', http-user-agent: 'release' }
 
     env:
