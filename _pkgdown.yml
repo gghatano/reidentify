@@ -1,0 +1,174 @@
+# pkgdown の設定。
+#
+# 出力先について:
+#   pkgdown の既定の出力先は docs/ だが、このリポジトリの docs/ には設計文書・
+#   調査ログ・検証スクリプト (docs/verify-quoted-numbers.R など) が入っていて、
+#   CI がそれらを実行している。上書きすると CI が壊れるので destination を
+#   別ディレクトリに逃がしている。生成物はコミットせず、CI (.github/workflows/
+#   pages.yml) がビルドしてデプロイする。pkgdown-site/ は .gitignore と
+#   .Rbuildignore の両方に入れてある。
+#
+# reference のグルーピングについて:
+#   README の「関数一覧」と同じ区分を使っている。README が読み物として説明する
+#   順序と、リファレンスの並び順が食い違うと、片方を直したときにもう片方が
+#   陳腐化する。エクスポート 55 関数すべてがどれかの節に属する。
+url: https://gghatano.github.io/reidentify/
+
+destination: pkgdown-site
+
+template:
+  bootstrap: 5
+
+home:
+  title: reidentify — 匿名加工データの再識別リスクを測る
+  description: >
+    匿名加工データ (ANON) が元データ (RAW) の個人にどれだけ紐づけ直せるかを
+    推定する R パッケージ。
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [overview, search, github]
+  components:
+    reference:
+      text: リファレンス
+      href: reference/index.html
+    articles:
+      text: 解説
+      href: articles/measuring-reidentification-risk.html
+    news:
+      text: 変更履歴
+      href: news/index.html
+    overview:
+      # 非技術の意思決定者向けの説明ページ。pkgdown の生成物ではなく、
+      # site/index.html を CI がそのまま /overview/ に置いている。
+      icon: fa-circle-info
+      text: 概要
+      href: overview/index.html
+      aria-label: 概要ページ (非技術の読者向け)
+
+reference:
+
+- title: データ準備
+  desc: >
+    RAW と ANON を突き合わせ可能な形にそろえる。`join_raw_anon_data()` が
+    作る RAW_ / ANON_ 接頭辞つきの候補ペア表が、以降すべての入力になる。
+  contents:
+  - join_raw_anon_data
+  - transform_transaction_to_master
+  - create_dummy_qi_data
+  - create_dummy_master_data
+  - create_dummy_transaction_data
+
+- title: スコア層
+  desc: >
+    3 層 API の第 1 層。属性 1 つ (あるいは宣言した複数属性) を手がかりに、
+    RAW × ANON の各候補ペアへスコアを付ける。ここでは割当を決めない。
+- subtitle: 単一属性のスコア
+  contents:
+  - score_num
+  - score_char
+  - score_num_rank
+  - score_dist
+  - score_count
+  - score_span
+  - score_profile
+- subtitle: 希少性・集合・多変量のスコア
+  contents:
+  - score_idf
+  - score_idf_match
+  - value_frequencies
+  - score_jaccard
+  - score_minhash
+  - score_mahalanobis
+  - score_multi
+  - score_scoreboard
+
+- title: 候補生成・ブロッキング
+  desc: >
+    大規模データで RAW × ANON の全ペアを持たずに済ませる。いずれも削減率と
+    再現率 (recall) を実測して `blocking` 属性に記録し、recall が 1 を
+    下回れば警告する。
+  contents:
+  - block_candidates
+  - lsh_candidates
+  - top_k_candidates
+  - blocking_recall
+
+- title: 統合層・軸の診断
+  desc: >
+    3 層 API の第 2 層。尺度の違うスコア表を正規化してから加重和にする。
+    軸の診断は「その属性がランダム割当より良いことを言えているか」を検定する。
+  contents:
+  - normalize_scores
+  - combine_scores
+  - axis_informativeness
+  - axis_report
+
+- title: 割当層
+  desc: >
+    3 層 API の第 3 層。スコア表を「どの ANON をどの RAW に対応づけるか」に
+    変える。同点の決着は乱数に依存するので、シードを指定する。
+  contents:
+  - match_greedy
+  - match_optimal
+  - match_scoreboard_rh
+
+- title: 評価指標
+  desc: >
+    成功率を単独で出さない。ランダム割当のベースライン、シード違いのばらつき、
+    レコードごとのリスクを併記して、測定が壊れていたときに気づけるようにする。
+  contents:
+  - reid_evaluate
+  - reid_confidence
+  - reid_stability
+  - reid_result
+
+- title: ユニシティ
+  desc: >
+    攻撃を実行せずに「そもそも何人が一意に定まるか」を測る。上限としてのリスク。
+  contents:
+  - unicity
+  - unicity_fraction
+  - spatiotemporal_unicity
+  - coarsen_place
+  - coarsen_time
+
+- title: 攻撃者知識モデル
+  desc: >
+    攻撃者が何を見られる想定かを明示する。W / M / S の 3 水準を横並びで
+    比較でき、想定を書かない成功率の数字を残さないためのしくみ。
+  contents:
+  - attacker_knowledge
+  - dummy_qi_knowledge
+  - score_by_knowledge
+  - reid_knowledge_curve
+
+- title: 一般化された値の扱い
+  desc: >
+    「30代」「東京都」のように区画へ丸めた公開値を、階層に沿って元の値と
+    突き合わせる。含意関係に基づく絞り込みと、k 匿名性の実測。
+  contents:
+  - generalization_hierarchy
+  - read_generalization_hierarchy
+  - generalization_units
+  - generalize_value
+  - is_generalized_value
+  - containment_counts
+  - score_containment
+
+- title: 従来 API
+  desc: >
+    3 層 API 以前からある一括実行の関数。スコア付け・割当・集計が 1 関数に
+    入っている。新しく書くコードでは 3 層 API を使う。
+  contents:
+  - reid_by_num
+  - reid_by_char
+  - reid_by_num_rank
+  - reid_by_dist
+
+- title: print メソッド
+  desc: >
+    このパッケージが返すオブジェクトの表示。通常は明示的に呼ばない。
+  contents:
+  - starts_with("print.")

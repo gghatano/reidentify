@@ -7,7 +7,7 @@
 しまうか**を推定します。攻撃の実演ではなく、「この加工でどれだけ守れているか」を
 数値で示すことが目的です。
 
-公開ページ: <https://gghatano.github.io/reidentify/>
+公開ページ: <https://gghatano.github.io/reidentify/>（リファレンス・vignette・変更履歴）／ <https://gghatano.github.io/reidentify/overview/>（概要 — 非技術の読者向けの説明）
 
 > [!IMPORTANT]
 > **研究・検討用のツールです。** 出力される数値は、法令適合性や「安全である」ことを
@@ -263,7 +263,7 @@ vapply(list(
 
 そのため `combine_scores()` は、重みをかけた後のばらつきが 10 倍を超えて食い違うと
 警告します（意図的な尺度差なら `scale_check = "none"` で抑制できます）。
-実測とこの閾値の根拠は [`docs/default-changes.md`](docs/default-changes.md) にあります。
+実測とこの閾値の根拠は [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) にあります。
 
 ### 従来の 1 発呼び出し API
 
@@ -357,7 +357,7 @@ RAW 側の共分散でこの冗長さを打ち消します。
 > `score_mahalanobis()` は条件数が 100 を超えると警告します。
 > **`method = "weighted"` と両方を測って、大きい方を採用してください。**
 > `ridge` を上げるのは対策になりません（大きくすると加重和そのものに戻ります）。
-> 実測の全掃引は [`docs/default-changes.md`](docs/default-changes.md) にあります。
+> 実測の全掃引は [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) にあります。
 
 ```r
 head(score_mahalanobis(pairs, c("AGE", "VISIT_COUNT")), 3)
@@ -570,7 +570,7 @@ attr(blocked, "blocking")
 **この recall 0.8850 は、Issue #36 まで見えていませんでした。** 既定の `bands = 32`
 は 11.5% の正解ペアを捨てます。`bands = 64` にすると recall 1.0 になる代わりに
 候補は 45% まで戻ります（実測は
-[`docs/investigation/blocking-benchmark-log.txt`](docs/investigation/blocking-benchmark-log.txt)）。
+[`docs/investigation/blocking-benchmark-log.txt`](https://github.com/gghatano/reidentify/blob/master/docs/investigation/blocking-benchmark-log.txt)）。
 
 ### 上位 k 件だけ残す
 
@@ -807,7 +807,7 @@ head(reid_confidence(combined), 3)
 > `"tie"` は連続スコアではほぼ全件が 1.0 に潰れ、精度–再現率曲線の閾値が
 > 1 点しか取れませんでした。**割当結果と成功率は変わりません**が、
 > `CONFIDENCE` の値と PR 表は過去の出力と比較できません。
-> 経緯と実測は [`docs/default-changes.md`](docs/default-changes.md) にあります。
+> 経緯と実測は [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) にあります。
 
 > **eccentricity には尺度の可搬性がありません。** その記録自身の候補スコアの
 > 散らばりに対する比なので、数値の範囲はスコア表の性質で決まります
@@ -1194,7 +1194,7 @@ recall が 1 を下回れば警告します。
   貪欲割当と大域最適割当、ユニシティ（属性・時空間）です。
   機械学習ベースのリンケージ、軌跡データそのものへの攻撃、
   差分プライバシの観点からの評価などは未実装です。実装候補の全体像は
-  [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) にあります。
+  [`docs/reid-method-candidates.md`](https://github.com/gghatano/reidentify/blob/master/docs/reid-method-candidates.md) にあります。
 
 - **攻撃者知識の想定を必ず明記してください。** 既定の `join_raw_anon_data()` は
   最強の攻撃者（S）を仮定します。想定を書かない成功率の数字は解釈できません。
@@ -1202,7 +1202,7 @@ recall が 1 を下回れば警告します。
 - **同点の決着は乱数に依存します。** 単一のシードの結果を結論にしないでください。
 
 - **既定値は変わることがあります。** 過去の報告書と数値を比べる前に
-  [`docs/default-changes.md`](docs/default-changes.md) を確認してください。
+  [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) を確認してください。
 
 ---
 
@@ -1211,12 +1211,12 @@ recall が 1 を下回れば警告します。
 | ドキュメント | 内容 |
 |---|---|
 | [`vignettes/measuring-reidentification-risk.Rmd`](vignettes/measuring-reidentification-risk.Rmd) | **vignette「再識別リスクの測り方」。** README が「使い方」を書くのに対し、こちらは**なぜそう測るのか**と、**出た数値をどういう条件で信じてよいか**を書く。測り方の誤りが低い数値として現れる実測が中心 |
-| [`docs/reid-method-candidates.md`](docs/reid-method-candidates.md) | 再識別手法カタログ（24 件）と評価フレームの設計。実装済み・未実装の全体像 |
-| [`docs/default-changes.md`](docs/default-changes.md) | 既定値の変更履歴。同じデータで過去と違う数値が出る変更の記録 |
-| [`docs/implementation-plan.md`](docs/implementation-plan.md) | Issue 候補と依存関係、実装の進め方 |
-| [`docs/lessons-learned.md`](docs/lessons-learned.md) | 調査・修正・統合作業から得た知見 |
-| [`docs/verify-readme-examples.R`](docs/verify-readme-examples.R) | このページのコード例を通し実行し、`#>` の出力と関数の網羅を機械照合する（[実行ログ](docs/verify-readme-examples-log.txt)） |
-| [`docs/investigation/`](docs/investigation/) | 調査ログと実測値、実装比較ベンチマーク（各手法の検証スクリプトと実行ログ） |
+| [`docs/reid-method-candidates.md`](https://github.com/gghatano/reidentify/blob/master/docs/reid-method-candidates.md) | 再識別手法カタログ（24 件）と評価フレームの設計。実装済み・未実装の全体像 |
+| [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) | 既定値の変更履歴。同じデータで過去と違う数値が出る変更の記録 |
+| [`docs/implementation-plan.md`](https://github.com/gghatano/reidentify/blob/master/docs/implementation-plan.md) | Issue 候補と依存関係、実装の進め方 |
+| [`docs/lessons-learned.md`](https://github.com/gghatano/reidentify/blob/master/docs/lessons-learned.md) | 調査・修正・統合作業から得た知見 |
+| [`docs/verify-readme-examples.R`](https://github.com/gghatano/reidentify/blob/master/docs/verify-readme-examples.R) | このページのコード例を通し実行し、`#>` の出力と関数の網羅を機械照合する（[実行ログ](https://github.com/gghatano/reidentify/blob/master/docs/verify-readme-examples-log.txt)） |
+| [`docs/investigation/`](https://github.com/gghatano/reidentify/tree/master/docs/investigation/) | 調査ログと実測値、実装比較ベンチマーク（各手法の検証スクリプトと実行ログ） |
 
 リファレンスマニュアルの正本は `man/*.Rd` です。関数ごとの詳細は R から参照できます。
 
@@ -1225,15 +1225,21 @@ recall が 1 を下回れば警告します。
 help(package = "reidentify")
 ```
 
+同じ内容を Web で読むには <https://gghatano.github.io/reidentify/> の
+**リファレンス** を参照してください（`man/*.Rd` から pkgdown が生成しています。
+55 関数をこのページの [関数一覧](#関数一覧) と同じ区分でグルーピングしてあります）。
+
 vignette はインストール済みのパッケージから
 `vignette("measuring-reidentification-risk", package = "reidentify")` で開けます
 （ソースから入れる場合は `R CMD INSTALL --build-vignettes .`、
-`install.packages(..., build_vignettes = TRUE)`）。
+`install.packages(..., build_vignettes = TRUE)`）。Web 版は同じサイトの
+**解説** にあります。
 
-公開ページ: <https://gghatano.github.io/reidentify/>
+非技術の意思決定者向けの説明ページは
+<https://gghatano.github.io/reidentify/overview/>（サイト右上の **概要**）です。
 
 ---
 
 ## ライセンス
 
-MIT License. [`LICENSE`](LICENSE) を参照してください。
+MIT License. [`LICENSE`](https://github.com/gghatano/reidentify/blob/master/LICENSE) を参照してください。

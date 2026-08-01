@@ -7,4 +7,6 @@
 ^R/tmp$
 ^\.github$
 ^site$
+^_pkgdown\.yml$
+^pkgdown-site$
 ^.*\.tar\.gz$

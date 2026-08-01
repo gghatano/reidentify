@@ -1,6 +1,13 @@
 name: Site
 
-# 公開ページ (site/) の検査とデプロイ。
+# 公開ページの検査・ビルド・デプロイ。
+#
+# サイトは 2 つの読者に向けた 2 つの部分からできている。
+#
+#   /          pkgdown が man/*.Rd と vignettes/ から生成する開発者向け
+#              リファレンス。_pkgdown.yml が構成を決める
+#   /overview/ site/index.html。非技術の意思決定者向けの説明ページ。
+#              README・vignette・過去の PR から参照されているので消さない
 #
 # なぜパスフィルタを付けないか (#63):
 #   もとは paths: ['site/**', '.github/workflows/pages.yml'] だった。つまり
@@ -10,6 +17,11 @@ name: Site
 #   直した陳腐化が 2 コミット後に再発したのはこのためで、隣の R-CMD-check.yml
 #   が「列挙し忘れた 1 つの変更で検査が静かに飛ぶ方が高くつく」と書いている
 #   原則が、ここだけ破られていた。
+#
+#   同じ理由で build ジョブも pull_request で走らせる。pkgdown のリファレンス
+#   は man/*.Rd と _pkgdown.yml の両方に依存していて、エクスポートを 1 つ
+#   足して _pkgdown.yml に載せ忘れると pkgdown は**エラーで落ちる**。それを
+#   デプロイ時 (= master マージ後) に初めて知るのでは遅い。
 #
 # verify ジョブは pull_request でも走る (デプロイはしない)。ページの数字が
 # 実測と合わないまま master に入ることを防ぐのが目的で、base R しか使わない
@@ -48,8 +60,57 @@ jobs:
       - name: Verify quoted figures
         run: Rscript docs/verify-quoted-numbers.R .
 
+  build:
+    runs-on: ubuntu-latest
+    name: pkgdown
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgdown, local::.
+          needs: website
+
+      # dest_dir は _pkgdown.yml の destination と同じ値を明示的に渡す。
+      # build_site_github_pages() の既定は "docs" で、このリポジトリの docs/
+      # には設計文書と CI が使う検証スクリプトが入っている。既定に任せると
+      # それらを消す。
+      - name: Build pkgdown site
+        run: |
+          pkgdown::build_site_github_pages(
+            dest_dir    = "pkgdown-site",
+            new_process = FALSE,
+            install     = FALSE
+          )
+        shell: Rscript {0}
+
+      # エクスポート関数がリファレンスに全部載っていることの確認。
+      # pkgdown 自身も未収載のトピックがあればビルドを落とすが、ここでは
+      # 「NAMESPACE の export と索引のリンクが一致するか」を直接照合する。
+      - name: Check every export is in the reference index
+        run: Rscript .github/scripts/check-reference-index.R .
+
+      # 非技術の読者向けページを /overview/ に置く。pkgdown の生成物ではない
+      # ので、ビルド後にコピーする。
+      - name: Place the overview page at /overview/
+        run: |
+          mkdir -p pkgdown-site/overview
+          cp site/index.html pkgdown-site/overview/index.html
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pkgdown-site
+
   deploy:
-    needs: verify
+    needs: [verify, build]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     name: Deploy
@@ -62,17 +123,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload site/
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
+      # build ジョブが上げた github-pages アーティファクトをそのまま公開する
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
