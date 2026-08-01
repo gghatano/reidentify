@@ -41,6 +41,44 @@ name: R checks
 #   fail-fast: false にしてあるので、1 環境が落ちても他は最後まで走る。
 #   #55 のような「1 プラットフォームだけ落ちる」事象は、他が中断すると
 #   どこまでが共通の問題か分からなくなる。
+#
+# なぜ source-tree tests にも Windows を足すのか (#89):
+#   上の「増える情報は 4 件分にとどまる」という見積もりは、**件数だけを
+#   数えていて中身を見ていなかった**。その差分に含まれるのが
+#   tests/testthat/test-self-contained.R のサブプロセス経路で、そこが
+#   使う API は system2() / shQuote() / R_LIBS / normalizePath() ——
+#   **#55 で実際にプラットフォーム差を出した当のもの**である。
+#   R CMD check 下では package_source_dir() が NULL を返して作業ツリーを
+#   一時ライブラリへ入れる分岐に入らない (#65) ので、#85 で R CMD check を
+#   Windows に広げてもこの経路は Linux でしか動いていなかった。
+#   件数で測ると 4 件、リスクで測ると #55 の再発検出そのものである。
+#
+#   macOS と R 4.1 / devel を足さなかった理由:
+#     - この経路で疑っているのは「パス区切り・引用符・プロセス起動の
+#       Windows 差」であって、macOS の system2()/shQuote()/R_LIBS は
+#       Linux と同じ POSIX 実装を通る。macOS 固有の差 (ファイルシステムの
+#       大文字小文字・locale) は R CMD check の macos 脚が既に踏んでいる。
+#     - R バージョン差はこの経路の対象ではない。試したいのは OS の API で、
+#       それは同じ release の R でも十分に踏める。
+#   増える情報量に対して、下記の実行時間を払う価値があるのは windows だけ
+#   と判断した。加えるなら macOS より先に、この判断が外れた証拠が要る。
+#
+#   実行時間: R CMD check の windows 脚が ubuntu 脚の約 1.35 倍
+#   (10 分 23 秒 / 7 分 41 秒) だったので、source-tree tests の windows 脚も
+#   5〜9 分と見込んでいた。実測 (PR #90, 2 回) は windows 3 分 56 秒 /
+#   5 分 05 秒、ubuntu 4 分 14 秒 / 3 分 10 秒。**1 回目は windows の方が
+#   速く、2 回目は遅い**。倍率を持ち越した見込みは当たっていないが、
+#   2 回では「どちらが速いか」も言えない — 言えるのは windows 脚が
+#   ubuntu 脚と同程度の桁だということだけである。R CMD check の windows が
+#   遅いのは tarball のビルドと --as-cran の各検査の分で、test_dir() だけを
+#   回すこのジョブには効いてこない、という読み方と矛盾はしない。
+#   2 脚は並列に走り、どちらの回も最長は R CMD check の windows
+#   (9 分 27 秒 / 9 分 19 秒) だったので、**ワークフロー全体の所要時間は
+#   伸びていない**。
+#   ただし #63 当時にこのジョブが 26 分かかった実績があり (ランナー側の
+#   遅延)、それが windows 脚で起きればワークフローが 26 分になる。
+#   ここは「たまに遅い」を受け入れる判断で、timeout-minutes は置いて
+#   いない — 打ち切ると #55 型の失敗と区別がつかなくなるため。
 on:
   push:
     branches: [master]
@@ -104,9 +142,24 @@ jobs:
   # 通る本数が違う (実測 2225 / 2227) ので、どちらにも価値がある。
   # site/index.html が載せている「自動テスト N 件」はこちらの完全な方の数字で、
   # 同じジョブで照合する (#63)。
+  #
+  # --check-figures を両方の脚で回すことの副作用 (#89): site/index.html の
+  # 数字と実行本数の一致を 2 つの OS で照合することになるので、**通る本数が
+  # OS で違えば必ずどちらかが落ちる**。これは弱点ではなく検出したいことの
+  # 一部で、片側だけ skip する test があれば数字のずれとして表に出る。
+  # 初回実測 (PR #90): 両脚とも PASS 2566 FAIL 0 ERROR 0 SKIP 0 で一致し、
+  # quoted figures も 0 件。ローカル Windows / R 4.6.1 でも同じ 2566。
   source-tree-tests:
-    runs-on: ubuntu-latest
-    name: source-tree tests
+    runs-on: ${{ matrix.os }}
+    name: source-tree tests (${{ matrix.os }})
+
+    strategy:
+      # R CMD check の脚と同じ理由 (#85)。加えてこのジョブは #89 で
+      # 「Windows だけ落ちる / Linux だけ落ちる」を見に来ているので、
+      # 片方が落ちたときに他方の結果が消えると目的そのものが失われる。
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
