@@ -149,10 +149,10 @@ validate_tie_tolerance <- function(tolerance, fn_name) {
 #' broke" cross-check that `docs/lessons-learned.md` section 2 asks for is
 #' precisely what fails here, and it fails silently, downwards.
 #'
-#' `match_optimal()`, `combine_scores()` and `reid_result()` already refused
-#' duplicated input. This is the same test, so that `match_greedy()` and
-#' `reid_evaluate()` -- the two entry points that were still permissive -- hold
-#' to the same contract.
+#' `match_optimal()` and `combine_scores()` already refused duplicated input.
+#' This is the same test, so that `match_greedy()` and `reid_evaluate()` --
+#' the two entry points that were still permissive -- hold to the same
+#' contract.
 #'
 #' @param scores a score table, already through [validate_reid_scores()]
 #' @param fn_name calling function, for the message
@@ -181,6 +181,98 @@ validate_unique_candidate_pairs <- function(scores, fn_name) {
          call. = FALSE)
   }
   invisible(scores)
+}
+
+#' pick exactly one RAW record per ANON record from a RAW/ANON candidate
+#' table that has a DISTANCE column, keeping only the row(s) whose
+#' DISTANCE is minimal within each ANON_ROW_NUMBER group and then, if more
+#' than one RAW record is still tied for the minimum, picking one of the
+#' tied candidates uniformly at random.
+#'
+#' Tie-breaking used to keep `RAW_ROW_NUMBER[1]`, i.e. whichever tied
+#' candidate happened to come first in the input. That made the reported
+#' success rate depend on the row order of a cross join, which is not a
+#' property of the data: on a 50-person fixture, reshuffling the input rows
+#' moved the rate over [0.02, 0.14] around a mean of 0.058. It also
+#' concentrated every success onto the first record of each tie group, which
+#' systematically distorts per-record risk even when the overall mean is
+#' unaffected. Random tie-breaking makes the estimator unbiased per record
+#' and lets the run-to-run spread be measured (see [reid_evaluate()]).
+#'
+#' Also guards against silently reporting an empty/short result: if DISTANCE
+#' is NA for every row, or if some ANON_ROW_NUMBER ends up with zero rows
+#' after tie-breaking (which happens when every candidate DISTANCE for that
+#' ANON record is NA), this stops with an error instead of quietly
+#' shrinking the result (and thus the reported trial count).
+#'
+#' @param dat_with_distance data frame with (at least) RAW_ROW_NUMBER,
+#'   ANON_ROW_NUMBER and DISTANCE columns
+#' @param seed integer seed for the random tie-break, or NULL (default) to
+#'   use the ambient RNG stream
+#'
+#' @return `dat_with_distance`, filtered down to exactly one row per
+#'   ANON_ROW_NUMBER (a uniformly chosen minimal-DISTANCE RAW candidate),
+#'   ordered by ANON_ROW_NUMBER.
+#'
+#' @keywords internal
+#'
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr filter
+#' @importFrom dplyr .data
+#' @importFrom magrittr %>%
+resolve_min_distance_ties <- function(dat_with_distance, seed = NULL) {
+  n_anon_before <- length(unique(dat_with_distance$ANON_ROW_NUMBER))
+
+  if (nrow(dat_with_distance) == 0 || all(is.na(dat_with_distance$DISTANCE))) {
+    stop(
+      "resolve_min_distance_ties(): DISTANCE could not be computed for any ",
+      "record (all values are NA, or there are no rows at all). This usually ",
+      "means the target column could not be compared numerically/character-",
+      "wise; check the score_*() input.",
+      call. = FALSE
+    )
+  }
+
+  dat_min <-
+    dat_with_distance %>%
+    dplyr::group_by(.data$ANON_ROW_NUMBER) %>%
+    dplyr::filter(.data$DISTANCE == min(.data$DISTANCE)) %>%
+    dplyr::ungroup()
+
+  ## Put the surviving candidates into a canonical order first, so that the
+  ## draw depends only on the data and the seed -- never on the row order of
+  ## the input. Without this, a fixed seed applied to the same data in a
+  ## different row order still yields a different pick, which is exactly the
+  ## input-order sensitivity this change is meant to remove.
+  dat_min <- dat_min[
+    order(dat_min$ANON_ROW_NUMBER, dat_min$RAW_ROW_NUMBER), ,
+    drop = FALSE
+  ]
+
+  ## Break ties uniformly at random: shuffle every surviving candidate, then
+  ## keep the first occurrence of each ANON record.
+  dat_result <- with_local_seed(seed, {
+    shuffled <- dat_min[sample.int(nrow(dat_min)), , drop = FALSE]
+    shuffled[!duplicated(shuffled$ANON_ROW_NUMBER), , drop = FALSE]
+  })
+
+  ## Restore a deterministic output order so that only the *choice* among
+  ## tied candidates is random, never the row order of the result.
+  dat_result <- dat_result[order(dat_result$ANON_ROW_NUMBER), , drop = FALSE]
+
+  n_anon_after <- length(unique(dat_result$ANON_ROW_NUMBER))
+
+  if (nrow(dat_result) == 0 || n_anon_after < n_anon_before) {
+    stop(
+      "resolve_min_distance_ties(): one or more ANON records were dropped ",
+      "because their DISTANCE to every RAW record was NA. Check the input ",
+      "for non-numeric or missing values in the target column.",
+      call. = FALSE
+    )
+  }
+
+  dat_result %>% return()
 }
 
 #' assign each ANON record to its best-scoring RAW record, independently

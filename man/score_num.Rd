@@ -19,8 +19,9 @@ score_num(
 \item{row_number}{name of the row-number column *before* the RAW_/ANON_
 prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table: one row per (RAW, ANON) candidate pair with
@@ -28,7 +29,9 @@ a "reid_scores" table: one row per (RAW, ANON) candidate pair with
   `abs(RAW - ANON)` (a distance: smaller is a better match).
 }
 \description{
-The score layer behind [reid_by_num()].
+The first of the three layers: it reports how far apart every (RAW, ANON)
+candidate pair is and decides nothing. Feed the result to [match_greedy()]
+or [match_optimal()].
 }
 \examples{
 raw  <- data.frame(ROW_NUMBER = 1:5, V = c(10, 20, 30, 40, 50))

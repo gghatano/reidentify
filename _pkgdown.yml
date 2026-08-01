@@ -11,7 +11,7 @@
 # reference のグルーピングについて:
 #   README の「関数一覧」と同じ区分を使っている。README が読み物として説明する
 #   順序と、リファレンスの並び順が食い違うと、片方を直したときにもう片方が
-#   陳腐化する。エクスポート 55 関数すべてがどれかの節に属する。
+#   陳腐化する。エクスポート 50 関数すべてがどれかの節に属する。
 url: https://gghatano.github.io/reidentify/
 
 destination: pkgdown-site
@@ -122,7 +122,6 @@ reference:
   - reid_evaluate
   - reid_confidence
   - reid_stability
-  - reid_result
 
 - title: ユニシティ
   desc: >
@@ -156,16 +155,6 @@ reference:
   - is_generalized_value
   - containment_counts
   - score_containment
-
-- title: 従来 API
-  desc: >
-    3 層 API 以前からある一括実行の関数。スコア付け・割当・集計が 1 関数に
-    入っている。新しく書くコードでは 3 層 API を使う。
-  contents:
-  - reid_by_num
-  - reid_by_char
-  - reid_by_num_rank
-  - reid_by_dist
 
 - title: print メソッド
   desc: >

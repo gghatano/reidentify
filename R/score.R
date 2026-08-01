@@ -22,7 +22,39 @@
 ## attribute instead of assuming.
 ## ---------------------------------------------------------------------------
 
-#' resolve the RAW_/ANON_-prefixed column names a reid_by_*()/score_*() call
+#' stop with a clear, actionable error message if any of `cols` is missing
+#' from `dat_raw_anon`, instead of letting the caller fail downstream with
+#' a confusing low-level error (e.g. base R's "replacement has 0 rows,
+#' data has NNN" from indexing a non-existent column with `[[`, which gives
+#' no hint about which column name was actually wrong).
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param cols character vector of (already RAW_/ANON_-prefixed) column
+#'   names that the caller is about to look up in `dat_raw_anon`
+#' @param fn_name name of the calling score_*() function, used in the
+#'   error message
+#'
+#' @return invisible NULL if all `cols` are present; otherwise stops with
+#'   an error naming the missing column(s).
+#'
+#' @keywords internal
+check_raw_anon_columns_exist <- function(dat_raw_anon, cols, fn_name) {
+  missing_cols <- setdiff(cols, names(dat_raw_anon))
+  if (length(missing_cols) > 0) {
+    stop(
+      fn_name, "(): column(s) not found in dat_raw_anon: ",
+      paste(missing_cols, collapse = ", "),
+      ". Check the `target`/`row_number` arguments (these are looked up ",
+      "*after* RAW_/ANON_ prefixing) against the columns actually present: ",
+      paste(names(dat_raw_anon), collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  invisible(NULL)
+}
+
+#' resolve the RAW_/ANON_-prefixed column names a score_*() call
 #' needs, and check up front that all four exist
 #'
 #' Every score function needs exactly the same four columns, derived the same
@@ -196,43 +228,20 @@ print.reid_scores <- function(x, ...) {
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-#' put a reid_by_*() result into the return type those functions have always
-#' used
-#'
-#' The four `reid_by_*()` functions have always handed back a tibble, even
-#' when given a plain data frame: their pre-#11 bodies ran the whole candidate
-#' table through `dplyr::group_by()` / `dplyr::ungroup()` inside
-#' [resolve_min_distance_ties()], and that upgrades a `data.frame` to a
-#' `tbl_df` as a side effect. `join_raw_anon_data()` returns a plain
-#' `data.frame` (it is built on `merge()`), so in practice *every* call took
-#' that upgrade path.
-#'
-#' The three-layer refactor moved the grouping into [match_greedy()]'s private
-#' work table, where it can no longer change the caller's type. The conversion
-#' is therefore done explicitly here, so the public return type of the four
-#' wrappers is exactly what it was before.
-#'
-#' @param x a data frame
-#'
-#' @return `x` as a tibble
-#'
-#' @keywords internal
-#'
-#' @importFrom tibble as_tibble
-as_reid_output <- function(x) {
-  tibble::as_tibble(x)
-}
 
 #' score a numeric column by absolute difference
 #'
-#' The score layer behind [reid_by_num()].
+#' The first of the three layers: it reports how far apart every (RAW, ANON)
+#' candidate pair is and decides nothing. Feed the result to [match_greedy()]
+#' or [match_optimal()].
 #'
 #' @param dat_raw_anon dataframe of raw_anon form
 #' @param target target column
 #' @param row_number name of the row-number column *before* the RAW_/ANON_
 #'   prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")
-#' @param .fn_name name used in error messages; the reid_by_*() wrappers pass
-#'   their own name so the message points at the function the user called
+#' @param .fn_name name used in error messages; a function that wraps this one
+#'   passes its own name so the message points at the function the user
+#'   actually called
 #'
 #' @return a "reid_scores" table: one row per (RAW, ANON) candidate pair with
 #'   columns RAW_ROW_NUMBER, ANON_ROW_NUMBER and SCORE, where SCORE is
@@ -274,8 +283,6 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 }
 
 #' score a character column by Levenshtein edit distance
-#'
-#' The score layer behind [reid_by_char()].
 #'
 #' **Generalised columns are refused.** Edit distance between a raw value and
 #' a published *region* -- `adist("37", "[30,40)")` is 6 -- measures the length
@@ -339,8 +346,6 @@ score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 
 #' score a distribution column ("A:B:C") by quantile-vector distance
 #'
-#' The score layer behind [reid_by_dist()].
-#'
 #' @inheritParams score_num
 #' @param split character separating the elements of the distribution column
 #'   (default ":"). Treated as a **literal string**, never as a regular
@@ -390,7 +395,7 @@ score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 
 #' rank a numeric column within RAW and within ANON, and score by rank gap
 #'
-#' The score layer behind [reid_by_num_rank()]. Rank ties are resolved with
+#' Rank ties are resolved with
 #' `ties.method = "min"`: genuinely tied values are indistinguishable in the
 #' data, so they collapse to the same rank instead of being split into a fake
 #' total order by incidental row position.
@@ -435,9 +440,8 @@ score_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 
 #' compute the per-row RAW/ANON ranks used by score_num_rank()
 #'
-#' Split out from [score_num_rank()] because [reid_by_num_rank()] reports the
-#' two rank columns in its (backward-compatible) output and would otherwise
-#' have to recompute them.
+#' Split out from [score_num_rank()] so that a caller which wants the two rank
+#' columns themselves does not have to recompute them.
 #'
 #' Ranks are computed over the *distinct* (row number, target) pairs on each
 #' side -- i.e. once per record, not once per candidate pair -- and then

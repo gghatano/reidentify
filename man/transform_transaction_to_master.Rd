@@ -25,8 +25,8 @@ transform_transaction_to_master(
 \item{collapse}{separator used to join the per-ID values of a `_DIST`
 column (default ":"). It is handed to `paste(collapse = )` and is
 therefore a **literal string**. Pass the same value as `split` when
-the resulting `_DIST` column is later scored by [score_dist()] /
-[reid_by_dist()]; those read the column back with a literal separator
+the resulting `_DIST` column is later scored by [score_dist()]; that
+reads the column back with a literal separator
 too, so the two sides are symmetric and any character -- including
 regex metacharacters such as `"|"` or `"."` -- round-trips (Issue #32).
 Do not use a separator that occurs inside the values themselves.}
@@ -88,7 +88,7 @@ m
 # of columns given (Issue #26), so downstream code can hard-code them
 names(m)
 
-# AMOUNT_DIST round-trips through score_dist() / reid_by_dist() as long as
+# AMOUNT_DIST round-trips through score_dist() as long as
 # `collapse` and `split` agree
 m$AMOUNT_DIST
 

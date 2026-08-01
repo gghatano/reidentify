@@ -41,8 +41,9 @@ profile, which would match every other empty record perfectly; pass
 \item{metric}{`"l1"` (default; total variation when `shape_only = TRUE`) or
 `"l2"` (squared Euclidean)}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table (a distance: smaller is a better match)

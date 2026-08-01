@@ -80,24 +80,28 @@ dat2_master <- dat_master %>%
 ## all past this point (Issue #27).
 dat_raw_anon <- join_raw_anon_data(dat_master, dat2_master)
 
+## The three-layer API: score_*() puts a number on every candidate pair,
+## match_greedy() turns that into one guess per ANON record, and
+## reid_evaluate() reports the rate next to the baseline it has to beat.
+## (The one-shot reid_by_*() / reid_result() wrappers were removed in 3.0.0.)
+show <- function(label, scores) {
+  cat("\n==== ", label, " ====\n", sep = "")
+  print(reid_evaluate(scores, seeds = 1:5, top_k = c(1, 5)))
+}
+
 ## 分布間の距離
-## (was commented out because the line above errored; re-enabled and
-## verified to run)
-result_dist <- reid_by_dist(dat_raw_anon = dat_raw_anon, target = "NUM_DYNAMIC_DIST")
-reid_result(dat_reid_result = result_dist, method = "dist") %>% print()
+show("dist / NUM_DYNAMIC_DIST", score_dist(dat_raw_anon, "NUM_DYNAMIC_DIST"))
 
 ## 文字列の一致度合い
-result_char <- reid_by_char(dat_raw_anon = dat_raw_anon, target = "CHAR_STATIC")
-reid_result(dat_reid_result = result_char, method = "CHAR") %>% print()
+show("char / CHAR_STATIC", score_char(dat_raw_anon, "CHAR_STATIC"))
 
 ## 順位でマッチング
-result_num_rank <- reid_by_num_rank(dat_raw_anon = dat_raw_anon, target = "ID")
-result_num_rank %>%
-  reid_result(method = "rank of num static max") %>%
-  print()
-result_num_rank$ANON_RANK %>% table()
+show("rank / ID", score_num_rank(dat_raw_anon, "ID"))
 
 ## 数値の距離
-result_num <- reid_by_num(dat_raw_anon = dat_raw_anon, target = "NUM_DYNAMIC_MEAN")
-result_num
-reid_result(dat_reid_result = result_num, method = "NUM_DYNAMIC_MEAN") %>% print()
+show("num / NUM_DYNAMIC_MEAN", score_num(dat_raw_anon, "NUM_DYNAMIC_MEAN"))
+
+## 単発の割当そのものを見たいとき
+match_greedy(score_num(dat_raw_anon, "NUM_DYNAMIC_MEAN"), seed = 1) %>%
+  head() %>%
+  print()

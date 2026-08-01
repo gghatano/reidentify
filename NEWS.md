@@ -1,3 +1,91 @@
+# reidentify 3.0.0 (2026-08-01)
+
+**従来 API（`reid_by_*()` / `reid_result()`）を削除しました。**
+これが 3.0.0 のすべてです。ほかの機能・既定値・返り値は 2.0.0 から
+変わっていません。
+
+## 破壊的変更 — 関数を削除した
+
+以下の 5 関数を削除しました（#84）。
+
+| 削除した関数 | 置き換え |
+|---|---|
+| `reid_by_num()` | `match_greedy(score_num(pairs, "COL"))` |
+| `reid_by_char()` | `match_greedy(score_char(pairs, "COL"))` |
+| `reid_by_dist()` | `match_greedy(score_dist(pairs, "COL"))` |
+| `reid_by_num_rank()` | `match_greedy(score_num_rank(pairs, "COL"))` |
+| `reid_result()` | `reid_evaluate(scores)` |
+
+2.0.0 の時点でこれらはすでに 3 層 API の薄いラッパで、内部では同じ
+`score_*()` + `match_greedy()` を呼んでいました。同じ引数・同じシードなら
+上の置き換えは**数値としても同一の結果**を返します（2.0.0 の
+`test-layers.R` がシードごとに突き合わせていました）。
+
+`reid_result()` だけは戻り値の形が変わります。`" method: X , success /
+trial :  23 / 200"` という文字列を返していましたが、この 2 つの数は
+`reid_evaluate()` の `per_seed$success` / `per_seed$trial` から読めます。
+`reid_evaluate()` はそれに加えてランダム割当のベースライン・シード違いの
+ばらつき・レコードごとのリスクを併記します。**成功率を単独で出さない**のは
+意図的で、比較対象のない成功率は読めないためです
+（`docs/lessons-learned.md` §2）。
+
+### 移行例
+
+```r
+## 2.0.0
+r <- reid_by_num(pairs, "AGE", seed = 1)
+print(reid_result(r, method = "AGE"))
+
+## 3.0.0
+m <- match_greedy(score_num(pairs, "AGE"), seed = 1)   # 割当そのもの
+reid_evaluate(score_num(pairs, "AGE"))                 # 評価つきの報告
+```
+
+`reid_stability()` は残っています。引数 `reid_fn` には
+`(dat_raw_anon, target, ..., seed)` を取る**攻撃**を渡します。従来 API を
+渡していた箇所は、スコア層と割当層を 1 行で束ねてください。
+
+```r
+## 2.0.0
+reid_stability(reid_by_num, pairs, "AGE", seeds = 1:20)
+
+## 3.0.0
+attack_num <- function(dat, target, seed) {
+  match_greedy(score_num(dat, target), seed = seed)
+}
+reid_stability(attack_num, pairs, "AGE", seeds = 1:20)
+```
+
+### 削除にあたって確認したこと
+
+従来 API のテストの多くは、旧 API の入口を使って**新 API と共有する内部**を
+検証していました。テストごと消せば検証が黙って弱くなり、CI は緑のまま
+誰も気づきません（`docs/lessons-learned.md` §2 の失敗様式）。そこで、削除
+した各テストが守っていた振る舞いを新 API の入口で書き直しています。
+
+* 引数 `row_number` の配線（`reid_prefixed_columns()`）→ 4 つの `score_*()`
+* 同点処理と NA ガード（`resolve_min_distance_ties()`）→ `match_greedy()`
+* デコイ列（`raw_target` など）による列取り違え → 4 つの `score_*()`
+* タイブレークのシード固定・入力行順非依存・不偏性 → `match_greedy()`
+* 返り値の契約（1 ANON 1 行、`success <= trial`）→ `match_greedy()` /
+  `reid_evaluate()`
+* ノイズ耐性・単調性 → `match_greedy(score_*())`
+
+`reid_result()` が持っていた「`ANON_ROW_NUMBER` の重複を拒む」防御は、
+より上流の `validate_unique_candidate_pairs()`（スコア表の入口）が
+引き継いでいます（#60）。
+
+## 内部の整理
+
+* `R/reidentify.R` を削除し、新 API が依存していた内部ヘルパーを移しました。
+  `with_local_seed()` → `R/utils.R`、`resolve_min_distance_ties()` →
+  `R/match.R`、`check_raw_anon_columns_exist()` → `R/score.R`、
+  `validate_split()` / `parse_dist_values()` / `calc_KL()` /
+  `distribution_distance()` → `R/distance.R`、`reid_stability()` →
+  `R/evaluate.R`。**公開 API の振る舞いは変わりません。**
+* 旧 API 専用だった内部ヘルパー `as_reid_output()` を削除しました。
+* エクスポート関数は 55 個から 50 個になりました。
+
 # reidentify 2.0.0 (2026-08-01)
 
 1.0.0.0（2019 年）以来の最初の更新です。API を 3 層（スコア層 / 統合層 /

@@ -30,9 +30,8 @@ a list with the per-candidate-row vectors `raw_row_number`,
   names in `cols`.
 }
 \description{
-Split out from [score_num_rank()] because [reid_by_num_rank()] reports the
-two rank columns in its (backward-compatible) output and would otherwise
-have to recompute them.
+Split out from [score_num_rank()] so that a caller which wants the two rank
+columns themselves does not have to recompute them.
 }
 \details{
 Ranks are computed over the *distinct* (row number, target) pairs on each

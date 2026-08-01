@@ -1,12 +1,19 @@
-## Phase 5: output-contract tests (adversarially requested).
+## Phase 5: output-contract tests (adversarially requested), carried over to
+## the three-layer API when the reid_by_*() wrappers were removed in 3.0.0.
 ##
-## These pin down the parts of the API surface that callers (and
-## reid_result()) rely on but that were previously only checked implicitly:
-##  - all 4 reid_by_*() functions always return a data frame with
-##    ANON_ROW_NUMBER / RAW_ROW_NUMBER / RESULT columns, and RESULT is
-##    logical.
-##  - reid_result() always returns a length-1 character vector, and its
-##    reported success is always <= trial.
+## These pin down the parts of the API surface that callers rely on but that
+## were previously only checked implicitly:
+##  - whichever of the four scores is used, the assignment layer always
+##    returns a data frame with ANON_ROW_NUMBER / RAW_ROW_NUMBER / RESULT,
+##    RESULT is logical, and there is exactly one row per ANON record.
+##  - the reported success can never exceed the number of trials, on an
+##    identity, a pure-noise and a record-suppressed fixture alike.
+##
+## The two assertions about reid_result()'s *text* went with the function.
+## What they were protecting -- "success <= trial", and a trial count that
+## matches the number of ANON records rather than a tie-inflated row count --
+## is asserted below against match_greedy() and reid_evaluate(), which are
+## where those numbers are produced now.
 
 make_identity_fixture <- function(people = 15, seed = 42) {
   set.seed(seed)
@@ -15,12 +22,12 @@ make_identity_fixture <- function(people = 15, seed = 42) {
   d
 }
 
-test_that("all 4 reid_by_*() functions return a data frame with ANON_ROW_NUMBER/RAW_ROW_NUMBER/RESULT, RESULT is logical", {
+test_that("all 4 scores assign to a data frame with ANON_ROW_NUMBER/RAW_ROW_NUMBER/RESULT, RESULT is logical", {
   d <- make_identity_fixture()
 
-  r_num <- reid_by_num(d, "NUM")
-  r_char <- reid_by_char(d, "CHAR")
-  r_rank <- reid_by_num_rank(d, "NUM")
+  m_num <- match_greedy(score_num(d, "NUM"))
+  m_char <- match_greedy(score_char(d, "CHAR"))
+  m_rank <- match_greedy(score_num_rank(d, "NUM"))
 
   set.seed(1)
   dat <- create_dummy_transaction_data(people = 15, size = 3)
@@ -29,9 +36,9 @@ test_that("all 4 reid_by_*() functions return a data frame with ANON_ROW_NUMBER/
     STATIC_NUM = "NUM_STATIC", DYNAMIC_NUM = "NUM_DYNAMIC", DYNAMIC_CHAR = "CHAR"
   )
   d_dist <- join_raw_anon_data(m, m)
-  r_dist <- reid_by_dist(d_dist, "NUM_DYNAMIC_DIST")
+  m_dist <- match_greedy(score_dist(d_dist, "NUM_DYNAMIC_DIST"))
 
-  for (r in list(r_num = r_num, r_char = r_char, r_rank = r_rank, r_dist = r_dist)) {
+  for (r in list(num = m_num, char = m_char, rank = m_rank, dist = m_dist)) {
     expect_true(is.data.frame(r))
     expect_true(all(c("ANON_ROW_NUMBER", "RAW_ROW_NUMBER", "RESULT") %in% names(r)))
     expect_type(r$RESULT, "logical")
@@ -40,27 +47,28 @@ test_that("all 4 reid_by_*() functions return a data frame with ANON_ROW_NUMBER/
   }
 })
 
-test_that("reid_result() always returns a length-1 character vector", {
-  d <- make_identity_fixture()
-  r_num <- reid_by_num(d, "NUM")
+test_that("success <= trial always holds (identity, subset, and independent-noise fixtures)", {
+  check_success_le_trial <- function(scores, n_anon_expected) {
+    m <- match_greedy(scores, seed = 1)
+    success <- sum(m$RESULT)
+    trial <- nrow(m)
 
-  txt <- reid_result(r_num, method = "num")
-  expect_type(txt, "character")
-  expect_length(txt, 1)
-})
+    expect_true(success <= trial)
+    ## the trial count is the number of ANON records, not a tie-inflated row
+    ## count -- the failure reid_result()'s duplicate guard used to catch
+    expect_equal(trial, n_anon_expected)
+    expect_equal(length(unique(m$ANON_ROW_NUMBER)), n_anon_expected)
 
-test_that("reid_result(): success <= trial always holds (identity, subset, and independent-noise fixtures)", {
-  check_success_le_trial <- function(dat_reid_result) {
-    txt <- reid_result(dat_reid_result, method = "check")
-    m <- regmatches(txt, regexpr("[0-9]+\\s*/\\s*[0-9]+", txt))
-    parts <- as.numeric(strsplit(gsub("\\s", "", m), "/")[[1]])
-    expect_true(parts[1] <= parts[2])
-    parts
+    ## and the analytic rate reid_evaluate() reports lives in [0, 1] over the
+    ## same denominator
+    e <- reid_evaluate(scores, seeds = 1:3, top_k = 1)
+    expect_true(e$success_analytic >= 0 && e$success_analytic <= 1)
+    expect_equal(unique(e$per_seed$trial), n_anon_expected)
   }
 
   ## identity: success == trial
   d1 <- make_identity_fixture()
-  check_success_le_trial(reid_by_num(d1, "NUM"))
+  check_success_le_trial(score_num(d1, "NUM"), 15)
 
   ## independent noise: success should be well below trial, but the
   ## invariant success <= trial must hold regardless
@@ -69,18 +77,34 @@ test_that("reid_result(): success <= trial always holds (identity, subset, and i
   anon <- raw
   anon$NUM <- runif(25)
   d2 <- join_raw_anon_data(raw, anon)
-  check_success_le_trial(reid_by_num(d2, "NUM"))
+  check_success_le_trial(score_num(d2, "NUM"), 25)
 
   ## subset (record-suppressed) ANON
   d3 <- join_raw_anon_data(raw, raw[1:10, ])
-  check_success_le_trial(reid_by_num(d3, "NUM"))
+  check_success_le_trial(score_num(d3, "NUM"), 10)
 })
 
-test_that("reid_result(): duplicate-ANON_ROW_NUMBER input still errors rather than silently reporting success <= trial with a wrong trial count (defense-in-depth regression, see phase 3)", {
+test_that("a duplicated candidate pair is refused rather than silently taking twice the tie-break share (defense-in-depth regression, see phase 3 and Issue #60)", {
+  ## reid_result() used to catch this after the fact, on its *input* data
+  ## frame. The check moved upstream, to the score table, where it can also
+  ## stop the analytic rate and the random baseline from being wrong in the
+  ## same direction (which is what made the old cross-check blind to it).
   bad <- data.frame(
     RAW_ROW_NUMBER = c(1, 2, 2, 3),
     ANON_ROW_NUMBER = c(1, 2, 2, 3),
-    RESULT = c(TRUE, TRUE, TRUE, TRUE)
+    SCORE = c(0, 0, 0, 0)
   )
-  expect_error(reid_result(bad, method = "broken"), regexp = "duplicate")
+
+  expect_error(match_greedy(bad), regexp = "duplicated")
+  expect_error(reid_evaluate(bad, seeds = 1:2), regexp = "duplicated")
+
+  ## the same table without the repeat is accepted
+  good <- data.frame(
+    RAW_ROW_NUMBER = c(1, 2, 3),
+    ANON_ROW_NUMBER = c(1, 2, 3),
+    SCORE = c(0, 0, 0)
+  )
+  m <- expect_no_error(match_greedy(good))
+  expect_equal(nrow(m), 3)
+  expect_equal(sum(m$RESULT), 3)
 })

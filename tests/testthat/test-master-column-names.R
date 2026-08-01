@@ -73,9 +73,9 @@ test_that("a single DYNAMIC_NUM column now works with a hard-coded downstream co
   m <- transform_transaction_to_master(dat, ROW_NUMBER = "ROW_NUMBER", DYNAMIC_NUM = "NUM_DYNAMIC")
   d <- join_raw_anon_data(m, m)
 
-  expect_no_error(reid_by_num(d, "NUM_DYNAMIC_MEAN"))
+  expect_no_error(score_num(d, "NUM_DYNAMIC_MEAN"))
   expect_equal(
-    sum(reid_by_num(d, "NUM_DYNAMIC_MEAN")$RESULT),
+    sum(match_greedy(score_num(d, "NUM_DYNAMIC_MEAN"))$RESULT),
     length(unique(d$ANON_ROW_NUMBER))
   )
 })

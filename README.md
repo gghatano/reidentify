@@ -265,28 +265,35 @@ vapply(list(
 警告します（意図的な尺度差なら `scale_check = "none"` で抑制できます）。
 実測とこの閾値の根拠は [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) にあります。
 
-### 従来の 1 発呼び出し API
+### 2.x の従来 API からの移行
 
-3 層に分ける前からある `reid_by_*()` も残っています。内部では上記の
-スコア層＋割当層を呼んでいます。
+3 層に分ける前からあった一括実行の `reid_by_*()` と `reid_result()` は
+**3.0.0 で削除しました。** 2.0.0 の時点でこれらはすでに 3 層 API の薄い
+ラッパで、内部では下表と同じ `score_*()` + `match_greedy()` を呼んでいた
+ため、置き換えても**数値は同一**です（同じシードなら割当まで一致します）。
+
+| 削除した関数 | 置き換え |
+|---|---|
+| `reid_by_num(pairs, "COL", seed = s)` | `match_greedy(score_num(pairs, "COL"), seed = s)` |
+| `reid_by_char(pairs, "COL", seed = s)` | `match_greedy(score_char(pairs, "COL"), seed = s)` |
+| `reid_by_dist(pairs, "COL", seed = s)` | `match_greedy(score_dist(pairs, "COL"), seed = s)` |
+| `reid_by_num_rank(pairs, "COL", seed = s)` | `match_greedy(score_num_rank(pairs, "COL"), seed = s)` |
+| `reid_result(r, method = "COL")` | `reid_evaluate(score_num(pairs, "COL"))` |
+
+`reid_result()` だけは戻り値の形が変わります。「成功数 / 試行数」の文字列を
+返していましたが、その 2 つの数は `reid_evaluate()` の `per_seed$success` /
+`per_seed$trial` から読めます。
 
 ```r
-r <- reid_by_num(pairs, "AGE", seed = 1)
-
-## NB: reid_result() は値を *invisible* で返すため、明示的に print() が要ります
-print(reid_result(r, method = "AGE"))
-#> [1] " method: AGE , success / trial :  23 / 200"
+e <- reid_evaluate(score_num(pairs, "AGE"), seeds = 1:20)
+c(success = unique(e$per_seed$success)[1], trial = unique(e$per_seed$trial))
+#> success   trial 
+#>      23     200 
 ```
 
-| 関数 | 対応するスコア層 |
-|---|---|
-| `reid_by_num()` | `score_num()` |
-| `reid_by_char()` | `score_char()` |
-| `reid_by_dist()` | `score_dist()` |
-| `reid_by_num_rank()` | `score_num_rank()` |
-
-`reid_result()` は「成功数 / 試行数」しか返しません。**ベースラインとの比較も
-ばらつきも出ないため、新規に書くコードでは `reid_evaluate()` を推奨します。**
+`reid_evaluate()` はこれにベースライン・ばらつき・レコードごとのリスクを
+併記します。**成功率を単独で出さない**のは意図的で、比較対象のない成功率は
+読めないためです。
 
 ---
 
@@ -839,10 +846,15 @@ stats::quantile(reid_confidence(combined)$CONFIDENCE, c(0.5, 0.9, 1))
 「壊れていたら気づける」ためのチェック**になっています。
 
 同点の決着は乱数に依存するため、1 回の実行値だけを信じないでください。
-ばらつきだけを見たいときは `reid_stability()` が使えます。
+ばらつきだけを見たいときは `reid_stability()` が使えます。第 1 引数には
+`(pairs, target, ..., seed)` を取る**攻撃**、つまりスコア層と割当層を
+束ねた関数を渡します。
 
 ```r
-reid_stability(reid_by_num, pairs, "AGE", seeds = 1:20)
+attack_num <- function(dat, target, seed) {
+  match_greedy(score_num(dat, target), seed = seed)
+}
+reid_stability(attack_num, pairs, "AGE", seeds = 1:20)
 #> reid stability over 20 tie-break seeds (trial = 200)
 #>   success rate: mean 0.1108  sd 0.0221  range [0.0800, 0.1550]
 ```
@@ -1039,14 +1051,14 @@ reid_evaluate(score_count(m_pairs), seeds = 1:10)
 
 ```r
 m2 <- transform_transaction_to_master(tx, DYNAMIC_NUM = "NUM_DYNAMIC", collapse = "|")
-reid_by_dist(join_raw_anon_data(m2, m2), "NUM_DYNAMIC_DIST", split = "|")
+score_dist(join_raw_anon_data(m2, m2), "NUM_DYNAMIC_DIST", split = "|")
 ```
 
 ---
 
 ## 関数一覧
 
-エクスポートされている 55 関数のすべてです。
+エクスポートされている 50 関数のすべてです。
 
 ### データ準備
 
@@ -1114,8 +1126,7 @@ recall が 1 を下回れば警告します。
 | 関数 | 説明 |
 |---|---|
 | `reid_evaluate(scores, seeds, top_k)` | ベースライン・top-k・精度再現率を含む総合評価 |
-| `reid_stability(reid_fn, ...)` | シード違いのばらつき |
-| `reid_result(...)` | 旧来の「成功数 / 試行数」表示 |
+| `reid_stability(reid_fn, ...)` | 攻撃 1 つのシード違いのばらつき |
 | `unicity_fraction(dat, columns)` | 指定した列で一意になるレコードの割合 |
 | `unicity(dat, attributes, p, seed)` | p 属性の部分集合を走査したユニシティ曲線 |
 | `spatiotemporal_unicity(dat, k, time_resolution, space_resolution)` | (場所, 時刻) k 点でのユニシティ |
@@ -1141,10 +1152,6 @@ recall が 1 を下回れば警告します。
 | `is_generalized_value(x)` | 値が区間・マスク等の一般化表記かを判定 |
 | `containment_counts(dat, targets, hierarchy)` | 公開区画ごとに含まれうる RAW の件数（k 匿名性の実測） |
 | `score_containment(dat, targets, hierarchy)` | 含意関係に基づくスコア |
-
-### 従来 API
-
-`reid_by_num()` / `reid_by_char()` / `reid_by_dist()` / `reid_by_num_rank()`
 
 ---
 

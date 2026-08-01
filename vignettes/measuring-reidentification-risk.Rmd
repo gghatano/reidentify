@@ -521,10 +521,15 @@ reid_evaluate(score_num(pairs, "AGE"), seeds = 1:20)
 シミュレーションとは独立に計算されています。
 **両者が一致することが、実装が壊れていないことの検査になっています。**
 
-ばらつきだけを見たいときは `reid_stability()` が使えます。
+ばらつきだけを見たいときは `reid_stability()` が使えます。第 1 引数には
+`(pairs, target, ..., seed)` を取る**攻撃**、つまりスコア層と割当層を
+束ねた関数を渡します。
 
 ```{r stability}
-reid_stability(reid_by_num, pairs, "AGE", seeds = 1:20)
+attack_num <- function(dat, target, seed) {
+  match_greedy(score_num(dat, target), seed = seed)
+}
+reid_stability(attack_num, pairs, "AGE", seeds = 1:20)
 ```
 
 ## レコード別リスク — 平均は最悪ケースを隠す

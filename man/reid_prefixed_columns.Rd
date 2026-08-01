@@ -2,7 +2,7 @@
 % Please edit documentation in R/score.R
 \name{reid_prefixed_columns}
 \alias{reid_prefixed_columns}
-\title{resolve the RAW_/ANON_-prefixed column names a reid_by_*()/score_*() call
+\title{resolve the RAW_/ANON_-prefixed column names a score_*() call
 needs, and check up front that all four exist}
 \usage{
 reid_prefixed_columns(dat_raw_anon, target, row_number, fn_name)

@@ -1,16 +1,15 @@
 ## Tests for the score / integration / assignment layers introduced by #11.
 ##
 ## The point of the split is that a distance definition and an assignment rule
-## can now be combined independently. Two things therefore have to be pinned
-## down:
+## can now be combined independently, so each layer's contract has to be
+## pinned down on its own: schema, orientation, validation.
 ##
-##  1. each layer's contract on its own (schema, orientation, validation);
-##  2. that the four legacy reid_by_*() functions really are wrappers -- i.e.
-##     they agree with score_*() + match_greedy() exactly, seed for seed.
-##
-## (2) is the load-bearing test: if the wrappers ever drift away from the
-## layered path, the two implementations would silently disagree about the
-## reidentification rate, and the safer-looking one would be believed.
+## This file used to end with an equivalence test between the four legacy
+## reid_by_*() wrappers and score_*() + match_greedy(). The wrappers were
+## removed in 3.0.0, so there is no second implementation left to disagree
+## with; what that test guarded -- that each score's SCORE is the distance it
+## claims to be, and that the assignment picks the argmin of it -- is asserted
+## directly below, against the score tables themselves.
 
 ## ---------------------------------------------------------------------------
 ## fixtures
@@ -99,9 +98,10 @@ test_that("score_*() error messages name the function the user called", {
   expect_error(score_dist(d, "NOPE"), regexp = "score_dist\\(\\)")
   expect_error(score_num_rank(d, "NOPE"), regexp = "score_num_rank\\(\\)")
 
-  ## the wrappers keep naming themselves, not the score layer
-  expect_error(reid_by_num(d, "NOPE"), regexp = "reid_by_num\\(\\)")
-  expect_error(reid_by_num_rank(d, "NOPE"), regexp = "reid_by_num_rank\\(\\)")
+  ## a wrapper naming itself via .fn_name keeps pointing at the function the
+  ## user actually called, not at the score layer underneath it
+  expect_error(score_num(d, "NOPE", .fn_name = "my_wrapper"),
+               regexp = "my_wrapper\\(\\)")
 })
 
 ## ---------------------------------------------------------------------------
@@ -461,50 +461,61 @@ test_that("combining two attributes finds records that neither attribute finds a
 })
 
 ## ---------------------------------------------------------------------------
-## the legacy functions really are wrappers
+## the assignment really is the argmin of the score it was handed
+##
+## The successor of the reid_by_*()-vs-layers equivalence test: with only one
+## implementation left, the property to hold on to is that match_greedy() picks
+## a minimal-SCORE candidate of the score table it was given -- for every one
+## of the four scores, and for every seed. If the two ever came apart, the
+## reported rate would be the rate of a different attack than the one the
+## caller described.
 ## ---------------------------------------------------------------------------
 
-test_that("reid_by_*() agree with score_*() + match_greedy() for every seed", {
+test_that("match_greedy() picks a minimal-SCORE candidate of the score table, for all 4 scores and every seed", {
   d <- make_master_join()
 
   cases <- list(
-    list(legacy = function(s) reid_by_num(d, "NUM_DYNAMIC_MEAN", seed = s),
-         score = function() score_num(d, "NUM_DYNAMIC_MEAN")),
-    list(legacy = function(s) reid_by_char(d, "CHAR_STATIC", seed = s),
-         score = function() score_char(d, "CHAR_STATIC")),
-    list(legacy = function(s) reid_by_dist(d, "NUM_DYNAMIC_DIST", seed = s),
-         score = function() score_dist(d, "NUM_DYNAMIC_DIST")),
-    list(legacy = function(s) reid_by_num_rank(d, "NUM_DYNAMIC_MEAN", seed = s),
-         score = function() score_num_rank(d, "NUM_DYNAMIC_MEAN")),
-    ## tie-heavy column: the seed actually matters here
-    list(legacy = function(s) reid_by_num(d, "BIN_MEAN", seed = s),
-         score = function() score_num(d, "BIN_MEAN")),
-    list(legacy = function(s) reid_by_num_rank(d, "BIN_MEAN", seed = s),
-         score = function() score_num_rank(d, "BIN_MEAN"))
+    num = function() score_num(d, "NUM_DYNAMIC_MEAN"),
+    char = function() score_char(d, "CHAR_STATIC"),
+    dist = function() score_dist(d, "NUM_DYNAMIC_DIST"),
+    rank = function() score_num_rank(d, "NUM_DYNAMIC_MEAN"),
+    ## tie-heavy columns: the seed actually matters here
+    num_tied = function() score_num(d, "BIN_MEAN"),
+    rank_tied = function() score_num_rank(d, "BIN_MEAN")
   )
 
-  for (i in seq_along(cases)) {
-    sc <- cases[[i]]$score()
+  for (nm in names(cases)) {
+    sc <- cases[[nm]]()
+    best <- tapply(sc$SCORE, sc$ANON_ROW_NUMBER, min)
+
     for (s in c(0L, 1L, 7L, 42L)) {
-      lab <- paste("case", i, "seed", s)
-      a <- cases[[i]]$legacy(s)
-      b <- match_greedy(sc, seed = s)
+      lab <- paste(nm, "seed", s)
+      m <- match_greedy(sc, seed = s)
 
-      expect_equal(a$ANON_ROW_NUMBER, b$ANON_ROW_NUMBER, info = lab)
-      expect_equal(a$RAW_ROW_NUMBER, b$RAW_ROW_NUMBER, info = lab)
-      expect_equal(a$RESULT, b$RESULT, info = lab)
+      ## exactly one row per ANON record, ANON-ordered
+      expect_equal(nrow(m), length(unique(sc$ANON_ROW_NUMBER)), info = lab)
+      expect_false(is.unsorted(m$ANON_ROW_NUMBER), info = lab)
 
-      ## the legacy DISTANCE column is the score of the pair that was chosen
+      ## the pair chosen for each ANON record exists in the score table, and
+      ## its SCORE is that record's minimum
       idx <- match(
-        paste(b$ANON_ROW_NUMBER, b$RAW_ROW_NUMBER),
+        paste(m$ANON_ROW_NUMBER, m$RAW_ROW_NUMBER),
         paste(sc$ANON_ROW_NUMBER, sc$RAW_ROW_NUMBER)
       )
-      expect_equal(a$DISTANCE, sc$SCORE[idx], info = lab)
+      expect_false(anyNA(idx), info = lab)
+      expect_equal(
+        as.numeric(sc$SCORE[idx]),
+        as.numeric(best[as.character(m$ANON_ROW_NUMBER)]),
+        info = lab
+      )
+
+      ## RESULT says exactly whether the guess was the true record
+      expect_equal(m$RESULT, m$ANON_ROW_NUMBER == m$RAW_ROW_NUMBER, info = lab)
     }
   }
 })
 
-test_that("reid_by_dist() now honours the `split` argument (it used to be accepted and ignored)", {
+test_that("score_dist() honours the `split` argument (it used to be accepted and ignored)", {
   ## Same numbers, written with two different separators. Parsed correctly,
   ## both give exactly the same distances.
   raw_colon <- data.frame(
@@ -520,15 +531,18 @@ test_that("reid_by_dist() now honours the `split` argument (it used to be accept
   d_colon <- join_raw_anon_data(raw_colon, raw_colon)
   d_semi <- join_raw_anon_data(raw_semi, raw_semi)
 
-  r_colon <- reid_by_dist(d_colon, "D", seed = 1)
-  r_semi <- reid_by_dist(d_semi, "D", split = ";", seed = 1)
+  s_colon <- score_dist(d_colon, "D")
+  s_semi <- score_dist(d_semi, "D", split = ";")
 
-  expect_equal(r_colon$DISTANCE, r_semi$DISTANCE)
-  expect_equal(r_colon$RESULT, r_semi$RESULT)
+  expect_equal(s_colon$SCORE, s_semi$SCORE)
+  expect_equal(
+    match_greedy(s_colon, seed = 1)$RESULT,
+    match_greedy(s_semi, seed = 1)$RESULT
+  )
 
   ## and without split= the semicolon-separated data is not parseable as
   ## numbers, rather than being silently mis-scored
-  expect_error(reid_by_dist(d_semi, "D"), regexp = "numeric")
+  expect_error(score_dist(d_semi, "D"), regexp = "numeric")
 })
 
 test_that("print methods for the new objects work and return invisibly", {

@@ -25,8 +25,9 @@ values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
 generalised column is also non-numeric, so this normally only decides
 which of the two errors is raised.}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table whose SCORE is the absolute difference
@@ -34,7 +35,7 @@ a "reid_scores" table whose SCORE is the absolute difference
   smaller is a better match).
 }
 \description{
-The score layer behind [reid_by_num_rank()]. Rank ties are resolved with
+Rank ties are resolved with
 `ties.method = "min"`: genuinely tied values are indistinguishable in the
 data, so they collapse to the same rank instead of being split into a fake
 total order by incidental row position.

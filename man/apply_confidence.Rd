@@ -35,7 +35,7 @@ apart on what "confidence" and "declined" mean.
 Below-threshold records are reported as `RAW_ROW_NUMBER = NA` with
 `RESULT = FALSE` -- the attacker declining to claim them -- rather than
 being deleted from the result. Deleting them would shrink the denominator
-that [reid_result()] divides by and inflate the reported reidentification
+that [reid_evaluate()] divides by and inflate the reported reidentification
 rate, which is the failure direction this package must not take quietly
 (docs/lessons-learned.md section 2).
 }

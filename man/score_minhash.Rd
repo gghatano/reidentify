@@ -35,8 +35,9 @@ for the ambient RNG stream}
 multiplicities; the default `FALSE` reduces each record to a true set,
 which is the reading Issue #18 is about}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table whose SCORE is `1 - estimated Jaccard`

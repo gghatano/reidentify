@@ -23,31 +23,44 @@ test_that("join_raw_anon_data cross-joins and prefixes column names", {
   expect_equal(nrow(unique(d[, c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER")])), 6)
 })
 
-test_that("reid_by_num computes |RAW - ANON| and picks the nearest RAW record", {
+test_that("score_num computes |RAW - ANON| and match_greedy picks the nearest RAW record", {
   raw <- data.frame(ROW_NUMBER = 1:3, V = c(10, 20, 30))
   anon <- data.frame(ROW_NUMBER = 1:3, V = c(11, 21, 31))
   d <- join_raw_anon_data(raw, anon)
 
-  r <- reid_by_num(d, "V")
-  r <- r[order(r$ANON_ROW_NUMBER), ]
+  s <- score_num(d, "V")
+  r <- match_greedy(s)
 
   ## nearest RAW to each ANON value is the diagonal, at distance 1
   expect_equal(r$RAW_ROW_NUMBER, c(1, 2, 3))
-  expect_equal(r$DISTANCE, c(1, 1, 1))
   expect_true(all(r$RESULT))
-  expect_equal(reid_result(r, method = "num"), " method: num , success / trial :  3 / 3")
+
+  ## the score of each chosen pair really is 1
+  chosen <- match(
+    paste(r$ANON_ROW_NUMBER, r$RAW_ROW_NUMBER),
+    paste(s$ANON_ROW_NUMBER, s$RAW_ROW_NUMBER)
+  )
+  expect_equal(s$SCORE[chosen], c(1, 1, 1))
+
+  ## success == trial == 3
+  expect_equal(sum(r$RESULT), 3)
+  expect_equal(nrow(r), 3)
 })
 
-test_that("reid_by_char uses Levenshtein (adist) distance", {
+test_that("score_char uses Levenshtein (adist) distance", {
   ## adist("aa","ab") == 1, adist("aa","ba") == 1, adist("aa","aa") == 0
   raw <- data.frame(ROW_NUMBER = 1:2, T = c("aa", "zz"), stringsAsFactors = FALSE)
   anon <- data.frame(ROW_NUMBER = 1:2, T = c("aa", "zz"), stringsAsFactors = FALSE)
   d <- join_raw_anon_data(raw, anon)
 
-  r <- reid_by_char(d, "T")
-  r <- r[order(r$ANON_ROW_NUMBER), ]
+  s <- score_char(d, "T")
+  r <- match_greedy(s)
 
-  expect_equal(r$DISTANCE, c(0, 0))
+  chosen <- match(
+    paste(r$ANON_ROW_NUMBER, r$RAW_ROW_NUMBER),
+    paste(s$ANON_ROW_NUMBER, s$RAW_ROW_NUMBER)
+  )
+  expect_equal(s$SCORE[chosen], c(0, 0))
   expect_true(all(r$RESULT))
 
   ## one-character edit => distance 1
@@ -169,12 +182,24 @@ test_that("create_dummy_* are reproducible under a fixed seed and validate their
   expect_error(join_raw_anon_data(1, 2), regexp = "data frame")
 })
 
-test_that("reid_result formats the success / trial text and counts successes", {
-  d <- data.frame(
-    RAW_ROW_NUMBER = c(1, 2, 3, 4),
-    ANON_ROW_NUMBER = c(1, 2, 3, 4),
-    RESULT = c(TRUE, FALSE, TRUE, TRUE)
-  )
+test_that("the success rate counts successes over ANON records, hand-computed", {
+  ## The successor of the reid_result() text test: what it pinned down was
+  ## "success is the number of TRUE results and trial is the number of ANON
+  ## records". reid_evaluate() reports those two numbers per seed.
+  ##
+  ## Fixture: 4 records, ANON == RAW on V for 3 of them and a value nobody
+  ## else is near for the fourth -- which lands on the nearest RAW record and
+  ## gets it wrong. So success 3, trial 4, rate 0.75, with no ties anywhere.
+  raw <- data.frame(ROW_NUMBER = 1:4, V = c(10, 20, 30, 40))
+  anon <- data.frame(ROW_NUMBER = 1:4, V = c(10, 20, 30, 21))
+  d <- join_raw_anon_data(raw, anon)
 
-  expect_equal(reid_result(d, method = "m"), " method: m , success / trial :  3 / 4")
+  m <- match_greedy(score_num(d, "V"))
+  expect_equal(sum(m$RESULT), 3)
+  expect_equal(nrow(m), 4)
+
+  e <- reid_evaluate(score_num(d, "V"), seeds = 1:3, top_k = 1)
+  expect_equal(unique(e$per_seed$success), 3)
+  expect_equal(unique(e$per_seed$trial), 4)
+  expect_equal(e$success_analytic, 0.75)
 })

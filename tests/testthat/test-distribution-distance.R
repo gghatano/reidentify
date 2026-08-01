@@ -89,7 +89,7 @@ test_that("n_quantiles is validated and scales the result", {
   expect_equal(distribution_distance("1:2", "3:4", n_quantiles = 20), 20 * 4)
 })
 
-test_that("reid_by_dist still reidentifies an exact copy perfectly", {
+test_that("score_dist still reidentifies an exact copy perfectly", {
   set.seed(71)
   dat <- suppressWarnings(create_dummy_transaction_data(people = 30, size = 4))
   m <- transform_transaction_to_master(
@@ -99,7 +99,7 @@ test_that("reid_by_dist still reidentifies an exact copy perfectly", {
   )
   d <- join_raw_anon_data(m, m)
 
-  r <- reid_by_dist(d, "NUM_DYNAMIC_DIST", seed = 1)
+  r <- match_greedy(score_dist(d, "NUM_DYNAMIC_DIST"), seed = 1)
 
   expect_equal(nrow(r), 30)
   expect_equal(sum(r$RESULT), 30)

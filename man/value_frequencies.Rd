@@ -26,8 +26,9 @@ available to any attacker -- estimating rarity from it needs no knowledge
 the adversary does not already have, which is what makes this weighting
 cheap to justify.}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a data frame with columns `VALUE`, `COUNT` and `SHARE`, ordered by
