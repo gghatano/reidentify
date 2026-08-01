@@ -1,7 +1,7 @@
 ## Phase 5: statistical correctness properties (adversarially requested).
 ##
 ## Identity (ANON == RAW exact copy => success == trial) is already covered
-## by test-column-selection.R / test-tie-and-na.R for all 4 reid_by_*()
+## by test-column-selection.R / test-tie-and-na.R for all 4 score_*()
 ## functions, so it is not duplicated here.
 ##
 ## This file covers:
@@ -18,13 +18,13 @@
 ##      few reps per perturbation level, rather than strict monotonicity at
 ##      every intermediate step (noise makes strict monotonicity unreliable).
 ##
-## reid_by_dist() is intentionally not exercised here: distribution_distance()
+## score_dist() is intentionally not exercised here: distribution_distance()
 ## is known (out of scope for this phase, see docs) to correlate ~0.99 with
 ## raw record-count differences rather than genuine distribution shape, which
 ## would make an informativeness/monotonicity test against it either
 ## meaningless or flaky for reasons unrelated to what's being tested.
 
-test_that("reid_by_num(): independent random noise in ANON$NUM reidentifies close to the chance baseline (mean over 10 seeds, N = 30)", {
+test_that("score_num(): independent random noise in ANON$NUM reidentifies close to the chance baseline (mean over 10 seeds, N = 30)", {
   n <- 30
   seeds <- 1:10
 
@@ -34,7 +34,7 @@ test_that("reid_by_num(): independent random noise in ANON$NUM reidentifies clos
     anon <- raw
     anon$NUM <- runif(n) # independent of raw$NUM: carries no information
     d <- join_raw_anon_data(raw, anon)
-    sum(reid_by_num(d, "NUM")$RESULT)
+    sum(match_greedy(score_num(d, "NUM"))$RESULT)
   }, numeric(1))
 
   ## chance baseline for matching N independent draws is ~1 correct guess;
@@ -42,7 +42,7 @@ test_that("reid_by_num(): independent random noise in ANON$NUM reidentifies clos
   expect_lt(mean(successes), 5)
 })
 
-test_that("reid_by_char(): independent random noise in ANON$CHAR reidentifies close to the chance baseline (mean over 10 seeds, N = 30)", {
+test_that("score_char(): independent random noise in ANON$CHAR reidentifies close to the chance baseline (mean over 10 seeds, N = 30)", {
   n <- 30
   seeds <- 1:10
 
@@ -52,13 +52,13 @@ test_that("reid_by_char(): independent random noise in ANON$CHAR reidentifies cl
     anon <- raw
     anon$CHAR <- stringi::stri_rand_strings(n, length = 2) # independent
     d <- join_raw_anon_data(raw, anon)
-    sum(reid_by_char(d, "CHAR")$RESULT)
+    sum(match_greedy(score_char(d, "CHAR"))$RESULT)
   }, numeric(1))
 
   expect_lt(mean(successes), 5)
 })
 
-test_that("reid_by_num_rank(): independent random noise in ANON$NUM reidentifies close to the chance baseline (mean over 10 seeds, N = 30)", {
+test_that("score_num_rank(): independent random noise in ANON$NUM reidentifies close to the chance baseline (mean over 10 seeds, N = 30)", {
   n <- 30
   seeds <- 1:10
 
@@ -68,13 +68,13 @@ test_that("reid_by_num_rank(): independent random noise in ANON$NUM reidentifies
     anon <- raw
     anon$NUM <- runif(n) # independent of raw$NUM
     d <- join_raw_anon_data(raw, anon)
-    sum(reid_by_num_rank(d, "NUM")$RESULT)
+    sum(match_greedy(score_num_rank(d, "NUM"))$RESULT)
   }, numeric(1))
 
   expect_lt(mean(successes), 5)
 })
 
-test_that("reid_by_num(): increasing Gaussian noise added to ANON$NUM decreases success (min-noise mean > max-noise mean, over 8 reps per level)", {
+test_that("score_num(): increasing Gaussian noise added to ANON$NUM decreases success (min-noise mean > max-noise mean, over 8 reps per level)", {
   n <- 40
   sigmas <- c(1e-6, 1e-2, 1, 50)
   reps <- 8
@@ -86,7 +86,7 @@ test_that("reid_by_num(): increasing Gaussian noise added to ANON$NUM decreases 
       anon <- raw
       anon$NUM <- raw$NUM + rnorm(n, sd = sigma)
       d <- join_raw_anon_data(raw, anon)
-      sum(reid_by_num(d, "NUM")$RESULT)
+      sum(match_greedy(score_num(d, "NUM"))$RESULT)
     }, numeric(1)))
   }
 
@@ -102,7 +102,7 @@ test_that("reid_by_num(): increasing Gaussian noise added to ANON$NUM decreases 
   expect_gt(successes[1], successes[length(successes)])
 })
 
-test_that("reid_by_num_rank(): increasing Gaussian noise added to ANON$NUM decreases success (min-noise mean > max-noise mean, over 8 reps per level)", {
+test_that("score_num_rank(): increasing Gaussian noise added to ANON$NUM decreases success (min-noise mean > max-noise mean, over 8 reps per level)", {
   n <- 40
   sigmas <- c(1e-6, 1e-2, 1, 50)
   reps <- 8
@@ -114,7 +114,7 @@ test_that("reid_by_num_rank(): increasing Gaussian noise added to ANON$NUM decre
       anon <- raw
       anon$NUM <- raw$NUM + rnorm(n, sd = sigma)
       d <- join_raw_anon_data(raw, anon)
-      sum(reid_by_num_rank(d, "NUM")$RESULT)
+      sum(match_greedy(score_num_rank(d, "NUM"))$RESULT)
     }, numeric(1)))
   }
 
@@ -127,7 +127,7 @@ test_that("reid_by_num_rank(): increasing Gaussian noise added to ANON$NUM decre
   expect_gt(successes[1], successes[length(successes)])
 })
 
-test_that("reid_by_char(): increasing the fraction of ANON$CHAR values replaced by independent random strings decreases success (min-perturbation mean > max-perturbation mean, over 8 reps per level)", {
+test_that("score_char(): increasing the fraction of ANON$CHAR values replaced by independent random strings decreases success (min-perturbation mean > max-perturbation mean, over 8 reps per level)", {
   n <- 40
   fractions <- c(0, 0.3, 0.7, 1.0)
   reps <- 8
@@ -143,7 +143,7 @@ test_that("reid_by_char(): increasing the fraction of ANON$CHAR values replaced 
         anon$CHAR[replace_idx] <- stringi::stri_rand_strings(k, length = 2)
       }
       d <- join_raw_anon_data(raw, anon)
-      sum(reid_by_char(d, "CHAR")$RESULT)
+      sum(match_greedy(score_char(d, "CHAR"))$RESULT)
     }, numeric(1)))
   }
 

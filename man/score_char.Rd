@@ -26,17 +26,15 @@ distances anyway, having said so) or `"ignore"` (skip the check). Use
 `"ignore"` only when the column is meant to be compared literally, e.g.
 when RAW and ANON carry the *same* already-binned values.}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table whose SCORE is the edit distance between the
   RAW and ANON values of `target` (a distance: smaller is a better match).
 }
 \description{
-The score layer behind [reid_by_char()].
-}
-\details{
 **Generalised columns are refused.** Edit distance between a raw value and
 a published *region* -- `adist("37", "[30,40)")` is 6 -- measures the length
 of the bracket string and nothing else, but it is a plausible-looking number

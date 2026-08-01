@@ -421,14 +421,17 @@ test_that("print.reid_evaluation() shows the baseline next to the rate, and retu
   expect_identical(res, e)
 })
 
-test_that("reid_result() is untouched: it still returns the same text", {
-  ## #12 asked for a structured object; adding one must not change the
-  ## existing character-scalar API that callers and tests already rely on.
+test_that("the plain success / trial figure is still recoverable from the structured object", {
+  ## #12 asked for a structured object, and reid_result() used to report the
+  ## bare "success / trial" text beside it. That function was removed in
+  ## 3.0.0; the two numbers it printed have to remain readable off
+  ## reid_evaluate(), or the structured object replaced it with less.
   d <- make_unique()
-  txt <- reid_result(reid_by_num(d, "V"), method = "num")
-  expect_type(txt, "character")
-  expect_length(txt, 1)
-  expect_match(txt, "5 / 5", fixed = TRUE)
+  e <- reid_evaluate(score_num(d, "V"), seeds = 1:5, top_k = 1)
+
+  expect_equal(unique(e$per_seed$success), 5)
+  expect_equal(unique(e$per_seed$trial), 5)
+  expect_equal(e$success_analytic, 1)
 })
 
 ## ---------------------------------------------------------------------------
@@ -606,7 +609,7 @@ test_that("reid_confidence() refuses a duplicated candidate pair (#60)", {
 })
 
 test_that("the four entry points now agree on the same contract (#60)", {
-  ## match_optimal / combine_scores / reid_result already refused this; the
+  ## match_optimal / combine_scores already refused this; the
   ## point of #60 is that reid_evaluate / match_greedy did not.
   s <- make_two_way_tie()
   bad <- duplicate_pair(s, 1, 2)

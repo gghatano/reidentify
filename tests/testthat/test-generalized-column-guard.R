@@ -146,12 +146,24 @@ test_that("score_num_rank() and score_dist() stop on a generalised column", {
   expect_error(score_dist(d, "AGE"), regexp = "score_containment")
 })
 
-test_that("the reid_by_*() wrappers inherit the guard and name themselves", {
+test_that("a caller that wraps a score function gets the guard, and the message names the wrapper", {
+  ## The reid_by_*() wrappers were removed in 3.0.0. What they exercised is
+  ## `.fn_name`: the guard fires inside the score layer but must name the
+  ## function the *user* called, or the message points at code they did not
+  ## write. Any wrapper (this package's own score_multi(), or a user's) relies
+  ## on it, so it is pinned here directly.
   d <- gen_fixture()
-  expect_error(reid_by_char(d, "AGE"), regexp = "reid_by_char\\(\\)")
-  expect_error(reid_by_num(d, "AGE"), regexp = "reid_by_num\\(\\)")
-  expect_error(reid_by_num_rank(d, "AGE"), regexp = "reid_by_num_rank\\(\\)")
-  expect_error(reid_by_dist(d, "AGE"), regexp = "reid_by_dist\\(\\)")
+  my_attack <- function(dat, target) {
+    score_char(dat, target, .fn_name = "my_attack")
+  }
+  expect_error(my_attack(d, "AGE"), regexp = "my_attack\\(\\)")
+  expect_error(my_attack(d, "AGE"), regexp = "score_containment")
+
+  ## and with no wrapper the score function names itself
+  expect_error(score_char(d, "AGE"), regexp = "score_char\\(\\)")
+  expect_error(score_num(d, "AGE"), regexp = "score_num\\(\\)")
+  expect_error(score_num_rank(d, "AGE"), regexp = "score_num_rank\\(\\)")
+  expect_error(score_dist(d, "AGE"), regexp = "score_dist\\(\\)")
 })
 
 test_that("a suppressed (masked) ANON column is refused too", {
@@ -192,10 +204,16 @@ test_that("generalized = 'ignore' is silent and reproduces the pre-fix numbers",
                                        as.character(d$RAW_AGE[i]))[[1]]))
 })
 
-test_that("the wrappers pass `generalized` through", {
+test_that("the escape hatches survive all the way through an assignment", {
+  ## `generalized` is a score-layer argument, but the thing a caller actually
+  ## produces is an assignment. "warn" must still yield a usable one, and
+  ## "ignore" must stay silent end to end.
   d <- gen_fixture()
-  expect_warning(reid_by_char(d, "AGE", generalized = "warn"))
-  expect_no_error(reid_by_char(d, "AGE", generalized = "ignore"))
+  expect_warning(m <- match_greedy(score_char(d, "AGE", generalized = "warn")))
+  expect_equal(nrow(m), length(unique(d$ANON_ROW_NUMBER)))
+
+  expect_silent(m2 <- match_greedy(score_char(d, "AGE", generalized = "ignore")))
+  expect_equal(nrow(m2), length(unique(d$ANON_ROW_NUMBER)))
 })
 
 ## ---------------------------------------------------------------------------
@@ -281,7 +299,7 @@ test_that("score_num_rank() refuses a plain character column instead of ranking 
   )
   expect_error(score_num_rank(d, "AREA"), regexp = "not\\s+numeric")
   expect_error(score_num_rank(d, "AREA"), regexp = "lexicographic")
-  expect_error(reid_by_num_rank(d, "AREA"), regexp = "reid_by_num_rank\\(\\)")
+  expect_error(score_num_rank(d, "AREA"), regexp = "score_num_rank\\(\\)")
 })
 
 test_that("score_num() refuses a plain character column with a message that names it", {

@@ -31,8 +31,9 @@ cheap to justify.}
 \item{weight}{rarity weighting scheme; see [idf_weight()]. `"none"` gives
 plain unweighted exact matching.}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table (a distance: smaller is a better match)

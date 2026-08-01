@@ -22,7 +22,7 @@
 「実装済み」と書いた関数は、すべて `NAMESPACE` にエクスポート行があることを確認している。
 何をいつの実物と突き合わせたかは、次の 1 行が持つ。
 
-**照合基準**: commit=`72cf755` date=2026-08-01 exports=55 closed_issues=45
+**照合基準**: commit=`PENDING` date=2026-08-01 exports=50 closed_issues=45
 
 **日付だけでなくコミットを書いているのは、「いつの実物と突き合わせたか」を後から
 追えるようにするためである（#63）。** 同じ日でも、どこまで入っているかはコミットで決まる。
@@ -105,8 +105,10 @@ Wasserstein のみ保留（#19）である。
 > 初版で `match_lsap()` / `match_margin(threshold)` と書いていた関数名は、実装では
 > `match_optimal()` と `reid_confidence()` + `min_confidence` 引数になった。
 
-既存の `reid_by_num()` / `reid_by_num_rank()` / `reid_by_char()` / `reid_by_dist()` は
-互換のために残っている。
+> 既存の `reid_by_num()` / `reid_by_num_rank()` / `reid_by_char()` / `reid_by_dist()` は
+> 2.0.0 では互換のために残していたが、**3.0.0 で削除した（#84）。** 削除時点で
+> これらは 3 層 API の薄いラッパで、同じシードなら数値も同一だった。
+> 以降この文書で `reid_by_*` に触れている箇所は、いずれも当時の記録である。
 
 ### 0.3 評価指標を成功率だけにしない
 

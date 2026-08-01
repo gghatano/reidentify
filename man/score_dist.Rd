@@ -32,8 +32,9 @@ generalised value has no distribution to compare, so this normally only
 replaces the coercion error raised further down with one that names the
 score to use instead (Issue #40).}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table whose SCORE is [distribution_distance()]
@@ -41,7 +42,7 @@ a "reid_scores" table whose SCORE is [distribution_distance()]
   match).
 }
 \description{
-The score layer behind [reid_by_dist()].
+score a distribution column ("A:B:C") by quantile-vector distance
 }
 \examples{
 # each record carries a whole distribution, written as "A:B:C"

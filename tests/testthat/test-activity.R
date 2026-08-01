@@ -309,13 +309,15 @@ test_that("ONE unparseable record is enough to stop score_span()", {
 
 test_that("ONE unparseable record is enough to stop the distribution scores", {
   ## Same property one layer down, where the split is per record rather than
-  ## vectorised: reid_by_dist()/score_dist() must not average over the records
-  ## that happened to parse.
+  ## vectorised: score_dist() must not average over the records that happened
+  ## to parse.
   m <- data.frame(ROW_NUMBER = 1:3, D = c("1:2:3", "4:oops:6", "7:8"),
                   stringsAsFactors = FALSE)
   j <- join_raw_anon_data(m, m)
   expect_error(score_dist(j, "D"), regexp = "could not convert")
-  expect_error(reid_by_dist(j, "D"), regexp = "could not convert")
+  ## and the failure is not deferred to the assignment layer, where a caller
+  ## might already have quoted a number off the score table
+  expect_error(match_greedy(score_dist(j, "D")), regexp = "could not convert")
 })
 
 ## ---------------------------------------------------------------------------

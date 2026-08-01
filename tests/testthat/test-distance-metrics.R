@@ -150,7 +150,7 @@ test_that("distribution_distance(): dependence on record-count difference is red
   expect_true(cor_new < cor_old - 0.2)
 })
 
-test_that("reid_by_dist(): identity join (ANON == RAW) still reidentifies every record (success == trial == n)", {
+test_that("score_dist(): identity join (ANON == RAW) still reidentifies every record (success == trial == n)", {
   set.seed(71)
   dat <- create_dummy_transaction_data(people = 30, size = 4)
   dat$NUM_STATIC_2 <- dat$NUM_STATIC + 1
@@ -167,10 +167,12 @@ test_that("reid_by_dist(): identity join (ANON == RAW) still reidentifies every 
   )
   d <- join_raw_anon_data(m, m)
 
-  r <- reid_by_dist(d, "NUM_DYNAMIC_DIST")
+  s <- score_dist(d, "NUM_DYNAMIC_DIST")
+  r <- match_greedy(s, seed = 1)
   expect_equal(nrow(r), 30)
   expect_equal(sum(r$RESULT), 30)
 
-  txt <- reid_result(r, method = "dist/NUM_DYNAMIC")
-  expect_equal(as.numeric(sub(".*/\\s*", "", txt)), 30)
+  ## the trial count is the number of ANON records, not a tie-inflated one
+  e <- reid_evaluate(s, seeds = 1:3, top_k = 1)
+  expect_equal(unique(e$per_seed$trial), 30)
 })

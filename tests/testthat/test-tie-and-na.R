@@ -1,26 +1,33 @@
-## Regression tests for phase 3:
+## Regression tests for phase 3, carried over to the three-layer API when the
+## reid_by_*() wrappers were removed in 3.0.0.
 ##
-## defect D: reid_by_dist() had no tie-handling step at all (unlike
-## reid_by_num / reid_by_char / reid_by_num_rank), so a discrete/low-
-## cardinality distribution column produced several result rows per ANON
-## record. reid_result() counts `trial` via nrow(), so this silently
-## inflated the denominator and under-reported the reidentification rate
-## -- the worst possible failure mode for a safety-checking tool.
+## defect D: the distribution attack had no tie-handling step at all (unlike
+## the num / char / rank ones), so a discrete/low-cardinality distribution
+## column produced several result rows per ANON record. The summary counted
+## `trial` via nrow(), so this silently inflated the denominator and
+## under-reported the reidentification rate -- the worst possible failure mode
+## for a safety-checking tool.
 ##
-## defect E: distribution_distance() (and the unused calc_KL()) coerced
-## their input to numeric with as.numeric(), which silently turns a
-## non-numeric/character column into all-NA distances. reid_by_dist() then
-## silently reported "0 / 0", which reads as "could not be reidentified =
-## safe" when in fact the column was simply the wrong type.
+## defect E: distribution_distance() (and calc_KL()) coerced their input to
+## numeric with as.numeric(), which silently turns a non-numeric/character
+## column into all-NA distances. The distribution attack then silently
+## reported "0 / 0", which reads as "could not be reidentified = safe" when in
+## fact the column was simply the wrong type.
 ##
-## Shared fix: resolve_min_distance_ties() (used by all 4 reid_by_*()
-## functions) always collapses ties down to exactly one row per
-## ANON_ROW_NUMBER, and errors instead of silently shrinking the result if
-## DISTANCE could not be computed. distribution_distance()/calc_KL() now
-## error with a specific message when a value cannot be parsed as numeric.
-## reid_result() now errors if handed a data frame with duplicated
-## ANON_ROW_NUMBER, as a defense in depth against this class of bug
-## recurring.
+## Shared fix: resolve_min_distance_ties() -- now reached through
+## match_greedy(), the single assignment entry point every score feeds into --
+## always collapses ties down to exactly one row per ANON_ROW_NUMBER, and
+## errors instead of silently shrinking the result if DISTANCE could not be
+## computed. distribution_distance()/calc_KL() error with a specific message
+## when a value cannot be parsed as numeric.
+##
+## The old "reid_result() rejects a duplicated ANON_ROW_NUMBER" defence has a
+## successor, not a copy: the duplicate check moved to the *input* side, as
+## validate_unique_candidate_pairs(), and is asserted in test-evaluate.R and
+## test-assignment.R for match_greedy() / match_optimal() / reid_evaluate() /
+## combine_scores(). The output side is covered structurally instead -- every
+## assignment here is checked to have exactly one row per ANON record, which
+## is the property the reid_result() guard existed to detect after the fact.
 
 make_master_30 <- function(seed = 71) {
   set.seed(seed)
@@ -47,63 +54,62 @@ make_identity_join_30 <- function(seed = 71) {
 
 n_expected <- function(d) length(unique(d$ANON_ROW_NUMBER))
 
-test_that("reid_by_dist on BIN_DIST (many ties) no longer inflates the row count / trial denominator", {
+test_that("score_dist() + match_greedy() on BIN_DIST (many ties) does not inflate the row count / trial denominator", {
   d <- make_identity_join_30()
   n <- n_expected(d)
   expect_equal(n, 30)
 
   ## Sanity check on the fixture: BIN_DIST really does have heavy collisions
-  ## for this data (this is what triggers defect D), so this test is
+  ## for this data (this is what triggered defect D), so this test is
   ## actually exercising the tie-handling path and not accidentally passing
   ## because every value happens to be unique.
   expect_true(length(unique(d$RAW_BIN_DIST)) < n)
 
-  r <- reid_by_dist(d, "BIN_DIST")
+  m <- match_greedy(score_dist(d, "BIN_DIST"), seed = 1)
   ## defect D used to produce more than one row per ANON record here
-  ## (108 rows for a 30-person identity join); the fix must always produce
-  ## exactly one row per ANON record.
-  expect_equal(nrow(r), n)
-  expect_equal(length(unique(r$ANON_ROW_NUMBER)), n)
+  ## (108 rows for a 30-person identity join); the tie-handling must always
+  ## produce exactly one row per ANON record.
+  expect_equal(nrow(m), n)
+  expect_equal(length(unique(m$ANON_ROW_NUMBER)), n)
 
-  txt <- reid_result(r, method = "dist/BIN")
-  ## trial (the denominator) must be the true number of ANON records, not
-  ## an inflated tie-count (defect D used to make this 108, not 30).
-  expect_equal(as.numeric(sub(".*/\\s*", "", txt)), 30)
+  ## and the reported trial count (the denominator) is the true number of
+  ## ANON records, not an inflated tie-count -- defect D used to make this
+  ## 108, not 30.
+  e <- reid_evaluate(score_dist(d, "BIN_DIST"), seeds = 1:3, top_k = 1)
+  expect_equal(unique(e$per_seed$trial), 30)
+  expect_equal(e$n_anon, 30)
 })
 
-test_that("all 4 reid_by_*() functions return exactly one row per ANON record, including tie-heavy/constant columns", {
+test_that("all 4 score functions give exactly one row per ANON record after assignment, including tie-heavy/constant columns", {
   d <- make_identity_join_30()
   n <- n_expected(d)
 
   ## NUM_STATIC is literally constant (10) for every record, so every
-  ## RAW/ANON pair is tied at DISTANCE == 0 -- the strongest possible stress
+  ## RAW/ANON pair is tied at SCORE == 0 -- the strongest possible stress
   ## test for missing tie-handling.
-  r_num <- reid_by_num(d, "NUM_STATIC")
-  expect_equal(nrow(r_num), n)
-  expect_equal(length(unique(r_num$ANON_ROW_NUMBER)), n)
+  cases <- list(
+    num = score_num(d, "NUM_STATIC"),
+    char = score_char(d, "CHAR_STATIC"),
+    dist = score_dist(d, "BIN_DIST"),
+    rank = score_num_rank(d, "NUM_STATIC")
+  )
 
-  r_char <- reid_by_char(d, "CHAR_STATIC")
-  expect_equal(nrow(r_char), n)
-  expect_equal(length(unique(r_char$ANON_ROW_NUMBER)), n)
-
-  r_dist <- reid_by_dist(d, "BIN_DIST")
-  expect_equal(nrow(r_dist), n)
-  expect_equal(length(unique(r_dist$ANON_ROW_NUMBER)), n)
-
-  r_rank <- reid_by_num_rank(d, "NUM_STATIC")
-  expect_equal(nrow(r_rank), n)
-  expect_equal(length(unique(r_rank$ANON_ROW_NUMBER)), n)
+  for (nm in names(cases)) {
+    m <- match_greedy(cases[[nm]], seed = 1)
+    expect_equal(nrow(m), n, info = nm)
+    expect_equal(length(unique(m$ANON_ROW_NUMBER)), n, info = nm)
+  }
 })
 
-test_that("reid_by_dist errors on a non-numeric distribution column instead of silently returning 0 / 0", {
+test_that("score_dist() errors on a non-numeric distribution column instead of silently producing an all-NA score", {
   d <- make_identity_join_30()
 
   ## CHAR_DIST is a distribution of random 2-letter strings ("ab:cd:..."),
   ## not numbers; before the fix, distribution_distance() silently coerced
-  ## this to all-NA distances via as.numeric(), and reid_result() reported
+  ## this to all-NA distances via as.numeric(), and the summary reported
   ## "0 / 0" with no error or warning.
   expect_error(
-    reid_by_dist(d, "CHAR_DIST"),
+    score_dist(d, "CHAR_DIST"),
     regexp = "numeric"
   )
 })
@@ -117,46 +123,57 @@ test_that("distribution_distance() and calc_KL() reject non-numeric distribution
   expect_equal(distribution_distance("1:2:3", "1:2:3"), 0)
 })
 
-test_that("reid_result errors when ANON_ROW_NUMBER has duplicates (the exact shape defect D used to produce)", {
-  ## Simulate the pre-fix defect D output shape: no tie-handling at all, so
-  ## more than one candidate RAW row survives for a given ANON row.
-  bad <- data.frame(
-    RAW_ROW_NUMBER = c(1, 2, 2, 3),
-    ANON_ROW_NUMBER = c(1, 2, 2, 3),
-    RESULT = c(TRUE, TRUE, TRUE, TRUE)
-  )
+test_that("resolve_min_distance_ties() errors rather than silently shrinking the result when DISTANCE is NA", {
+  ## The direct successor of the reid_result() duplicate guard: the failure it
+  ## defended against was "the result has the wrong number of rows and the
+  ## rate is computed from it anyway". Both directions are refused here.
 
-  expect_error(reid_result(bad, method = "broken"), regexp = "duplicate")
-
-  ## a data frame without duplicates still works normally
-  good <- data.frame(
-    RAW_ROW_NUMBER = c(1, 2, 3),
-    ANON_ROW_NUMBER = c(1, 2, 3),
-    RESULT = c(TRUE, TRUE, FALSE)
+  ## every DISTANCE missing: nothing was measured at all
+  all_na <- data.frame(
+    RAW_ROW_NUMBER = c(1, 2, 1, 2),
+    ANON_ROW_NUMBER = c(1, 1, 2, 2),
+    DISTANCE = NA_real_
   )
-  expect_no_error(reid_result(good, method = "ok"))
-  expect_match(reid_result(good, method = "ok"), "2 / 3", fixed = TRUE)
+  expect_error(resolve_min_distance_ties(all_na), regexp = "could not be computed")
+
+  ## one ANON record with no computable distance: it would silently vanish
+  ## from the result, shrinking the denominator
+  some_na <- data.frame(
+    RAW_ROW_NUMBER = c(1, 2, 1, 2),
+    ANON_ROW_NUMBER = c(1, 1, 2, 2),
+    DISTANCE = c(1, 2, NA_real_, NA_real_)
+  )
+  expect_error(resolve_min_distance_ties(some_na), regexp = "dropped")
+
+  ## a well-formed input still collapses to exactly one row per ANON record
+  ok <- data.frame(
+    RAW_ROW_NUMBER = c(1, 2, 1, 2),
+    ANON_ROW_NUMBER = c(1, 1, 2, 2),
+    DISTANCE = c(0, 3, 4, 0)
+  )
+  got <- resolve_min_distance_ties(ok, seed = 1)
+  expect_equal(nrow(got), 2)
+  expect_equal(got$ANON_ROW_NUMBER, c(1, 2))
+  expect_equal(got$RAW_ROW_NUMBER, c(1, 2))
 })
 
-test_that("identity check: ANON is an exact copy of RAW => success == trial == 30 for all 4 reid functions", {
+test_that("identity check: ANON is an exact copy of RAW => every one of the 30 records is found by all 4 score functions", {
   d <- make_identity_join_30()
 
   ## NUM_DYNAMIC_DIST/NUM_DYNAMIC_MEAN/CHAR_STATIC are (for this data)
   ## effectively collision-free, unlike the deliberately low-cardinality
   ## BIN_DIST/NUM_STATIC columns used above, so the "true match" is
-  ## unambiguous and success should equal trial for all 4 functions.
-  r_num <- reid_by_num(d, "NUM_DYNAMIC_MEAN")
-  r_char <- reid_by_char(d, "CHAR_STATIC")
-  r_dist <- reid_by_dist(d, "NUM_DYNAMIC_DIST")
-  r_rank <- reid_by_num_rank(d, "NUM_DYNAMIC_MEAN")
+  ## unambiguous and success should equal trial for all 4.
+  cases <- list(
+    num = score_num(d, "NUM_DYNAMIC_MEAN"),
+    char = score_char(d, "CHAR_STATIC"),
+    dist = score_dist(d, "NUM_DYNAMIC_DIST"),
+    rank = score_num_rank(d, "NUM_DYNAMIC_MEAN")
+  )
 
-  expect_equal(sum(r_num$RESULT), 30)
-  expect_equal(sum(r_char$RESULT), 30)
-  expect_equal(sum(r_dist$RESULT), 30)
-  expect_equal(sum(r_rank$RESULT), 30)
-
-  expect_match(reid_result(r_num, method = "num"), "30 / 30", fixed = TRUE)
-  expect_match(reid_result(r_char, method = "char"), "30 / 30", fixed = TRUE)
-  expect_match(reid_result(r_dist, method = "dist"), "30 / 30", fixed = TRUE)
-  expect_match(reid_result(r_rank, method = "rank"), "30 / 30", fixed = TRUE)
+  for (nm in names(cases)) {
+    m <- match_greedy(cases[[nm]], seed = 1)
+    expect_equal(nrow(m), 30, info = nm)
+    expect_equal(sum(m$RESULT), 30, info = nm)
+  }
 })

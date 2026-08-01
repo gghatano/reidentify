@@ -66,8 +66,9 @@ attributes are worth using.}
 \item{alpha}{significance level for the screen, passed to
 [axis_informativeness()]; ignored when `screen = "none"`}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table over the candidate pairs of `dat_raw_anon`.

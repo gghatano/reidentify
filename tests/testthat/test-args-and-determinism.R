@@ -1,20 +1,23 @@
-## Regression tests for phase 4:
+## Regression tests for phase 4, carried over to the three-layer API when the
+## reid_by_*() wrappers were removed in 3.0.0.
 ##
-## defect 1: reid_by_num() / reid_by_char() / reid_by_dist() /
-## reid_by_num_rank() accepted a `row_number` argument, built
+## defect 1: the reid_by_*() wrappers accepted a `row_number` argument, built
 ## raw_row_number/anon_row_number from it, and then never used those
 ## variables -- they went on to reference the literal columns
 ## RAW_ROW_NUMBER/ANON_ROW_NUMBER regardless. Passing a data set whose row
 ## number column was renamed (e.g. to "RECORD_ID") crashed with
-## "Can't select columns that don't exist." The fix wires `row_number`
-## through to the actual column lookup in all 4 functions, and always
-## reports the result using canonical RAW_ROW_NUMBER/ANON_ROW_NUMBER output
-## columns (so reid_result()'s defaults keep working unchanged).
+## "Can't select columns that don't exist." The fix wired `row_number`
+## through to the actual column lookup, and it now lives in
+## reid_prefixed_columns() -- shared by every score_*() function, which is
+## where these tests reach it. The output columns are always named
+## RAW_ROW_NUMBER/ANON_ROW_NUMBER whatever `row_number` was, so the
+## assignment and evaluation layers need no special-casing.
 ##
-## defect 2: reid_by_num_rank() used rank(..., ties.method = "random"),
-## so results for tie-heavy columns were different on every run. The fix
+## defect 2: the rank score used rank(..., ties.method = "random"), so
+## results for tie-heavy columns were different on every run. The fix
 ## switches to ties.method = "min" (deterministic; ties collapse to the
-## same rank rather than an arbitrary distinct one).
+## same rank rather than an arbitrary distinct one). compute_num_ranks(),
+## reached here through score_num_rank(), is what carries it.
 ##
 ## defect 3: create_dummy_master_data()/create_dummy_transaction_data()
 ## used the deprecated tibble::data_frame(); replaced with tibble::tibble().
@@ -42,56 +45,53 @@ make_identity_join_30 <- function(seed = 71) {
   join_raw_anon_data(m, m)
 }
 
+## Score tables are compared as *sets* of candidate pairs: join_raw_anon_data()
+## is built on merge(), whose row order depends on the column names it was
+## handed, and renaming the row-number column changes those.
+sorted_scores <- function(s) {
+  s <- as.data.frame(s)
+  s[order(s$ANON_ROW_NUMBER, s$RAW_ROW_NUMBER), , drop = FALSE][
+    , c("ANON_ROW_NUMBER", "RAW_ROW_NUMBER", "SCORE")
+  ]
+}
+
 ## -----------------------------------------------------------------------
 ## row_number argument actually works, and is backward compatible
 ## -----------------------------------------------------------------------
 
-test_that("row_number argument: all 4 reid_by_*() work with a renamed row-number column and match the default-named result", {
+test_that("row_number argument: all 4 score_*() work with a renamed row-number column and give the same score table as the default-named one", {
   m <- make_master_30()
   d_default <- join_raw_anon_data(m, m)
 
   m_renamed <- dplyr::rename(m, RECORD_ID = ROW_NUMBER)
   d_renamed <- join_raw_anon_data(m_renamed, m_renamed)
 
-  ## reid_by_num
-  r_default <- reid_by_num(d_default, "NUM_DYNAMIC_MEAN")
-  r_renamed <- expect_no_error(
-    reid_by_num(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID")
-  )
-  expect_identical(
-    reid_result(r_default, method = "num"),
-    reid_result(r_renamed, method = "num")
+  cases <- list(
+    num = list(fn = score_num, target = "NUM_DYNAMIC_MEAN"),
+    char = list(fn = score_char, target = "CHAR_STATIC"),
+    dist = list(fn = score_dist, target = "NUM_DYNAMIC_DIST"),
+    rank = list(fn = score_num_rank, target = "NUM_DYNAMIC_MEAN")
   )
 
-  ## reid_by_char
-  r_default <- reid_by_char(d_default, "CHAR_STATIC")
-  r_renamed <- expect_no_error(
-    reid_by_char(d_renamed, "CHAR_STATIC", row_number = "RECORD_ID")
-  )
-  expect_identical(
-    reid_result(r_default, method = "char"),
-    reid_result(r_renamed, method = "char")
-  )
+  for (nm in names(cases)) {
+    fn <- cases[[nm]]$fn
+    tgt <- cases[[nm]]$target
 
-  ## reid_by_dist
-  r_default <- reid_by_dist(d_default, "NUM_DYNAMIC_DIST")
-  r_renamed <- expect_no_error(
-    reid_by_dist(d_renamed, "NUM_DYNAMIC_DIST", row_number = "RECORD_ID")
-  )
-  expect_identical(
-    reid_result(r_default, method = "dist"),
-    reid_result(r_renamed, method = "dist")
-  )
+    s_default <- fn(d_default, tgt)
+    s_renamed <- expect_no_error(fn(d_renamed, tgt, row_number = "RECORD_ID"))
 
-  ## reid_by_num_rank
-  r_default <- reid_by_num_rank(d_default, "NUM_DYNAMIC_MEAN")
-  r_renamed <- expect_no_error(
-    reid_by_num_rank(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID")
-  )
-  expect_identical(
-    reid_result(r_default, method = "rank"),
-    reid_result(r_renamed, method = "rank")
-  )
+    expect_equal(
+      sorted_scores(s_renamed), sorted_scores(s_default),
+      ignore_attr = TRUE, info = nm
+    )
+
+    ## and the assignment reached through them is the same, seed for seed
+    a <- match_greedy(s_default, seed = 3)
+    b <- match_greedy(s_renamed, seed = 3)
+    expect_equal(a$ANON_ROW_NUMBER, b$ANON_ROW_NUMBER, info = nm)
+    expect_equal(a$RAW_ROW_NUMBER, b$RAW_ROW_NUMBER, info = nm)
+    expect_equal(a$RESULT, b$RESULT, info = nm)
+  }
 })
 
 test_that("row_number argument: previously this crashed with 'Can't select columns that don't exist'", {
@@ -102,46 +102,46 @@ test_that("row_number argument: previously this crashed with 'Can't select colum
   expect_false("RAW_ROW_NUMBER" %in% names(d_renamed))
   expect_true("RAW_RECORD_ID" %in% names(d_renamed))
 
-  expect_no_error(reid_by_num(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID"))
-  expect_no_error(reid_by_char(d_renamed, "CHAR_STATIC", row_number = "RECORD_ID"))
-  expect_no_error(reid_by_dist(d_renamed, "NUM_DYNAMIC_DIST", row_number = "RECORD_ID"))
-  expect_no_error(reid_by_num_rank(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID"))
+  expect_no_error(score_num(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID"))
+  expect_no_error(score_char(d_renamed, "CHAR_STATIC", row_number = "RECORD_ID"))
+  expect_no_error(score_dist(d_renamed, "NUM_DYNAMIC_DIST", row_number = "RECORD_ID"))
+  expect_no_error(score_num_rank(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID"))
 })
 
-test_that("row_number argument: output always uses canonical RAW_ROW_NUMBER/ANON_ROW_NUMBER so reid_result() defaults work unchanged", {
+test_that("row_number argument: the score table always uses canonical RAW_ROW_NUMBER/ANON_ROW_NUMBER, so the assignment and evaluation layers need no special-casing", {
   m <- make_master_30()
   m_renamed <- dplyr::rename(m, RECORD_ID = ROW_NUMBER)
   d_renamed <- join_raw_anon_data(m_renamed, m_renamed)
 
-  r_num <- reid_by_num(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID")
-  r_char <- reid_by_char(d_renamed, "CHAR_STATIC", row_number = "RECORD_ID")
-  r_dist <- reid_by_dist(d_renamed, "NUM_DYNAMIC_DIST", row_number = "RECORD_ID")
-  r_rank <- reid_by_num_rank(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID")
-
-  expect_true(all(c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER") %in% names(r_num)))
-  expect_true(all(c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER") %in% names(r_char)))
-  expect_true(all(c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER") %in% names(r_dist)))
-  expect_true(all(c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER") %in% names(r_rank)))
-
-  ## reid_result() with its *default* raw_row_number/anon_row_number args
-  ## (i.e. no special-casing needed by the caller) works on all 4.
-  expect_no_error(reid_result(r_num, method = "num"))
-  expect_no_error(reid_result(r_char, method = "char"))
-  expect_no_error(reid_result(r_dist, method = "dist"))
-  expect_no_error(reid_result(r_rank, method = "rank"))
+  scores <- list(
+    num = score_num(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID"),
+    char = score_char(d_renamed, "CHAR_STATIC", row_number = "RECORD_ID"),
+    dist = score_dist(d_renamed, "NUM_DYNAMIC_DIST", row_number = "RECORD_ID"),
+    rank = score_num_rank(d_renamed, "NUM_DYNAMIC_MEAN", row_number = "RECORD_ID")
+  )
 
   n <- length(unique(d_renamed$ANON_RECORD_ID))
-  expect_match(reid_result(r_num, method = "num"), paste(n, "/", n), fixed = TRUE)
-  expect_match(reid_result(r_char, method = "char"), paste(n, "/", n), fixed = TRUE)
-  expect_match(reid_result(r_dist, method = "dist"), paste(n, "/", n), fixed = TRUE)
-  expect_match(reid_result(r_rank, method = "rank"), paste(n, "/", n), fixed = TRUE)
+
+  for (nm in names(scores)) {
+    s <- scores[[nm]]
+    expect_identical(
+      names(s), c("RAW_ROW_NUMBER", "ANON_ROW_NUMBER", "SCORE"),
+      info = nm
+    )
+
+    ## the assignment layer's defaults work unchanged on it: one row per ANON
+    ## record, every one of them found (ANON is an exact copy of RAW)
+    m_out <- expect_no_error(match_greedy(s))
+    expect_equal(nrow(m_out), n, info = nm)
+    expect_equal(sum(m_out$RESULT), n, info = nm)
+  }
 })
 
 ## -----------------------------------------------------------------------
-## reid_by_num_rank() determinism
+## score_num_rank() determinism (ties.method = "min")
 ## -----------------------------------------------------------------------
 
-test_that("reid_by_num_rank() is deterministic on a heavily-tied column (BIN_MEAN), 5 runs identical", {
+test_that("score_num_rank() is deterministic on a heavily-tied column (BIN_MEAN), 5 runs identical", {
   d <- make_identity_join_30()
 
   ## sanity check on the fixture: BIN_MEAN really does have ties for this
@@ -149,28 +149,34 @@ test_that("reid_by_num_rank() is deterministic on a heavily-tied column (BIN_MEA
   n <- length(unique(d$ANON_ROW_NUMBER))
   expect_true(length(unique(d$RAW_BIN_MEAN)) < n)
 
-  runs <- lapply(1:5, function(i) reid_by_num_rank(d, "BIN_MEAN"))
+  runs <- lapply(1:5, function(i) score_num_rank(d, "BIN_MEAN"))
   for (i in 2:5) {
     expect_identical(runs[[1]], runs[[i]])
   }
+
+  ## and the whole attack, score plus assignment, is reproducible with it
+  attacks <- lapply(1:5, function(i) match_greedy(score_num_rank(d, "BIN_MEAN"), seed = 1))
+  for (i in 2:5) {
+    expect_identical(attacks[[1]], attacks[[i]])
+  }
 })
 
-test_that("reid_by_num_rank() is deterministic on a fully-constant column (NUM_STATIC), 5 runs identical", {
+test_that("score_num_rank() is deterministic on a fully-constant column (NUM_STATIC), 5 runs identical", {
   d <- make_identity_join_30()
 
   ## NUM_STATIC is constant (10) for every record -- every value ties.
   expect_equal(length(unique(d$RAW_NUM_STATIC)), 1)
 
-  runs <- lapply(1:5, function(i) reid_by_num_rank(d, "NUM_STATIC"))
+  runs <- lapply(1:5, function(i) score_num_rank(d, "NUM_STATIC"))
   for (i in 2:5) {
     expect_identical(runs[[1]], runs[[i]])
   }
 })
 
-test_that("reid_by_num_rank() determinism holds for the exact reproduction snippet in the task (BIN_MEAN)", {
+test_that("score_num_rank() determinism holds for the exact reproduction snippet in the task (BIN_MEAN)", {
   d <- make_identity_join_30()
-  a <- reid_by_num_rank(d, "BIN_MEAN")
-  b <- reid_by_num_rank(d, "BIN_MEAN")
+  a <- score_num_rank(d, "BIN_MEAN")
+  b <- score_num_rank(d, "BIN_MEAN")
   expect_identical(a, b)
 })
 

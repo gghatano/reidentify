@@ -32,9 +32,9 @@ identically, so `lift` does not move either. The "would I notice if this
 broke" cross-check that `docs/lessons-learned.md` section 2 asks for is
 precisely what fails here, and it fails silently, downwards.
 
-`match_optimal()`, `combine_scores()` and `reid_result()` already refused
-duplicated input. This is the same test, so that `match_greedy()` and
-`reid_evaluate()` -- the two entry points that were still permissive -- hold
-to the same contract.
+`match_optimal()` and `combine_scores()` already refused duplicated input.
+This is the same test, so that `match_greedy()` and `reid_evaluate()` --
+the two entry points that were still permissive -- hold to the same
+contract.
 }
 \keyword{internal}

@@ -23,8 +23,9 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 \item{method}{`"log_ratio"` (default), `"absolute"` or `"relative"`
 (`|a - b| / max(a, b, 1)`, bounded in \[0, 1\])}
 
-\item{.fn_name}{name used in error messages; the reid_by_*() wrappers pass
-their own name so the message points at the function the user called}
+\item{.fn_name}{name used in error messages; a function that wraps this one
+passes its own name so the message points at the function the user
+actually called}
 }
 \value{
 a "reid_scores" table (a distance: smaller is a better match)

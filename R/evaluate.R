@@ -1,7 +1,7 @@
 ## ---------------------------------------------------------------------------
 ## Evaluation metrics (Issue #12)
 ##
-## reid_result() reports "success / trial" and nothing else. Two things are
+## A bare "success / trial" figure reports nothing else. Two things are
 ## missing from that number, and both of them matter more than the number
 ## itself:
 ##
@@ -469,6 +469,119 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
     ),
     class = "reid_evaluation"
   )
+}
+
+#' run an attack over several tie-break seeds and summarise the spread of the
+#' success rate
+#'
+#' When a target column has ties, a single run reports one draw from a
+#' distribution of possible outcomes, not a fixed property of the data. A
+#' point estimate on its own is therefore not interpretable: on a 50-person
+#' fixture with a low-cardinality column the rate ranges over [0.02, 0.14]
+#' depending only on which tied candidate is picked. This runs the same
+#' attack across `seeds` and reports the mean together with the standard
+#' deviation, so the uncertainty is visible in the result rather than hidden.
+#'
+#' A near-zero `sd` means the target column is effectively collision-free and
+#' the point estimate can be read directly; a large `sd` means the single-run
+#' number should not be quoted without it.
+#'
+#' [reid_evaluate()] reports the same spread (`success_mean` / `success_sd` /
+#' `success_min` / `success_max`) straight from a score table, alongside the
+#' baselines and the per-record risk, and is the usual way in. This function
+#' is the narrower tool: it takes a whole *attack* -- any function of
+#' `(dat_raw_anon, target, ..., seed)` returning a data frame with a logical
+#' `RESULT` column -- so a caller can measure the spread of an attack the
+#' score/assignment split does not cover.
+#'
+#' @param reid_fn an attack function (or its name) taking
+#'   `(dat_raw_anon, target, ..., seed)` and returning one row per ANON record
+#'   with a logical `RESULT` column. A score/assignment pair is wrapped in one
+#'   line; see the examples.
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column
+#' @param seeds integer vector of tie-break seeds (default 1:20)
+#' @param ... further arguments passed on to `reid_fn`
+#'
+#' @return an object of class "reid_stability": a list with `per_seed` (a
+#'   data frame of seed / success / trial / rate), and the summary fields
+#'   `mean`, `sd`, `min`, `max`, `trial` and `n_seeds`
+#'
+#' @seealso [reid_evaluate()], which reports the same spread from a score
+#'   table together with the baselines it has to be read against.
+#'
+#' @examples
+#' # every value is shared by two records, so which one the attack "wins"
+#' # is decided by the tie-break: a single run is one draw, not the answer
+#' raw <- data.frame(ROW_NUMBER = 1:6, V = c(1, 1, 2, 2, 3, 3))
+#' d <- join_raw_anon_data(raw, raw)
+#'
+#' # an attack is a score function plus an assignment rule
+#' attack_num <- function(dat, target, seed) {
+#'   match_greedy(score_num(dat, target), seed = seed)
+#' }
+#' reid_stability(attack_num, d, "V", seeds = 1:5)
+#'
+#' # a collision-free column gives sd 0: there the point estimate can be
+#' # quoted on its own
+#' u <- data.frame(ROW_NUMBER = 1:6, V = c(10, 20, 30, 40, 50, 60))
+#' reid_stability(attack_num, join_raw_anon_data(u, u), "V", seeds = 1:5)
+#'
+#' @importFrom stats sd
+#' @export
+reid_stability <- function(reid_fn, dat_raw_anon, target, seeds = 1:20, ...) {
+  reid_fn <- match.fun(reid_fn)
+
+  if (length(seeds) < 2) {
+    stop(
+      "reid_stability(): need at least 2 seeds to report a standard ",
+      "deviation; got ", length(seeds), ".",
+      call. = FALSE
+    )
+  }
+  if (anyDuplicated(seeds) > 0) {
+    stop("reid_stability(): `seeds` must not contain duplicates.", call. = FALSE)
+  }
+
+  rows <- lapply(seeds, function(s) {
+    r <- reid_fn(dat_raw_anon, target = target, seed = s, ...)
+    data.frame(seed = s, success = sum(r$RESULT), trial = nrow(r))
+  })
+  per_seed <- do.call(rbind, rows)
+  per_seed$rate <- per_seed$success / per_seed$trial
+
+  structure(
+    list(
+      per_seed = per_seed,
+      mean = mean(per_seed$rate),
+      sd = stats::sd(per_seed$rate),
+      min = min(per_seed$rate),
+      max = max(per_seed$rate),
+      trial = unique(per_seed$trial),
+      n_seeds = length(seeds)
+    ),
+    class = "reid_stability"
+  )
+}
+
+#' print a reid_stability summary
+#'
+#' @param x a "reid_stability" object
+#' @param ... ignored
+#'
+#' @return `x`, invisibly
+#'
+#' @export
+print.reid_stability <- function(x, ...) {
+  cat(sprintf(
+    "reid stability over %d tie-break seeds (trial = %s)\n",
+    x$n_seeds, paste(x$trial, collapse = "/")
+  ))
+  cat(sprintf(
+    "  success rate: mean %.4f  sd %.4f  range [%.4f, %.4f]\n",
+    x$mean, x$sd, x$min, x$max
+  ))
+  invisible(x)
 }
 
 #' print a reidentification evaluation

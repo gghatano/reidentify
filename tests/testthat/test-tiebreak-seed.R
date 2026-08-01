@@ -8,6 +8,12 @@
 ## [0.02, 0.14] purely as a function of how the input rows happened to be
 ## ordered, and it concentrated every possible success onto the 3 records
 ## that led their tie group.
+##
+## These used to run through reid_by_num(); the wrappers were removed in
+## 3.0.0 and the tie-break itself never lived there -- it is
+## resolve_min_distance_ties(), reached from match_greedy(), which is the
+## single assignment entry point every score feeds into. The tests were moved
+## onto that path rather than deleted with the wrappers.
 
 make_tie_heavy <- function(people = 50, seed = 71) {
   set.seed(seed)
@@ -17,19 +23,26 @@ make_tie_heavy <- function(people = 50, seed = 71) {
   join_raw_anon_data(raw, raw)
 }
 
+## the attack these tests measure the spread of: a score plus an assignment
+## rule. reid_stability() takes a whole attack, so it is written once here.
+attack_num <- function(dat, target, seed) {
+  match_greedy(score_num(dat, target), seed = seed)
+}
+
 test_that("the same seed gives an identical result", {
   d <- make_tie_heavy()
 
-  a <- reid_by_num(d, "BIN", seed = 42)
-  b <- reid_by_num(d, "BIN", seed = 42)
+  a <- match_greedy(score_num(d, "BIN"), seed = 42)
+  b <- match_greedy(score_num(d, "BIN"), seed = 42)
 
   expect_identical(a, b)
 })
 
 test_that("different seeds actually change which tied candidate is chosen", {
   d <- make_tie_heavy()
+  s <- score_num(d, "BIN")
 
-  rates <- vapply(1:20, function(s) mean(reid_by_num(d, "BIN", seed = s)$RESULT), numeric(1))
+  rates <- vapply(1:20, function(sd) mean(match_greedy(s, seed = sd)$RESULT), numeric(1))
 
   expect_gt(length(unique(rates)), 1)
 })
@@ -37,12 +50,12 @@ test_that("different seeds actually change which tied candidate is chosen", {
 test_that("input row order no longer changes the result for a fixed seed", {
   d <- make_tie_heavy()
 
-  baseline <- reid_by_num(d, "BIN", seed = 7)
+  baseline <- match_greedy(score_num(d, "BIN"), seed = 7)
 
   set.seed(1)
   for (i in 1:10) {
     shuffled <- d[sample(nrow(d)), ]
-    got <- reid_by_num(shuffled, "BIN", seed = 7)
+    got <- match_greedy(score_num(shuffled, "BIN"), seed = 7)
     ## row.names differ after subsetting; compare the payload only
     expect_equal(got$ANON_ROW_NUMBER, baseline$ANON_ROW_NUMBER)
     expect_equal(got$RAW_ROW_NUMBER, baseline$RAW_ROW_NUMBER)
@@ -53,39 +66,52 @@ test_that("input row order no longer changes the result for a fixed seed", {
 test_that("output is ordered by ANON_ROW_NUMBER regardless of input order", {
   d <- make_tie_heavy()
 
-  r <- reid_by_num(d, "BIN", seed = 5)
+  r <- match_greedy(score_num(d, "BIN"), seed = 5)
   expect_false(is.unsorted(r$ANON_ROW_NUMBER))
 
-  r2 <- reid_by_num(d[sample(nrow(d)), ], "BIN", seed = 5)
+  r2 <- match_greedy(score_num(d[sample(nrow(d)), ], "BIN"), seed = 5)
   expect_identical(r$ANON_ROW_NUMBER, r2$ANON_ROW_NUMBER)
 })
 
 test_that("passing seed= does not disturb the caller's RNG stream", {
   d <- make_tie_heavy(people = 20)
+  s <- score_num(d, "BIN")
 
   set.seed(99)
   before <- runif(3)
 
   set.seed(99)
-  invisible(reid_by_num(d, "BIN", seed = 12345))
+  invisible(match_greedy(s, seed = 12345))
   after <- runif(3)
 
   expect_identical(before, after)
 })
 
-test_that("all 4 reid_by_*() accept seed= and stay reproducible", {
+test_that("all 4 score functions accept a seeded assignment and stay reproducible", {
   d <- make_tie_heavy(people = 20)
 
-  expect_identical(reid_by_num(d, "BIN", seed = 3), reid_by_num(d, "BIN", seed = 3))
-  expect_identical(reid_by_char(d, "CHAR", seed = 3), reid_by_char(d, "CHAR", seed = 3))
-  expect_identical(reid_by_num_rank(d, "BIN", seed = 3), reid_by_num_rank(d, "BIN", seed = 3))
+  expect_identical(
+    match_greedy(score_num(d, "BIN"), seed = 3),
+    match_greedy(score_num(d, "BIN"), seed = 3)
+  )
+  expect_identical(
+    match_greedy(score_char(d, "CHAR"), seed = 3),
+    match_greedy(score_char(d, "CHAR"), seed = 3)
+  )
+  expect_identical(
+    match_greedy(score_num_rank(d, "BIN"), seed = 3),
+    match_greedy(score_num_rank(d, "BIN"), seed = 3)
+  )
 
   raw <- data.frame(
     ROW_NUMBER = 1:10, ID = 1:10,
     D = rep(c("1:2:3", "4:5:6"), length.out = 10), stringsAsFactors = FALSE
   )
   dd <- join_raw_anon_data(raw, raw)
-  expect_identical(reid_by_dist(dd, "D", seed = 3), reid_by_dist(dd, "D", seed = 3))
+  expect_identical(
+    match_greedy(score_dist(dd, "D"), seed = 3),
+    match_greedy(score_dist(dd, "D"), seed = 3)
+  )
 })
 
 test_that("random tie-breaking is unbiased: the mean rate matches mean(1 / tie_size)", {
@@ -97,18 +123,26 @@ test_that("random tie-breaking is unbiased: the mean rate matches mean(1 / tie_s
   )
   theoretical <- mean(1 / tie_sizes)
 
-  st <- reid_stability(reid_by_num, d, "BIN", seeds = 1:200)
+  st <- reid_stability(attack_num, d, "BIN", seeds = 1:200)
 
   ## sampling error over 200 seeds is small; allow a generous tolerance
   expect_equal(st$mean, theoretical, tolerance = 0.02)
+
+  ## reid_evaluate() computes the same expectation analytically rather than by
+  ## simulation, from the same tie structure. The two routes agreeing is the
+  ## "would I notice if this broke" check docs/lessons-learned.md section 2
+  ## asks for, so it is asserted here as well as inside test-evaluate.R.
+  e <- reid_evaluate(score_num(d, "BIN"), seeds = 1:20, top_k = 1)
+  expect_equal(e$success_analytic, theoretical, tolerance = 1e-8)
 })
 
 test_that("every record becomes reachable, not just the head of each tie group", {
   d <- make_tie_heavy()
+  s <- score_num(d, "BIN")
 
   ever_hit <- rowSums(vapply(
     1:100,
-    function(s) as.integer(reid_by_num(d, "BIN", seed = s)$RESULT),
+    function(sd) as.integer(match_greedy(s, seed = sd)$RESULT),
     numeric(50)
   ))
 
@@ -121,7 +155,7 @@ test_that("every record becomes reachable, not just the head of each tie group",
 test_that("reid_stability reports mean, sd and range over seeds", {
   d <- make_tie_heavy()
 
-  st <- reid_stability(reid_by_num, d, "BIN", seeds = 1:30)
+  st <- reid_stability(attack_num, d, "BIN", seeds = 1:30)
 
   expect_s3_class(st, "reid_stability")
   expect_setequal(
@@ -145,7 +179,7 @@ test_that("reid_stability reports sd 0 for a collision-free column", {
   d <- make_tie_heavy()
 
   ## NUM is continuous, so ANON == RAW matches uniquely: no ties, no spread
-  st <- reid_stability(reid_by_num, d, "NUM", seeds = 1:10)
+  st <- reid_stability(attack_num, d, "NUM", seeds = 1:10)
 
   expect_equal(st$mean, 1)
   expect_equal(st$sd, 0)
@@ -154,6 +188,40 @@ test_that("reid_stability reports sd 0 for a collision-free column", {
 test_that("reid_stability validates its seeds argument", {
   d <- make_tie_heavy(people = 10)
 
-  expect_error(reid_stability(reid_by_num, d, "BIN", seeds = 1), regexp = "at least 2")
-  expect_error(reid_stability(reid_by_num, d, "BIN", seeds = c(1, 1, 2)), regexp = "duplicate")
+  expect_error(reid_stability(attack_num, d, "BIN", seeds = 1), regexp = "at least 2")
+  expect_error(reid_stability(attack_num, d, "BIN", seeds = c(1, 1, 2)), regexp = "duplicate")
+})
+
+test_that("reid_stability accepts a function given by name, and passes ... through", {
+  d <- make_tie_heavy(people = 20)
+
+  ## match.fun(): a character name resolves to the function of that name
+  assign("attack_by_name", attack_num, envir = globalenv())
+  on.exit(rm("attack_by_name", envir = globalenv()), add = TRUE)
+  st <- reid_stability("attack_by_name", d, "BIN", seeds = 1:5)
+  expect_s3_class(st, "reid_stability")
+
+  ## extra arguments reach the attack. Fixture: V = c(10, 20, 30, 30), so
+  ## records 1-2 have a unique best candidate (tie confidence 1) and records
+  ## 3-4 are indistinguishable from each other (tie confidence 1/2). Attacking
+  ## everything gives mean rate (1 + 1 + 1/2 + 1/2) / 4 = 0.75; declining below
+  ## confidence 0.9 drops records 3-4 -- they keep their row, so the trial
+  ## count is still 4 and the rate is exactly 0.5.
+  raw <- data.frame(ROW_NUMBER = 1:4, V = c(10, 20, 30, 30))
+  d4 <- join_raw_anon_data(raw, raw)
+
+  cautious <- function(dat, target, seed, min_confidence = 0) {
+    match_greedy(score_num(dat, target), seed = seed,
+                 confidence = "tie", min_confidence = min_confidence)
+  }
+
+  st_all <- reid_stability(cautious, d4, "V", seeds = 1:200)
+  expect_equal(st_all$trial, 4)
+  expect_equal(st_all$mean, 0.75, tolerance = 0.05)
+
+  st_cautious <- reid_stability(cautious, d4, "V", seeds = 1:5,
+                                min_confidence = 0.9)
+  expect_equal(st_cautious$trial, 4)
+  expect_equal(st_cautious$mean, 0.5)
+  expect_equal(st_cautious$sd, 0)
 })

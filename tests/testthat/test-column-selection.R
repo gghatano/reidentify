@@ -1,20 +1,23 @@
-## Regression tests for the "silent wrong column" defect (phase 2).
+## Regression tests for the "silent wrong column" defect (phase 2), carried
+## over to the three-layer API when the reid_by_*() wrappers were removed in
+## 3.0.0.
 ##
-## reid_by_num / reid_by_char / reid_by_dist / reid_by_num_rank build a
-## column name by pasting "RAW_"/"ANON_" onto `target`, then used to hand
-## that name to dplyr::select()/pull() as a *bare backtick symbol*
-## (e.g. `` `raw_target` ``). tidyselect's legacy fallback first looks for a
-## column literally named "raw_target" before falling back to using the
-## variable's value as a column name. If the data happens to contain a
-## column literally named "raw_target"/"anon_target"/"raw_row_number"/
-## "anon_row_number", the functions silently pick that decoy column
-## instead of the intended one, with no error or warning.
+## The score functions build a column name by pasting "RAW_"/"ANON_" onto
+## `target`, then used to hand that name to dplyr::select()/pull() as a *bare
+## backtick symbol* (e.g. `` `raw_target` ``). tidyselect's legacy fallback
+## first looks for a column literally named "raw_target" before falling back to
+## using the variable's value as a column name. If the data happens to contain
+## a column literally named "raw_target"/"anon_target"/"raw_row_number"/
+## "anon_row_number", the functions silently pick that decoy column instead of
+## the intended one, with no error or warning.
+##
+## The lookup now goes through reid_prefixed_columns() + `[[`, which is what
+## every score_*() function uses, so this is where the regression is pinned.
 ##
 ## These tests build a master data set via transform_transaction_to_master()
 ## and join a copy of it against itself (join_raw_anon_data(m, m)), which
 ## is a perfect "anonymization" of itself: every function under test should
-## report success == trial == number of rows, both with and without decoy
-## columns present.
+## reidentify every ANON record, both with and without decoy columns present.
 
 make_master <- function(people = 20, size = 4, seed = 71) {
   set.seed(seed)
@@ -56,75 +59,57 @@ add_decoy_columns <- function(d) {
 ## exact copy of RAW is the number of distinct ANON rows, not nrow(d).
 n_expected <- function(d) length(unique(d$ANON_ROW_NUMBER))
 
-test_that("reid_by_num: decoy columns named raw_target/anon_target do not change the result", {
+## the four score functions, each with a target column of the right type
+score_cases <- function() {
+  list(
+    score_num = list(fn = score_num, target = "NUM_DYNAMIC_MEAN"),
+    score_char = list(fn = score_char, target = "CHAR_STATIC"),
+    score_dist = list(fn = score_dist, target = "NUM_DYNAMIC_DIST"),
+    score_num_rank = list(fn = score_num_rank, target = "NUM_DYNAMIC_MEAN")
+  )
+}
+
+test_that("decoy columns named raw_target/anon_target/raw_row_number/anon_row_number do not change any score table", {
   d <- make_identity_join()
   g <- add_decoy_columns(d)
 
-  r_clean <- reid_by_num(d, "NUM_DYNAMIC_MEAN")
-  r_decoy <- reid_by_num(g, "NUM_DYNAMIC_MEAN")
+  for (nm in names(score_cases())) {
+    case <- score_cases()[[nm]]
+    s_clean <- case$fn(d, case$target)
+    s_decoy <- case$fn(g, case$target)
 
-  expect_equal(sum(r_clean$RESULT), n_expected(d))
-  expect_equal(sum(r_decoy$RESULT), n_expected(d))
-  expect_equal(r_clean$RESULT, r_decoy$RESULT)
-  expect_equal(r_clean$RAW, r_decoy$RAW)
-  expect_equal(r_clean$ANON, r_decoy$ANON)
+    expect_equal(s_clean$SCORE, s_decoy$SCORE, info = nm)
+    expect_equal(s_clean$RAW_ROW_NUMBER, s_decoy$RAW_ROW_NUMBER, info = nm)
+    expect_equal(s_clean$ANON_ROW_NUMBER, s_decoy$ANON_ROW_NUMBER, info = nm)
+
+    ## the decoy values (-999 / 999) would show up as a wrong answer here
+    m_clean <- match_greedy(s_clean, seed = 1)
+    m_decoy <- match_greedy(s_decoy, seed = 1)
+    expect_equal(sum(m_clean$RESULT), n_expected(d), info = nm)
+    expect_equal(sum(m_decoy$RESULT), n_expected(d), info = nm)
+    expect_equal(m_clean$RESULT, m_decoy$RESULT, info = nm)
+    expect_equal(m_clean$RAW_ROW_NUMBER, m_decoy$RAW_ROW_NUMBER, info = nm)
+  }
 })
 
-test_that("reid_by_char: decoy columns named raw_target/anon_target do not change the result", {
+test_that("identity check: ANON is an exact copy of RAW => every ANON record is reidentified by all 4 score functions", {
   d <- make_identity_join()
-  g <- add_decoy_columns(d)
 
-  r_clean <- reid_by_char(d, "CHAR_STATIC")
-  r_decoy <- reid_by_char(g, "CHAR_STATIC")
-
-  expect_equal(sum(r_clean$RESULT), n_expected(d))
-  expect_equal(sum(r_decoy$RESULT), n_expected(d))
-  expect_equal(r_clean$RESULT, r_decoy$RESULT)
-  expect_equal(r_clean$DISTANCE, r_decoy$DISTANCE)
+  for (nm in names(score_cases())) {
+    case <- score_cases()[[nm]]
+    m <- match_greedy(case$fn(d, case$target), seed = 1)
+    expect_equal(nrow(m), n_expected(d), info = nm)
+    expect_equal(sum(m$RESULT), n_expected(d), info = nm)
+  }
 })
 
-test_that("reid_by_dist: decoy columns named raw_target/anon_target do not change the result", {
-  d <- make_identity_join()
-  g <- add_decoy_columns(d)
-
-  r_clean <- reid_by_dist(d, "NUM_DYNAMIC_DIST")
-  r_decoy <- reid_by_dist(g, "NUM_DYNAMIC_DIST")
-
-  expect_equal(sum(r_clean$RESULT), n_expected(d))
-  expect_equal(sum(r_decoy$RESULT), n_expected(d))
-  expect_equal(r_clean$RESULT, r_decoy$RESULT)
-  expect_equal(r_clean$DISTANCE, r_decoy$DISTANCE)
-})
-
-test_that("reid_by_num_rank: decoy columns named raw_target/anon_target/raw_row_number/anon_row_number do not change the result", {
-  d <- make_identity_join()
-  g <- add_decoy_columns(d)
-
-  r_clean <- reid_by_num_rank(d, "NUM_DYNAMIC_MEAN")
-  r_decoy <- reid_by_num_rank(g, "NUM_DYNAMIC_MEAN")
-
-  expect_equal(sum(r_clean$RESULT), n_expected(d))
-  expect_equal(sum(r_decoy$RESULT), n_expected(d))
-  expect_equal(r_clean$RESULT, r_decoy$RESULT)
-  expect_equal(r_clean$DISTANCE, r_decoy$DISTANCE)
-})
-
-test_that("identity check: ANON is an exact copy of RAW => success == trial == nrow(master) for all 4 reid functions", {
+test_that("normal calls to the 4 score functions raise no tidyselect deprecation warnings", {
   d <- make_identity_join()
 
-  expect_equal(sum(reid_by_num(d, "NUM_DYNAMIC_MEAN")$RESULT), n_expected(d))
-  expect_equal(sum(reid_by_char(d, "CHAR_STATIC")$RESULT), n_expected(d))
-  expect_equal(sum(reid_by_dist(d, "NUM_DYNAMIC_DIST")$RESULT), n_expected(d))
-  expect_equal(sum(reid_by_num_rank(d, "NUM_DYNAMIC_MEAN")$RESULT), n_expected(d))
-})
-
-test_that("normal calls to the 4 reid functions raise no tidyselect deprecation warnings", {
-  d <- make_identity_join()
-
-  expect_no_warning(reid_by_num(d, "NUM_DYNAMIC_MEAN"))
-  expect_no_warning(reid_by_char(d, "CHAR_STATIC"))
-  expect_no_warning(reid_by_dist(d, "NUM_DYNAMIC_DIST"))
-  expect_no_warning(reid_by_num_rank(d, "NUM_DYNAMIC_MEAN"))
+  for (nm in names(score_cases())) {
+    case <- score_cases()[[nm]]
+    expect_no_warning(match_greedy(case$fn(d, case$target)))
+  }
 })
 
 test_that("transform_transaction_to_master works when only some of STATIC_NUM/STATIC_CHAR/DYNAMIC_NUM/DYNAMIC_CHAR are given", {

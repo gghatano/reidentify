@@ -1,5 +1,5 @@
 R: R version 4.6.1 (2026-06-24 ucrt) 
-date: 2026-08-01 01:36:23 
+date: 2026-08-01 12:41:09 
 
 == figure 1: a rule-following generalisation still identifies people ==
   candidates offered            : 200
@@ -20,4 +20,4 @@ date: 2026-08-01 01:36:23
   ratio                         : 13.5x
 
 == package state quoted on the page ==
-  exported functions            : 55
+  exported functions            : 50

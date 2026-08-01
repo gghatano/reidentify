@@ -64,12 +64,12 @@ test_that("a wrong separator still errors loudly rather than mis-parsing", {
   expect_error(PV("1:2:3", "|", "x"), regexp = "numeric")
 })
 
-test_that("score_dist() / reid_by_dist() accept metacharacter separators end to end", {
+test_that("score_dist() accepts metacharacter separators end to end", {
   vals <- c("1:2:3", "4:5:6", "7:8:9", "10:50:90")
   raw <- data.frame(ROW_NUMBER = 1:4, D = vals, stringsAsFactors = FALSE)
   d_ref <- join_raw_anon_data(raw, raw)
   ref_scores <- score_dist(d_ref, "D")
-  ref_reid <- reid_by_dist(d_ref, "D", seed = 1)
+  ref_match <- match_greedy(ref_scores, seed = 1)
 
   for (sep in META) {
     alt <- raw
@@ -77,10 +77,14 @@ test_that("score_dist() / reid_by_dist() accept metacharacter separators end to 
     d <- join_raw_anon_data(alt, alt)
     lab <- paste0("split = ", encodeString(sep, quote = '"'))
 
-    expect_equal(score_dist(d, "D", split = sep)$SCORE, ref_scores$SCORE, info = lab)
-    r <- reid_by_dist(d, "D", split = sep, seed = 1)
-    expect_equal(r$DISTANCE, ref_reid$DISTANCE, info = lab)
-    expect_equal(r$RESULT, ref_reid$RESULT, info = lab)
+    s <- score_dist(d, "D", split = sep)
+    expect_equal(s$SCORE, ref_scores$SCORE, info = lab)
+
+    ## and the whole attack, not only the score, is unaffected by which
+    ## literal separator the column happens to use
+    m <- match_greedy(s, seed = 1)
+    expect_equal(m$RAW_ROW_NUMBER, ref_match$RAW_ROW_NUMBER, info = lab)
+    expect_equal(m$RESULT, ref_match$RESULT, info = lab)
   }
 })
 
@@ -94,14 +98,18 @@ test_that("transform_transaction_to_master(collapse=) round-trips through split=
     stringsAsFactors = FALSE
   )
   ref <- transform_transaction_to_master(dat, DYNAMIC_NUM = "AMT")
-  ref_d <- reid_by_dist(join_raw_anon_data(ref, ref), "AMT_DIST", seed = 1)
+  ref_s <- score_dist(join_raw_anon_data(ref, ref), "AMT_DIST")
+  ref_m <- match_greedy(ref_s, seed = 1)
 
   for (sep in META) {
     m <- transform_transaction_to_master(dat, collapse = sep, DYNAMIC_NUM = "AMT")
     lab <- paste0("collapse/split = ", encodeString(sep, quote = '"'))
-    r <- reid_by_dist(join_raw_anon_data(m, m), "AMT_DIST", split = sep, seed = 1)
-    expect_equal(r$DISTANCE, ref_d$DISTANCE, info = lab)
-    expect_equal(r$RESULT, ref_d$RESULT, info = lab)
+    s <- score_dist(join_raw_anon_data(m, m), "AMT_DIST", split = sep)
+    expect_equal(s$SCORE, ref_s$SCORE, info = lab)
+
+    r <- match_greedy(s, seed = 1)
+    expect_equal(r$RAW_ROW_NUMBER, ref_m$RAW_ROW_NUMBER, info = lab)
+    expect_equal(r$RESULT, ref_m$RESULT, info = lab)
   }
 })
 

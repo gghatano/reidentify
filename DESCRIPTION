@@ -1,7 +1,7 @@
 Package: reidentify
 Type: Package
 Title: Measure Re-Identification Risk in Anonymized Data
-Version: 2.0.0
+Version: 3.0.0
 Authors@R: person(given = "@gg_hatano", role = c("aut", "cre"),
                   email = "adad0405+reidentify@gmail.com")
 Description: Estimates how reliably the records of an anonymized data set can

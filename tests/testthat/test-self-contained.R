@@ -155,20 +155,22 @@ test_that("all 8 exported functions work in-process without dplyr/magrittr attac
   dra <- join_raw_anon_data(fx$raw, fx$anon)
   expect_true(is.data.frame(dra))
 
-  r_num <- reid_by_num(dra, "VAL")
+  r_num <- match_greedy(score_num(dra, "VAL"))
   expect_true(is.data.frame(r_num))
 
-  r_rank <- reid_by_num_rank(dra, "VAL")
+  r_rank <- match_greedy(score_num_rank(dra, "VAL"))
   expect_true(is.data.frame(r_rank))
 
-  r_char <- reid_by_char(dra, "TXT")
+  r_char <- match_greedy(score_char(dra, "TXT"))
   expect_true(is.data.frame(r_char))
 
-  r_dist <- reid_by_dist(dra, "D")
+  r_dist <- match_greedy(score_dist(dra, "D"))
   expect_true(is.data.frame(r_dist))
 
-  txt <- reid_result(r_num, method = "x")
-  expect_type(txt, "character")
+  ## the evaluation layer pulls in the widest set of unqualified calls, so it
+  ## is the strongest single test of self-containedness here
+  ev <- reid_evaluate(score_num(dra, "VAL"), seeds = 1:3, top_k = 1)
+  expect_s3_class(ev, "reid_evaluation")
 
   master_dummy <- create_dummy_master_data(5)
   expect_equal(nrow(master_dummy), 5)
@@ -196,11 +198,11 @@ self_contained_script <- paste(
   "                   TXT = c('aa','bb','cc','dd','ex'),",
   "                   D = c('1:2.1','2:3.1','3:4.1','4:5.1','5:6.1'), stringsAsFactors = FALSE)",
   "dra <- join_raw_anon_data(raw, anon)",
-  "r <- reid_by_num(dra, 'VAL')",
-  "reid_by_num_rank(dra, 'VAL')",
-  "reid_by_char(dra, 'TXT')",
-  "reid_by_dist(dra, 'D')",
-  "reid_result(r, method = 'x')",
+  "match_greedy(score_num(dra, 'VAL'))",
+  "match_greedy(score_num_rank(dra, 'VAL'))",
+  "match_greedy(score_char(dra, 'TXT'))",
+  "match_greedy(score_dist(dra, 'D'))",
+  "reid_evaluate(score_num(dra, 'VAL'), seeds = 1:3, top_k = 1)",
   "create_dummy_master_data(5)",
   "t <- create_dummy_transaction_data(5, 2)",
   "transform_transaction_to_master(t, STATIC_NUM = 'NUM_STATIC', DYNAMIC_NUM = 'NUM_DYNAMIC', DYNAMIC_CHAR = 'CHAR')",
