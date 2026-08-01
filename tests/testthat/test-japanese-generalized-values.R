@@ -109,6 +109,33 @@ test_that("money notation reads, including grouping and the myriad scale", {
   ))))
 })
 
+test_that("a myriad group with a remainder adds up", {
+  ## "1万5000円" is 15000: the scale characters multiply, and a trailing number
+  ## with no scale of its own is added as it stands.
+  expect_equal(jp_iv(jp(0x31, MAN, 0x35, 0x30, 0x30, 0x30, EN, IJOU)),
+               "[15000,Inf)")
+  expect_equal(gen_scale_sum(jp(0x31, MAN, 0x35, 0x30, 0x30, 0x30)), 15000)
+})
+
+test_that("an expanded number is rendered without losing digits", {
+  ## format() would print 1e8 as "1e+08" and round 1234567.8 to seven
+  ## significant digits; either would be re-read as a different endpoint.
+  expect_equal(gen_format_number(1e8), "100000000")
+  expect_equal(gen_format_number(1234567.8), "1234567.8")
+  expect_equal(gen_format_number(1550.5), "1550.5")
+  expect_equal(gen_format_number(Inf), "")
+})
+
+test_that("an empty `units` disables stripping rather than erroring", {
+  ## `units` is a user-facing argument of score_containment(); passing it an
+  ## empty vector must mean "strip nothing", not "strip everything".
+  expect_equal(jp_iv("30kg"), "[30,30]")
+  expect_null(parse_generalized_interval("30kg", units = character(0)))
+  expect_equal(gen_strip_units("30kg", character(0)), "30kg")
+  expect_null(parse_generalized_interval(jp(0x36, 0x35, SAI, IJOU),
+                                         units = character(0)))
+})
+
 test_that("the two-sided band, the commonest way to write an age bin, reads", {
   expect_equal(jp_iv(jp(0x32, 0x30, SAI, IJOU, 0x33, 0x30, SAI, MIMAN)),
                "[20,30)")
