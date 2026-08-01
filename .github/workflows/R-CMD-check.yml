@@ -63,11 +63,14 @@ name: R checks
 #   増える情報量に対して、下記の実行時間を払う価値があるのは windows だけ
 #   と判断した。加えるなら macOS より先に、この判断が外れた証拠が要る。
 #
-#   実行時間の見積もり: ubuntu の source-tree tests は直近 master で
-#   3 分 46 秒。同じ master の R CMD check は ubuntu 7 分 41 秒 /
-#   windows 10 分 23 秒 (約 1.35 倍) だったので、windows 脚は 5〜9 分と
-#   見込む。2 脚は並列に走り、いま最長のジョブは R CMD check の windows
-#   (10 分 23 秒) なので、**ワークフロー全体の所要時間は基本的に伸びない**。
+#   実行時間: R CMD check の windows 脚が ubuntu 脚の約 1.35 倍
+#   (10 分 23 秒 / 7 分 41 秒) だったので、source-tree tests の windows 脚も
+#   5〜9 分と見込んでいたが、**初回実測 (PR #90) は 3 分 56 秒で、同じ回の
+#   ubuntu 脚 4 分 14 秒より速かった**。見込みは外れている。R CMD check の
+#   windows が遅いのは tarball のビルドと --as-cran の各検査の分で、
+#   test_dir() だけを回すこのジョブには効いてこない、と読める。
+#   2 脚は並列に走り、この回の最長は R CMD check の windows (9 分 27 秒)
+#   だったので、**ワークフロー全体の所要時間は伸びていない**。
 #   ただし #63 当時にこのジョブが 26 分かかった実績があり (ランナー側の
 #   遅延)、それが windows 脚で起きればワークフローが 26 分になる。
 #   ここは「たまに遅い」を受け入れる判断で、timeout-minutes は置いて
@@ -140,7 +143,8 @@ jobs:
   # 数字と実行本数の一致を 2 つの OS で照合することになるので、**通る本数が
   # OS で違えば必ずどちらかが落ちる**。これは弱点ではなく検出したいことの
   # 一部で、片側だけ skip する test があれば数字のずれとして表に出る。
-  # 実測 (ローカル Windows / R 4.6.1): PASS 2566 で ubuntu と一致。
+  # 初回実測 (PR #90): 両脚とも PASS 2566 FAIL 0 ERROR 0 SKIP 0 で一致し、
+  # quoted figures も 0 件。ローカル Windows / R 4.6.1 でも同じ 2566。
   source-tree-tests:
     runs-on: ${{ matrix.os }}
     name: source-tree tests (${{ matrix.os }})
