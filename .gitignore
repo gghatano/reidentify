@@ -7,3 +7,6 @@
 /R/tmp/*
 /*.tar.gz
 /*.Rcheck/
+# pkgdown の出力先 (_pkgdown.yml の destination)。生成物はコミットせず、
+# .github/workflows/pages.yml がビルドしてデプロイする。
+/pkgdown-site/
