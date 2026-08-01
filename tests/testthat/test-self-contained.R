@@ -52,6 +52,18 @@ package_source_dir <- function() {
     if (!file.exists(desc) || !dir.exists(file.path(p, "R"))) {
       next
     }
+    ## An *installed* package also has DESCRIPTION and an R/ directory, but R/
+    ## holds the lazy-load database (reidentify.rdb/.rdx) rather than sources,
+    ## and Meta/ only exists once installed. Without this, a run whose tests
+    ## live inside the installed tree -- covr::package_coverage() puts them at
+    ## <lib>/reidentify/reidentify-tests/testthat, so test_path("..", "..") is
+    ## the install itself -- decides it has a working tree and then tries to
+    ## `R CMD INSTALL` a binary package. Detecting a source tree that is not
+    ## there is the same class of error as missing one that is.
+    if (dir.exists(file.path(p, "Meta")) ||
+          length(list.files(file.path(p, "R"), pattern = "[.][Rr]$")) == 0L) {
+      next
+    }
     nm <- tryCatch(unname(read.dcf(desc, fields = "Package")[1, 1]),
                    error = function(e) NA_character_)
     if (identical(nm, "reidentify")) {

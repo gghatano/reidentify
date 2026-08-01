@@ -298,6 +298,26 @@ test_that("create_dummy_qi_data() columns have the intended discriminating power
   ## SPEND_DIST is a colon-joined distribution with VISIT_COUNT elements
   n_elements <- lengths(strsplit(d$SPEND_DIST, ":", fixed = TRUE))
   expect_equal(n_elements, d$VISIT_COUNT)
+
+  ## SPEND_MEAN is documented as a *summary of* SPEND_DIST, and the W/M/S
+  ## tests read the M level as "the attacker also holds the behavioural
+  ## summaries". If SPEND_MEAN drifted off SPEND_DIST -- a median, a different
+  ## rounding -- every one of those tests would still pass while measuring an
+  ## attacker whose columns no longer describe each other. Nothing else in the
+  ## suite ties the two columns together.
+  expect_equal(
+    d$SPEND_MEAN,
+    vapply(strsplit(d$SPEND_DIST, ":", fixed = TRUE),
+           function(v) round(mean(as.numeric(v)), 1), numeric(1))
+  )
+
+  ## ZIP is meant to be the *coarse* quasi-identifier: roughly people/5 codes,
+  ## so it collides heavily and a level-W attacker holding only ZIP does barely
+  ## better than guessing. A ZIP that stopped colliding would make the W level
+  ## strong and the "W < M < S" test would still pass, on a fixture that no
+  ## longer poses the question.
+  expect_lte(length(unique(d$ZIP)), ceiling(100 / 5))
+  expect_gt(mean(table(d$ZIP)), 3)
 })
 
 test_that("create_dummy_qi_data() is reproducible from its seed and leaves the RNG stream alone", {

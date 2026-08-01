@@ -81,6 +81,56 @@ test_that("open-ended dash ranges parse", {
   expect_equal(iv_str("~39"), "(-Inf,39]")
 })
 
+## The suffix forms below are the ones a Japanese release actually uses for a
+## top-coded band ("65 and over"), and coverage said nothing in the suite ever
+## reached them: R/generalize.R lines 192-215 had zero hits. They are written
+## from code points for the same reason R/generalize.R writes them that way --
+## the file stays readable in any locale, and a code point says exactly which
+## character is meant.
+GEN_TEST_OR_MORE <- intToUtf8(c(0x4EE5, 0x4E0A))  # ijou   "or more"
+GEN_TEST_OR_LESS <- intToUtf8(c(0x4EE5, 0x4E0B))  # ika    "or less"
+GEN_TEST_UNDER   <- intToUtf8(c(0x672A, 0x6E80))  # miman  "under"
+GEN_TEST_SAI     <- intToUtf8(0x6B73)             # sai    "years old"
+
+test_that("the open-ended suffix forms parse", {
+  ## If any of these stops parsing, parse_generalized_interval() returns NULL,
+  ## is_generalized_value() reports FALSE, and the #40 guard goes quiet on a
+  ## column that really is generalised -- the fourfold silent under-report.
+  expect_equal(iv_str(paste0("65", GEN_TEST_OR_MORE)), "[65,Inf)")
+  expect_equal(iv_str("30+"), "[30,Inf)")
+  expect_equal(iv_str(paste0("39", GEN_TEST_OR_LESS)), "(-Inf,39]")
+  expect_equal(iv_str(paste0("39", GEN_TEST_UNDER)), "(-Inf,39)")
+
+  ## "or less" and "under" differ only in whether the endpoint is inside, which
+  ## is one record's worth of candidates at every band edge.
+  expect_true(node_matches("39", paste0("39", GEN_TEST_OR_LESS)))
+  expect_false(node_matches("39", paste0("39", GEN_TEST_UNDER)))
+  expect_true(node_matches("38", paste0("39", GEN_TEST_UNDER)))
+
+  ## and the lower endpoint of "or more" is inside
+  expect_equal(node_matches(c("64", "65", "66"), paste0("65", GEN_TEST_OR_MORE)),
+               c(FALSE, TRUE, TRUE))
+  expect_equal(node_matches(c("29", "30", "31"), "30+"),
+               c(FALSE, TRUE, TRUE))
+})
+
+test_that("an open-ended band counts as a region, so the guard can see it", {
+  ## is_generalized_value() is what decides whether score_char()/score_num()
+  ## refuse the column. A top-coded band is a region: it covers more than one
+  ## point, and comparing it as a string is the misuse #40 is about.
+  for (v in c(paste0("65", GEN_TEST_OR_MORE), "30+",
+              paste0("39", GEN_TEST_OR_LESS), paste0("39", GEN_TEST_UNDER))) {
+    expect_true(is_generalized_value(v), info = v)
+  }
+})
+
+test_that("a known unit after the number does not hide the band", {
+  ## "65 or more" carrying its unit at the end still has to read as a band --
+  ## strip_unit() runs before the suffix forms are tried.
+  expect_equal(iv_str(paste0("65", GEN_TEST_OR_MORE, GEN_TEST_SAI)), "[65,Inf)")
+  expect_equal(iv_str("30+yrs"), "[30,Inf)")
+})
+
 test_that("a leading minus is read as a negative number, not as 'up to'", {
   # documented, and deliberate: "-39" is ambiguous, and the number reading is
   # the one that cannot silently swallow a whole column
@@ -361,6 +411,32 @@ test_that("score_containment gives every survivor 1 - 1/k and every other 1", {
   expect_equal(s$SCORE[s$ANON_ROW_NUMBER == 6 & s$RAW_ROW_NUMBER == 6], 0)
 
   expect_equal(unname(attr(s, "candidate_count")[c("1", "3", "6")]), c(2, 3, 1))
+})
+
+test_that("a top-coded band narrows to exactly the records inside it", {
+  ## The shape a real release has: everything above the cut published as one
+  ## open-ended band. The band is the widest node in the file, so if it were
+  ## misread the candidate counts would come out *smaller* than the truth and
+  ## the reported risk would be too high -- but if the whole column failed to
+  ## parse, score_containment() falls back to literal equality, no RAW value is
+  ## ever inside, and the reported risk collapses to guessing.
+  raw <- data.frame(ROW_NUMBER = 1:10, AGE = 60:69)
+  anon <- data.frame(
+    ROW_NUMBER = 1:10,
+    AGE = ifelse(60:69 < 65, paste0("65", GEN_TEST_UNDER),
+                 paste0("65", GEN_TEST_OR_MORE)),
+    stringsAsFactors = FALSE
+  )
+  d <- join_raw_anon_data(raw, anon)
+
+  cc <- containment_counts(d, "AGE")
+  ## the two bands partition the file 5/5, and every record's truth is inside
+  expect_equal(cc$N_CONTAINED, rep(5, 10))
+  expect_true(all(cc$TRUTH_CONTAINED))
+
+  ## ... and score_char() is refused on the same column, which is the reason
+  ## the parse above has to keep working
+  expect_error(score_char(d, "AGE"), regexp = "score_containment")
 })
 
 test_that("an excluded candidate always scores worse than any survivor", {

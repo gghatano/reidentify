@@ -1,0 +1,61 @@
+name: coverage
+
+# R/ の行カバレッジを測って報告するだけのジョブ (#86)。
+#
+# なぜ R-CMD-check.yml に足さないか:
+#   あちらは 9 ジョブが required check として並んでおり、落ちれば PR が止まる。
+#   カバレッジは止める理由にならない (下記) ので、別ファイルにして責務を分ける。
+#   R-CMD-check.yml は #89 で別途触られているファイルでもある。
+#
+# なぜ閾値で落とさないか:
+#   初回実測 (1438ebc) で 98.51%。残り 1.49% はほぼ防御的な stop() で、
+#   「絶対に起きないこと」を守るためのガードである。すでに 98.5% ある数字に
+#   ゲートを掛けると、発火するのはノイズのときだけになり、通す一番安い方法は
+#   「一番到達しやすいガードにテストを書く」ことになる。テストを増やす方向が
+#   逆になる。docs/lessons-learned.md §2 の言う「数字を追う」失敗そのもの。
+#
+#   カバレッジがこの package で役に立つのは 0 の列 —— 一度も通っていない分岐
+#   —— のほうで、実際そこから「65以上 / 39未満 形式の一般化値をどのテストも
+#   parse していない」が出た。あれは外れ方が静かな種類 (parse できない値は
+#   ただのカテゴリに見え、#40 のガードが黙り、リスクが 4 分の 1 に出る) なので、
+#   スクリプトは未到達行を列挙して判断は読む側に残す。
+#
+# 落ちる条件:
+#   カバレッジの数値では落とさないが、**測定自体が壊れたら落とす**。黙って
+#   動かなくなったレポートは、レポートが無いより悪い (§2)。
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    name: line coverage
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr, any::pkgload
+          needs: coverage
+
+      - name: Measure coverage
+        run: Rscript .github/scripts/coverage-report.R .
