@@ -26,14 +26,16 @@ including a bare number -- `"35"` parses as the degenerate interval
 `NA` is `FALSE`. A missing value can mean anything, and treating it as a
 generalisation would flag every column that merely has a gap in it.
 
-The `"30代"` / `"30s"` decade form is only accepted for a multiple of ten.
+The ASCII `"30s"` decade form is only accepted for a multiple of ten.
 [parse_generalized_interval()] reads `"8s"` as `[8, 18)`, which is right for
 containment (a hierarchy may legitimately declare such a node) but wrong
 here: over 200,000 random two-character strings, 0.256% were of the form
 digit + `"s"` and every one of them was reported as a generalisation --
 which is how this check first stopped a passing test that had nothing to do
 with generalisation. Requiring a multiple of ten drops the rate to 0.0245%,
-and nobody writes "the 8s" for a decade.
+and nobody writes "the 8s" for a decade. The restriction is on the ASCII
+form only: `"8代"` needs a character no alphanumeric string can produce, so
+it costs nothing to read it as written (Issue #92).
 
 A *categorical* generalisation cannot be recognised this way: nothing about
 the string `"東京都"` says it contains `"千代田区"`. That relationship lives

@@ -11,8 +11,14 @@ a character vector of unit strings
 }
 \description{
 A generalised value is often written with its unit attached -- "30-39歳",
-"1000-1999円". The unit has to be stripped before the endpoints can be read,
-but stripping *any* trailing text would misread a categorical code such as
+"1000-1999円", "65歳以上". The unit has to be removed before the endpoints
+can be read, and it is removed wherever it sits directly after a number, not
+only at the end of the value: "65歳以上" is the ordinary Japanese form and
+reading only "65以上" left the commonest top-coded band invisible
+(Issue #92).
+}
+\details{
+Stripping *any* text after a number would misread a categorical code such as
 "3S" as the number 3, so only these known units are removed. Pass your own
 vector to `score_containment(units = )` to extend the list.
 }
