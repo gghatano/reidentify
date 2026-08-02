@@ -1261,7 +1261,7 @@ c(success = unique(e$per_seed$success)[1], trial = unique(e$per_seed$trial))
 | ドキュメント | 内容 |
 |---|---|
 | [`vignettes/measuring-reidentification-risk.Rmd`](vignettes/measuring-reidentification-risk.Rmd) | **vignette「再識別リスクの測り方」。** README が「使い方」を書くのに対し、こちらは**なぜそう測るのか**と、**出た数値をどういう条件で信じてよいか**を書く。測り方の誤りが低い数値として現れる実測が中心 |
-| [`vignettes/anonymize-attack-evaluate.Rmd`](vignettes/anonymize-attack-evaluate.Rmd) | **vignette「加工して、攻撃して、結果を読む」。** データ保有者の視点で、**加工 → 攻撃 → 評価**を 1 つのデータセットに対して最後まで通す。直接識別子の削除・一般化・抑止・ノイズ・サンプリングを積み上げ、**どの加工がどれだけ効いたか**を段階ごとに実測する（加工そのものは base R で手書きする） |
+| [`vignettes/anonymize-attack-evaluate.Rmd`](vignettes/anonymize-attack-evaluate.Rmd) | **vignette「加工して、攻撃して、結果を読む」。** データ保有者の視点で、**加工 → 攻撃 → 評価**を 1 つのデータセットに対して最後まで通す。直接識別子の削除・一般化・抑止・ノイズ・サンプリングを積み上げ、**どの加工がどれだけ効いたか**を実測する。段階ごとの累積デルタは**加工を並べた順序で「効いた加工」が入れ替わる**ため、順序に依存しない **leave-one-out**（公開データから 1 手だけ外して測り直す）を併記する（加工そのものは base R で手書きする） |
 | [`docs/reid-method-candidates.md`](https://github.com/gghatano/reidentify/blob/master/docs/reid-method-candidates.md) | 再識別手法カタログ（24 件）と評価フレームの設計。実装済み・未実装の全体像 |
 | [`docs/default-changes.md`](https://github.com/gghatano/reidentify/blob/master/docs/default-changes.md) | 既定値の変更履歴。同じデータで過去と違う数値が出る変更の記録 |
 | [`docs/implementation-plan.md`](https://github.com/gghatano/reidentify/blob/master/docs/implementation-plan.md) | Issue 候補と依存関係、実装の進め方 |
