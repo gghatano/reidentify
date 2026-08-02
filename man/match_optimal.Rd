@@ -64,12 +64,12 @@ its first choice still reports the confidence of that first choice under
 \item{min_confidence}{decline to guess below this confidence (default 0).
 Applied on top of any declining the padding already did.}
 
-\item{tolerance}{relative tolerance for tie detection in the reported
-CONFIDENCE, default `sqrt(.Machine$double.eps)` (Issue #61), so that
-`match_optimal()` and [match_greedy()] agree on what "tied" means. The
-**assignment** is unaffected: the solver minimises the raw costs, and
-perturbing them to make the report unit-invariant could change which
-assignment is chosen. Pass 0 for the exact comparison used before #61.}
+\item{tolerance}{relative tolerance for deciding that two candidate scores
+are tied, default `sqrt(.Machine$double.eps)` (Issue #61), so that
+`match_optimal()` and [match_greedy()] agree on what "tied" means. It
+applies to **both** the reported CONFIDENCE and the assignment itself;
+see "Why the tolerance reaches the solver" below. Pass 0 for the exact
+comparison used before #108.}
 }
 \value{
 a data frame with the same four columns as [match_greedy()] --
@@ -176,6 +176,54 @@ used in two blocks and the result is optimal per block, not globally. Pass
 blocks that genuinely cannot contain each other's true matches (same
 region, same birth year, ...) and the loss is nil; pass arbitrary ones and
 it is an approximation. Either way the choice is the caller's and visible.
+}
+
+\section{Why the tolerance reaches the solver}{
+
+
+Issue #61 gave this function a `tolerance` and applied it only to the
+reported CONFIDENCE, reasoning that "perturbing the solver's input to make a
+report unit-invariant could change which assignment is optimal". Issue #108
+measured that reasoning and it runs the wrong way round.
+
+The cost the solver minimises is a *sum*, so an instance can be degenerate --
+two different assignments costing exactly the same in real arithmetic --
+while every individual candidate score is distinct. Leaving the raw costs in
+place does not preserve neutrality there; it hands the choice to the last
+bit, and hands it *deterministically*. Measured on 60 independent 2x2 blocks
+in which matching straight across and matching crosswise are exactly equally
+good (true success rate 0.5), 7.1e-15 of representation noise -- the gap
+between `42.3 - 41.2` and `43.4 - 42.3` -- moved the reported rate to
+**0.0000** when it fell on the true pairs and to **1.0000** when it fell on
+the decoys, over 20 seeds each. Applying the tolerance gives 0.5175 in both,
+the same as the exactly-tied table. [match_greedy()] reported 0.5100 on all
+three, because #61 had already fixed it there.
+
+Both directions are wrong and one of them is the quiet one
+(`docs/lessons-learned.md` section 2). Snapping the costs restores the tie,
+and the row/column shuffle then breaks it on the seed, which is the same
+rule the rest of the package uses.
+
+The residual risk the old comment named is real but bounded: snapping moves
+each cost by at most `tolerance` relative, so it can only reorder
+assignments already separated by less than that -- which is rounding noise,
+not evidence. Checked on eight two-attribute fixtures (30 records, Gaussian
+noise sd 3) the assignment is identical with `tolerance = 0` and with the
+default. Pass `tolerance = 0` to get the pre-#108 behaviour back.
+
+**This does not make the assignment unit-invariant, and #108 does not claim
+it does.** The tolerance is defined within one ANON record's candidate list,
+while the degeneracy of an assignment problem is a property of sums *across*
+records, so a near-tie built from within-record gaps larger than `tolerance`
+survives. Re-expressing the same 1-D data in 1/10 units changed the returned
+assignment in 18 of 200 (seed, trial) cells with `tolerance = 0` and in 28
+of 200 with the default -- *more*, not fewer. Every one of those 56 cases
+achieved an identical total cost: they are alternative optima, and there are
+more of them precisely because the rounding noise is no longer resolving
+them falsely. What the tolerance fixes is that the reported rate is now
+right in expectation; which optimum comes back still depends on the seed and
+on the backend, and the extra run-to-run spread is what
+[reid_evaluate()]'s `success_sd` is for.
 }
 
 \examples{

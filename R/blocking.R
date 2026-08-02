@@ -429,10 +429,33 @@ block_candidates <- function(raw, anon, keys, transform = NULL,
 #' record, more where the score is flat. `ties = "random"` caps hard at k, and
 #' needs a `seed` for the same reason [match_greedy()] does.
 #'
+#' "Equally" means *to within `tolerance`*, not bit-for-bit (Issue #108).
+#' Until then this was the last tie-deciding function in the package still
+#' comparing with a bare `<=`, and the promise above was not kept: re-expressing
+#' the same data in 1/10 units turns a tie into a strict ordering (Issue #61),
+#' the cut lands on the wrong side of it, and the reported recall moves. On the
+#' `docs/` #61 fixture -- both ANON records at 42.3, RAW records at 41.2 and
+#' 43.4, so every ANON record has two candidates tied at 1.1 in real
+#' arithmetic -- `k = 1` kept 2 pairs at recall 0.5 instead of 4 at recall 1,
+#' and multiplying every value by 10 changed the answer.
+#'
 #' Recall is reported the same way as for [block_candidates()]: it is below 1
 #' whenever the true RAW record was not among the k best, which is not rare --
 #' that is exactly the "not identified at rank 1 but identified at rank 7" case
 #' the top-k hit rate of [reid_evaluate()] measures.
+#'
+#' **Candidate pairs are a set.** A repeated (ANON, RAW) pair is rejected here,
+#' as it is by [match_greedy()], [match_optimal()], [reid_confidence()] and
+#' [reid_evaluate()]. That guard belongs here in particular because this
+#' function *removes* the evidence: with `k = 1` and `ties = "random"` it
+#' returns one row per ANON record, so the duplicates are gone from its output
+#' and every downstream check passes -- after the duplicates have taken extra
+#' shares of the draw that chose the survivor. Measured with each wrong pair
+#' listed three times, the true record survived 0.2542 of draws instead of
+#' 0.4833 on a 4-record fixture and 0.2408 instead of 0.4767 on a 20-record
+#' one; on the latter `reid_evaluate()` then reported 0.3500 against 0.5500,
+#' with `lift` pinned at 1 in both cases because the random baseline moved by
+#' the same factor. That is exactly the Issue #60 signature.
 #'
 #' @param scores a score table (see [score_num()])
 #' @param k number of candidates to keep per ANON record
@@ -440,6 +463,11 @@ block_candidates <- function(raw, anon, keys, transform = NULL,
 #'   or `"random"` to cut at exactly k, breaking ties at random
 #' @param seed integer seed used when `ties = "random"`, or NULL for the
 #'   ambient RNG stream
+#' @param tolerance relative tolerance for deciding that two candidate scores
+#'   are tied, default `sqrt(.Machine$double.eps)` (Issue #108, following
+#'   #61), so that the same data in different units is pruned the same way.
+#'   Pass `tolerance = 0` for the exact `<=` comparison used before #108; see
+#'   `docs/default-changes.md`.
 #'
 #' @return the score table restricted to the kept pairs, carrying a `blocking`
 #'   attribute (a "reid_blocking" record).
@@ -453,9 +481,18 @@ block_candidates <- function(raw, anon, keys, transform = NULL,
 #'
 #' @export
 top_k_candidates <- function(scores, k = 10, ties = c("keep", "random"),
-                             seed = NULL) {
+                             seed = NULL,
+                             tolerance = reid_tie_tolerance()) {
   ties <- match.arg(ties)
   score_type <- validate_reid_scores(scores, "scores")
+  validate_tie_tolerance(tolerance, "top_k_candidates")
+  ## Issue #108: checked here rather than left to the four entry points that
+  ## already check it, because k = 1 with ties = "random" emits one row per
+  ## ANON record and so *launders* the duplicates out of its own output. The
+  ## downstream guards then have nothing to see, and the skew the duplicates
+  ## put into the draw survives unremarked. See
+  ## validate_unique_candidate_pairs().
+  validate_unique_candidate_pairs(scores, "top_k_candidates")
   if (!is.numeric(k) || length(k) != 1L || is.na(k) || k < 1) {
     stop("top_k_candidates(): `k` must be a single positive number.",
          call. = FALSE)
@@ -469,6 +506,13 @@ top_k_candidates <- function(scores, k = 10, ties = c("keep", "random"),
 
   value <- if (identical(score_type, "similarity")) -scores$SCORE else scores$SCORE
   anon <- scores$ANON_ROW_NUMBER
+
+  ## Issue #61/#108: collapse near-equal candidate scores onto one value before
+  ## anything is ordered or compared, so the "keep everything tied with the
+  ## k-th" rule and the random draw among tied candidates both see the same,
+  ## unit-invariant notion of "tied". Only the ranking uses this; the SCORE
+  ## column of the returned table is the caller's, untouched.
+  value <- snap_tied_values_by_group(value, anon, tolerance)
 
   idx <- seq_len(nrow(scores))
   if (identical(ties, "random")) {
@@ -515,7 +559,19 @@ top_k_candidates <- function(scores, k = 10, ties = c("keep", "random"),
     n_true_pairs_kept = n_true_kept,
     n_anon_without_candidate = length(unique(anon)) -
       length(unique(out$ANON_ROW_NUMBER)),
-    extra = list(k = k, ties = ties)
+    ## `tolerance` only appears when it is not the default, the same way
+    ## block_candidates() reports `transform` only when one was given: a lever
+    ## nobody touched is noise in a record whose job is to say what was thrown
+    ## away, but a lever somebody *did* touch changes which pairs those were.
+    ## identical(), not all.equal(): the default *is* 1.5e-8, so all.equal()
+    ## would call tolerance = 0 -- the one value a reader most needs to see --
+    ## equal to it and drop the line.
+    extra = c(
+      list(k = k, ties = ties),
+      if (!identical(as.numeric(tolerance), reid_tie_tolerance())) {
+        list(tolerance = tolerance)
+      }
+    )
   )
   attr(out, "blocking") <- info
   warn_blocking_loss(info, "top_k_candidates")
