@@ -11,7 +11,9 @@ build_target_scores(
   split,
   fn_name,
   source = "anon",
-  weight = "idf"
+  weight = "idf",
+  hierarchy = NULL,
+  rules = NULL
 )
 }
 \arguments{
@@ -27,6 +29,10 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 \item{fn_name}{name used in error messages}
 
 \item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
+
+\item{hierarchy, rules}{passed to [score_containment()] for `"containment"`
+columns; a hierarchy is what makes a *categorical* generalisation
+(千代田区 published as 東京都) scorable at all}
 }
 \value{
 a named list of "reid_scores" tables, in the order of `targets`

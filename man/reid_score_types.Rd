@@ -14,4 +14,16 @@ One list, used by [attacker_knowledge()], [score_multi()] and
 [score_fn_for_type()], so a type added in one place cannot be silently
 missing from the others.
 }
+\details{
+`"containment"` was added by Issue #100. Before it, the eight value
+comparison types were the *only* declarable ones, so a caller whose release
+publishes generalised regions had nothing correct to declare: six types
+stopped (rightly), two ran to completion and under-reported the risk
+roughly fivefold, and [score_containment()] -- the one score that reads a
+region as a region -- was unreachable from [attacker_knowledge()] and
+[score_by_knowledge()] at all. The W / M / S workflow is the package's
+recommended path, so "the correct tool exists but not on the recommended
+path" pushed users onto hand-built `combine_scores()` calls, where no guard
+applies either.
+}
 \keyword{internal}

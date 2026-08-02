@@ -13,6 +13,7 @@ score_jaccard(
   alpha = 1,
   beta = 1,
   multiset = FALSE,
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_jaccard"
 )
 }
@@ -38,6 +39,12 @@ not RAW (much stronger evidence of a wrong match).}
 \item{multiset}{if `TRUE`, repeated elements count with their
 multiplicities; the default `FALSE` reduces each record to a true set,
 which is the reading Issue #18 is about}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+generalised value splits into a one-element set that intersects nothing,
+so every candidate pair scores 1 and the column silently carries no
+signal (Issue #100).}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user
@@ -71,5 +78,6 @@ match_greedy(score_jaccard(join_raw_anon_data(raw, anon), "ITEMS"))
 }
 \seealso{
 [score_minhash()] for a min-hash approximation of the same score,
-  and [lsh_candidates()] for candidate blocking.
+  [lsh_candidates()] for candidate blocking, and [score_containment()] for
+  generalised columns.
 }

@@ -88,6 +88,82 @@ reid_prefixed_columns <- function(dat_raw_anon, target, row_number, fn_name) {
   cols
 }
 
+#' resolve a score function's columns *and* refuse a generalised one
+#'
+#' The single entry point every value-comparison score uses to look up its
+#' target column. Issue #40 attached the generalisation guard to three
+#' functions by hand; Issue #100 measured what that left behind. Of the eight
+#' score types [reid_score_types()] lets a caller declare, `"idf"` and
+#' `"profile"` ran to completion on a fully generalised column with no error
+#' and no warning, reporting a success rate a fifth of the one
+#' [score_containment()] reports on the same data -- and `score_jaccard()`,
+#' `score_minhash()` and `score_scoreboard()` did the same outside the declared
+#' types. Every one of them was "not on the list", because the list was of
+#' *functions*.
+#'
+#' So the guard is attached here instead, to the act of resolving a target
+#' column. A score function that looks up a column now cannot avoid the check
+#' without deliberately passing `generalized = "ignore"`, and a score function
+#' added later gets it by construction. What still has to be maintained by hand
+#' is the *declaration* of that intent, [reid_generalized_guard_policy()],
+#' which the exhaustiveness test in
+#' `tests/testthat/test-generalized-column-guard.R` compares against the
+#' package's actual exports.
+#'
+#' @param dat_raw_anon dataframe of raw_anon form
+#' @param target target column name, *before* RAW_/ANON_ prefixing
+#' @param row_number row-number column name, before prefixing
+#' @param fn_name name of the user-facing function, for error messages
+#' @param generalized `"stop"` (default), `"warn"` or `"ignore"`; see
+#'   [check_generalized_target()]
+#'
+#' @return the same list [reid_prefixed_columns()] returns
+#'
+#' @keywords internal
+reid_score_columns <- function(dat_raw_anon, target, row_number, fn_name,
+                               generalized = c("stop", "warn", "ignore")) {
+  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, fn_name)
+  guard_generalized_target(dat_raw_anon, cols, target,
+                           match.arg(generalized), fn_name)
+  cols
+}
+
+#' run the generalisation guard and add the W/M/S workflow's remedy
+#'
+#' [check_generalized_target()] names [score_containment()] as the function to
+#' call. That is the whole answer for somebody writing score calls by hand, and
+#' none of it for somebody working through [attacker_knowledge()] /
+#' [score_multi()], where columns are *declared* rather than called -- the
+#' second half of Issue #100. This adds the declaration form of the same
+#' remedy, without touching the shared message itself.
+#'
+#' @inheritParams check_generalized_target
+#'
+#' @return whatever [check_generalized_target()] returns, invisibly
+#'
+#' @keywords internal
+guard_generalized_target <- function(dat_raw_anon, cols, target, action,
+                                     fn_name) {
+  hint <- paste0(
+    " In a column specification -- attacker_knowledge() or score_multi() -- ",
+    "declare it as \"containment\" instead: ",
+    "c(", target, " = \"containment\")."
+  )
+
+  tryCatch(
+    withCallingHandlers(
+      check_generalized_target(dat_raw_anon, cols, target, action, fn_name),
+      warning = function(w) {
+        ## withCallingHandlers disables this handler while it runs, so the
+        ## warning raised here propagates outward instead of recursing.
+        warning(conditionMessage(w), hint, call. = FALSE)
+        invokeRestart("muffleWarning")
+      }
+    ),
+    error = function(e) stop(conditionMessage(e), hint, call. = FALSE)
+  )
+}
+
 #' construct a score table
 #'
 #' @param raw_row_number vector of RAW record identifiers
@@ -228,6 +304,77 @@ print.reid_scores <- function(x, ...) {
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+#' what every exported score function does with a generalised column
+#'
+#' The declaration half of the Issue #100 fix. `reid_score_columns()` makes the
+#' guard hard to *omit*; this table makes omitting it impossible to do
+#' *quietly*, because `test-generalized-column-guard.R` reads it, compares it
+#' against the package's actual `score_*()` exports, and then runs every entry
+#' against a generalised fixture to check the declared behaviour is the
+#' observed one.
+#'
+#' A new score function -- or a new entry in [reid_score_types()] -- therefore
+#' fails the suite until somebody writes down which of these it is. That is the
+#' point: Issue #40 fixed three functions and left five behind precisely
+#' because nothing forced the question to be asked for the rest.
+#'
+#' The three policies:
+#'
+#' \describe{
+#'   \item{`"refuse"`}{comparing a raw value with a published region measures
+#'     the shape of the region, not the risk, so the column is refused (with
+#'     `generalized = "warn"` / `"ignore"` as the deliberate escape hatch, or
+#'     -- where the column also has to be numeric -- refused outright).}
+#'   \item{`"containment"`}{the score generalised columns are *for*.}
+#'   \item{`"delegates"`}{a wrapper that owns no target column of its own: it
+#'     builds its result out of the single-column scores above, so the guard
+#'     fires inside them and re-checking here would only double the message.}
+#' }
+#'
+#' @return a named character vector, one entry per exported `score_*()`
+#'   function
+#'
+#' @keywords internal
+reid_generalized_guard_policy <- function() {
+  c(
+    ## single-column value comparisons: all refuse
+    score_num = "refuse",
+    score_char = "refuse",
+    score_dist = "refuse",
+    score_num_rank = "refuse",
+    score_idf = "refuse",
+    score_count = "refuse",
+    score_profile = "refuse",
+    score_span = "refuse",
+    score_jaccard = "refuse",
+    score_minhash = "refuse",
+    ## multi-column value comparisons: also refuse, per target column
+    score_idf_match = "refuse",
+    score_scoreboard = "refuse",
+    score_mahalanobis = "refuse",
+    ## the one score that reads a region as a region
+    score_containment = "containment",
+    ## wrappers over the above
+    score_multi = "delegates",
+    score_by_knowledge = "delegates"
+  )
+}
+
+#' the exported score functions the policy table has to account for
+#'
+#' Read off the namespace rather than listed, so that adding an exported
+#' `score_*()` function is enough to make the exhaustiveness test notice it.
+#'
+#' @return character vector of function names
+#'
+#' @keywords internal
+reid_exported_score_functions <- function() {
+  nms <- grep("^score_", getNamespaceExports("reidentify"), value = TRUE)
+  sort(nms[vapply(nms, function(n) {
+    is.function(get(n, envir = asNamespace("reidentify")))
+  }, logical(1))])
+}
+
 
 #' score a numeric column by absolute difference
 #'
@@ -239,6 +386,12 @@ print.reid_scores <- function(x, ...) {
 #' @param target target column
 #' @param row_number name of the row-number column *before* the RAW_/ANON_
 #'   prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+#'   Accepted for symmetry with the other scores, but it changes nothing here:
+#'   a published region is a string, and there is no arithmetic to do on a
+#'   character column, so the type check refuses it first and no escape hatch
+#'   can produce a number.
 #' @param .fn_name name used in error messages; a function that wraps this one
 #'   passes its own name so the message points at the function the user
 #'   actually called
@@ -258,6 +411,7 @@ print.reid_scores <- function(x, ...) {
 #'
 #' @export
 score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
+                      generalized = c("stop", "warn", "ignore"),
                       .fn_name = "score_num") {
   cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
 
@@ -265,6 +419,16 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
   ## operator", which names neither the function nor the column, and above all
   ## does not say what to do about a *generalised* column -- the case that
   ## actually brings callers here (Issue #40).
+  ##
+  ## This is the one score that does *not* run the shared guard first, and the
+  ## reason is that here the type check is strictly the stronger of the two: a
+  ## published region is a string, so every generalised column fails it, while
+  ## a categorical generalisation that no structural test can recognise
+  ## (千代田区 published as 東京都) fails it too. Its message already routes to
+  ## score_containment() when the column is generalised, and additionally says
+  ## the column is character -- which the shared message does not, and which is
+  ## the whole answer when the column is merely categorical. Running the guard
+  ## afterwards keeps the contract identical for anything that gets past it.
   is_text <- function(v) is.character(v) || is.factor(v)
   if (is_text(dat_raw_anon[[cols$raw_target]]) ||
         is_text(dat_raw_anon[[cols$anon_target]])) {
@@ -274,6 +438,8 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                            "column, or convert \"", target, "\" to numeric.")
     ), call. = FALSE)
   }
+  guard_generalized_target(dat_raw_anon, cols, target,
+                           match.arg(generalized), .fn_name)
 
   new_reid_scores(
     raw_row_number = dat_raw_anon[[cols$raw_row_number]],
@@ -324,8 +490,8 @@ score_num <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 score_char <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                        generalized = c("stop", "warn", "ignore"),
                        .fn_name = "score_char") {
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
-  check_generalized_target(dat_raw_anon, cols, target, generalized, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   raw_target_col <- as.character(dat_raw_anon[[cols$raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[cols$anon_target]])
@@ -375,8 +541,8 @@ score_dist <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                        split = ":",
                        generalized = c("stop", "warn", "ignore"),
                        .fn_name = "score_dist") {
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
-  check_generalized_target(dat_raw_anon, cols, target, generalized, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   raw_target_col <- as.character(dat_raw_anon[[cols$raw_target]])
   anon_target_col <- as.character(dat_raw_anon[[cols$anon_target]])
@@ -458,8 +624,8 @@ score_num_rank <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #' @keywords internal
 compute_num_ranks <- function(dat_raw_anon, target, row_number, fn_name,
                               generalized = c("stop", "warn", "ignore")) {
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, fn_name)
-  check_generalized_target(dat_raw_anon, cols, target, generalized, fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, fn_name,
+                             generalized)
 
   ## rank() happily orders a character column lexicographically, so a
   ## generalised or categorical target used to produce a complete set of

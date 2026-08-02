@@ -10,6 +10,7 @@ score_idf(
   row_number = "ROW_NUMBER",
   source = c("anon", "raw", "pooled"),
   weight = c("idf", "inv_log", "inv", "none"),
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_idf"
 )
 }
@@ -30,6 +31,9 @@ cheap to justify.}
 \item{weight}{rarity weighting scheme; see [idf_weight()]. `"none"` gives
 plain unweighted exact matching.}
 
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.}
+
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user
 actually called}
@@ -43,9 +47,27 @@ A candidate pair scores 0 when the two records carry the same value, and the
 rarity weight of that value when they do not. Rare values therefore
 discriminate strongly and near-universal ones barely at all.
 }
+\section{Generalised columns are refused}{
+
+
+Exact matching on a generalised column agrees with **nothing**: the raw
+value `37` is never the string `"[30,40)"`, so every candidate pair scores
+the same rarity weight and the column carries no signal at all. It is the
+quietest form of the Issue #40 failure -- no coercion, no error, a
+perfectly well-formed score table, and a reported success rate a fifth of
+the one [score_containment()] measures on the same release (Issue #100, and
+`docs/lessons-learned.md` section 2). The frequency table underneath is
+wrong in the same direction: it counts how often each *region* was
+published, not how rare the underlying value is, so a region covering a
+tenth of the population is scored as if it identified somebody.
+}
+
 \examples{
 d <- create_dummy_qi_data(people = 30, seed = 1)
 j <- join_raw_anon_data(d, d)
 match_greedy(score_idf(j, "ZIP"))
 
+}
+\seealso{
+[score_containment()] for generalised columns.
 }

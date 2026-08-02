@@ -16,8 +16,14 @@ attacker_knowledge(
 \item{level}{one of "W" (weak), "M" (medium) or "S" (strong)}
 
 \item{quasi_identifiers}{named character vector mapping column name to the
-kind of score to use for it: `"num"`, `"char"`, `"dist"` or `"rank"`.
-E.g. `c(AGE = "num", ZIP = "char")`.}
+kind of score to use for it. Any of the types [reid_score_types()] lists
+-- `"num"`, `"char"`, `"dist"`, `"rank"`, `"idf"`, `"count"`,
+`"profile"`, `"span"`, `"containment"` -- e.g.
+`c(AGE = "num", ZIP = "char")`. Use `"containment"` for a column the
+release publishes as *regions* (`"[30,40)"`, `"135****"`, 東京都): every
+other type compares the raw value with the printed region and measures
+the region's shape rather than the risk, which is why they refuse such a
+column outright (Issue #100).}
 
 \item{behavior}{named character vector, same form, of coarse behavioural
 features (visit counts, spend summaries, ...). Visible from level M.}

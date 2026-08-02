@@ -223,6 +223,11 @@ normalize_one_score <- function(s, method, arg = "scores") {
 #'   (default FALSE). The two give identical rankings; the square root is the
 #'   default because it shares the units of the underlying columns.
 #'
+#' @param generalized what to do when one of `targets` turns out to hold
+#'   generalised values on the ANON side: `"stop"` (default), `"warn"` or
+#'   `"ignore"`. A generalised column is also non-numeric, so this only
+#'   decides which of the two errors is raised. See [score_containment()].
+#'
 #' @return a "reid_scores" table whose SCORE is the Mahalanobis distance
 #'   (a distance: smaller is a better match)
 #'
@@ -244,8 +249,10 @@ normalize_one_score <- function(s, method, arg = "scores") {
 score_mahalanobis <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
                               cov_from = c("raw", "anon", "pooled"),
                               ridge = 1e-6, squared = FALSE,
+                              generalized = c("stop", "warn", "ignore"),
                               .fn_name = "score_mahalanobis") {
   cov_from <- match.arg(cov_from)
+  generalized <- match.arg(generalized)
 
   if (!is.character(targets) || length(targets) == 0) {
     stop(.fn_name, "(): `targets` must be a character vector naming at least ",
@@ -263,7 +270,7 @@ score_mahalanobis <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   }
 
   cols <- lapply(targets, function(t) {
-    reid_prefixed_columns(dat_raw_anon, t, row_number, .fn_name)
+    reid_score_columns(dat_raw_anon, t, row_number, .fn_name, generalized)
   })
 
   as_numeric_column <- function(nm) {
@@ -457,7 +464,8 @@ expand_target_spec <- function(targets, fn_name) {
 #'
 #' @keywords internal
 build_target_scores <- function(dat_raw_anon, targets, row_number, split, fn_name,
-                                source = "anon", weight = "idf") {
+                                source = "anon", weight = "idf",
+                                hierarchy = NULL, rules = NULL) {
   out <- lapply(seq_along(targets), function(i) {
     target <- names(targets)[i]
     type <- unname(targets[i])
@@ -469,6 +477,12 @@ build_target_scores <- function(dat_raw_anon, targets, row_number, split, fn_nam
       ## screening below needs.
       fn(dat_raw_anon, target, row_number = row_number,
          source = source, weight = weight)
+    } else if (identical(type, "containment")) {
+      ## Likewise the single-column form of containment: the block below
+      ## intersects the declared columns, but axis screening has to see what
+      ## each one narrows to on its own.
+      fn(dat_raw_anon, target, row_number = row_number,
+         hierarchy = hierarchy, rules = rules)
     } else if (type %in% reid_split_score_types()) {
       fn(dat_raw_anon, target, row_number = row_number, split = split)
     } else {
@@ -899,13 +913,26 @@ apply_axis_screen <- function(report, screen, fn_name) {
 #'
 #' @section Columns scored as a block:
 #'
-#' Two kinds of column are *not* scored one at a time. Columns declared
+#' Three kinds of column are *not* scored one at a time. Columns declared
 #' `"idf"` are handed together to [score_idf_match()], because the relative
 #' size of the rarity weights across columns is the method itself and
-#' normalising each column separately would discard it. Under
+#' normalising each column separately would discard it. Columns declared
+#' `"containment"` go together to [score_containment()], because the published
+#' regions are **intersected** -- each attribute the attacker holds cuts the
+#' candidate set again, and the cuts multiply rather than add. Under
 #' `method = "mahalanobis"` the `"num"` columns are likewise handled together.
-#' In both cases the block receives the summed weight of the columns it
+#' In every case the block receives the summed weight of the columns it
 #' absorbed, and is normalised as a single component against the rest.
+#'
+#' @section Generalised columns:
+#'
+#' Declare a column the release publishes as regions (`"[30,40)"`,
+#' `"135****"`, 東京都) as `"containment"`. Every other type compares a raw
+#' value against a printed region and so measures the region's shape, not the
+#' risk; those types refuse such a column rather than returning a number
+#' (Issue #100). See [is_generalized_value()] for what is detected, and pass a
+#' `hierarchy` for categorical generalisations, which no structural test can
+#' recognise.
 #'
 #' @inheritParams score_num
 #' @param targets either a named character vector mapping column name to score
@@ -922,6 +949,9 @@ apply_axis_screen <- function(report, screen, fn_name) {
 #' @param cov_from,ridge passed to [score_mahalanobis()] when
 #'   `method = "mahalanobis"`
 #' @param source,weight passed to [score_idf_match()] for `"idf"` columns
+#' @param hierarchy,rules passed to [score_containment()] for `"containment"`
+#'   columns; a hierarchy is what makes a *categorical* generalisation
+#'   (千代田区 published as 東京都) scorable at all
 #' @param screen what to do about a column that, measured on its own, does not
 #'   rank the true record better than chance (see [axis_informativeness()]):
 #'   \describe{
@@ -959,6 +989,7 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
                         ridge = 1e-6,
                         source = c("anon", "raw", "pooled"),
                         weight = c("idf", "inv_log", "inv", "none"),
+                        hierarchy = NULL, rules = NULL,
                         screen = c("warn", "drop", "none"),
                         alpha = 0.05,
                         .fn_name = "score_multi") {
@@ -990,7 +1021,8 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   if (!identical(screen, "none")) {
     singles <- build_target_scores(
       dat_raw_anon, targets, row_number, split, .fn_name,
-      source = source, weight = weight
+      source = source, weight = weight,
+      hierarchy = hierarchy, rules = rules
     )
     report <- axis_informativeness(singles, alpha = alpha)
     keep <- apply_axis_screen(report, screen, .fn_name)
@@ -1047,10 +1079,31 @@ score_multi <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
     absorbed <- absorbed | is_idf
   }
 
+  ## The published regions of several columns are intersected, not added: a
+  ## record has to survive every one of them to stay a candidate. Scoring the
+  ## columns separately and summing the normalised results would give each
+  ## exclusion a *partial* vote, so a record ruled out by one attribute could
+  ## still outrank one that survives them all -- the under-report direction
+  ## again (docs/lessons-learned.md section 2).
+  is_cont <- types == "containment"
+  if (any(is_cont)) {
+    blocks$containment <- score_containment(
+      dat_raw_anon,
+      targets = names(targets)[is_cont],
+      row_number = row_number,
+      hierarchy = hierarchy,
+      rules = rules,
+      .fn_name = .fn_name
+    )
+    block_weights <- c(block_weights, sum(weights[is_cont]))
+    absorbed <- absorbed | is_cont
+  }
+
   rest <- if (is.null(singles)) {
     build_target_scores(
       dat_raw_anon, targets[!absorbed], row_number, split, .fn_name,
-      source = source, weight = weight
+      source = source, weight = weight,
+      hierarchy = hierarchy, rules = rules
     )
   } else {
     ## Screening already built exactly these tables, with exactly these

@@ -16,6 +16,8 @@ score_multi(
   ridge = 1e-06,
   source = c("anon", "raw", "pooled"),
   weight = c("idf", "inv_log", "inv", "none"),
+  hierarchy = NULL,
+  rules = NULL,
   screen = c("warn", "drop", "none"),
   alpha = 0.05,
   .fn_name = "score_multi"
@@ -47,6 +49,10 @@ the stopgap that Issue #13 needed.}
 `method = "mahalanobis"`}
 
 \item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
+
+\item{hierarchy, rules}{passed to [score_containment()] for `"containment"`
+columns; a hierarchy is what makes a *categorical* generalisation
+(千代田区 published as 東京都) scorable at all}
 
 \item{screen}{what to do about a column that, measured on its own, does not
 rank the true record better than chance (see [axis_informativeness()]):
@@ -99,13 +105,28 @@ double-counts them.
 \section{Columns scored as a block}{
 
 
-Two kinds of column are *not* scored one at a time. Columns declared
+Three kinds of column are *not* scored one at a time. Columns declared
 `"idf"` are handed together to [score_idf_match()], because the relative
 size of the rarity weights across columns is the method itself and
-normalising each column separately would discard it. Under
+normalising each column separately would discard it. Columns declared
+`"containment"` go together to [score_containment()], because the published
+regions are **intersected** -- each attribute the attacker holds cuts the
+candidate set again, and the cuts multiply rather than add. Under
 `method = "mahalanobis"` the `"num"` columns are likewise handled together.
-In both cases the block receives the summed weight of the columns it
+In every case the block receives the summed weight of the columns it
 absorbed, and is normalised as a single component against the rest.
+}
+
+\section{Generalised columns}{
+
+
+Declare a column the release publishes as regions (`"[30,40)"`,
+`"135****"`, 東京都) as `"containment"`. Every other type compares a raw
+value against a printed region and so measures the region's shape, not the
+risk; those types refuse such a column rather than returning a number
+(Issue #100). See [is_generalized_value()] for what is detected, and pass a
+`hierarchy` for categorical generalisations, which no structural test can
+recognise.
 }
 
 \examples{

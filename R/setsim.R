@@ -193,12 +193,18 @@ set_similarity <- function(a, b,
 #' @param multiset if `TRUE`, repeated elements count with their
 #'   multiplicities; the default `FALSE` reduces each record to a true set,
 #'   which is the reading Issue #18 is about
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+#'   generalised value splits into a one-element set that intersects nothing,
+#'   so every candidate pair scores 1 and the column silently carries no
+#'   signal (Issue #100).
 #'
 #' @return a "reid_scores" table whose SCORE is `1 - similarity`, in \[0, 1\]
 #'   (a distance: smaller is a better match)
 #'
 #' @seealso [score_minhash()] for a min-hash approximation of the same score,
-#'   and [lsh_candidates()] for candidate blocking.
+#'   [lsh_candidates()] for candidate blocking, and [score_containment()] for
+#'   generalised columns.
 #'
 #' @examples
 #' raw <- data.frame(
@@ -218,12 +224,14 @@ score_jaccard <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                           split = ":",
                           method = c("jaccard", "dice", "overlap", "tversky"),
                           alpha = 1, beta = 1, multiset = FALSE,
+                          generalized = c("stop", "warn", "ignore"),
                           .fn_name = "score_jaccard") {
   method <- match.arg(method)
   validate_split(split)
   check_tversky_weights(alpha, beta, .fn_name)
 
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   raw_side <- side_token_sets(dat_raw_anon, cols$raw_row_number, cols$raw_target,
                               split, multiset, target, .fn_name)
@@ -365,6 +373,8 @@ minhash_signatures <- function(sets, n_hash = 128L, seed = 0L, universe = NULL) 
 #'
 #' @return a "reid_scores" table whose SCORE is `1 - estimated Jaccard`
 #'
+#' @seealso [score_containment()] for generalised columns.
+#'
 #' @examples
 #' raw <- data.frame(
 #'   ROW_NUMBER = 1:3,
@@ -376,9 +386,12 @@ minhash_signatures <- function(sets, n_hash = 128L, seed = 0L, universe = NULL) 
 #' @export
 score_minhash <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                           split = ":", n_hash = 128L, seed = 0L,
-                          multiset = FALSE, .fn_name = "score_minhash") {
+                          multiset = FALSE,
+                          generalized = c("stop", "warn", "ignore"),
+                          .fn_name = "score_minhash") {
   validate_split(split)
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   raw_side <- side_token_sets(dat_raw_anon, cols$raw_row_number, cols$raw_target,
                               split, multiset, target, .fn_name)
