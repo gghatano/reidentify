@@ -1,0 +1,572 @@
+---
+title: "加工して、攻撃して、結果を読む — データ保有者のための一連の手順"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{加工して、攻撃して、結果を読む — データ保有者のための一連の手順}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+options(width = 80, digits = 7)
+```
+
+この文書は、**自分のデータを加工し、それを攻撃し、出てきた数値を読む**という
+一連の作業を、1 つのデータセットに対して最後まで通します。
+
+既存の文書との住み分けは次のとおりです。
+
+| 文書 | 答えること |
+|---|---|
+| 概要ページ | なぜ測るのか |
+| vignette「再識別リスクの測り方」 | **なぜそう測るのか**（測り方を間違えると危険なデータが安全に見える） |
+| README | どう使うか（関数ごとの説明） |
+| **この文書** | **加工 → 攻撃 → 評価を、自分のデータでどう回すか** |
+
+## 加工の関数はこのパッケージにありません
+
+先に断っておきます。**reidentify に「匿名加工を実行する関数」は基本的にありません。**
+これは攻撃と評価のためのツールだからです。
+`generalize_value()` / `generalization_hierarchy()` / `coarsen_time()` /
+`coarsen_place()` は加工の**部品**ですが、
+「どの列をどう潰すか」を決めて適用するのは利用者の仕事です。
+
+したがって以下では、**加工を base R で手書きします。**
+実務の加工はどのみち自社のスキーマに合わせた手書きになるので、
+そのまま持ち帰れる形にしてあります。
+
+以下のコードはすべて実行され、表示されている数値はこの文書をビルドしたときに
+生成されたものです。乱数はすべて `set.seed()` で固定してあります。
+
+```{r library}
+library(reidentify)
+```
+
+---
+
+# 1. 出発点 — 加工前のデータで、どれだけ特定できるか
+
+## 1.1 元データ
+
+300 人分のダミーデータを元データ（RAW）とします。
+
+```{r raw}
+N   <- 300L
+raw <- as.data.frame(create_dummy_qi_data(people = N, seed = 20260802))
+str(raw, vec.len = 3)
+```
+
+列の役割を先に決めます。**この分類が加工方針そのもの**です。
+
+| 列 | 分類 | 保有者の想定 |
+|---|---|---|
+| `ID`, `FINGERPRINT` | 直接識別子 | 公開してはならない |
+| `AGE`, `ZIP`, `SEX` | 準識別子 | 単独では個人を指さないが、組み合わせると指す |
+| `VISIT_COUNT`, `SPEND_MEAN` | 行動特徴 | 分析に必要なので残したい |
+| `SPEND_DIST` | 明細 | 今回は公開しない |
+
+## 1.2 一般化の階層を宣言する
+
+年齢と郵便番号は後で粗くします。**粗くした値を後から正しく突き合わせるには、
+どの値がどの区画に入るのかを宣言しておく必要があります。**
+年齢は同梱の階層（5 歳刻み → 10 歳刻み）を、
+郵便番号は 10 個ずつまとめる階層をその場で作ります。
+
+```{r hierarchy}
+base_hier <- read_generalization_hierarchy(
+  system.file("extdata", "generalization-jp.csv", package = "reidentify")
+)
+zips <- sort(unique(raw$ZIP))
+
+hier <- generalization_hierarchy(rbind(
+  base_hier$edges[base_hier$edges$attribute == "AGE",
+                  c("attribute", "value", "parent")],
+  data.frame(attribute = "ZIP",
+             value     = zips,
+             parent    = sprintf("ZG%02d", ceiling(seq_along(zips) / 10)),
+             stringsAsFactors = FALSE)
+))
+hier
+```
+
+## 1.3 攻撃を 1 つ決めて、以後は変えない
+
+**加工の効果を比べるには、攻撃側を固定する必要があります。**
+ここで決める攻撃者は次のようにふるまいます。
+
+- 元データのレコードを持っている（最強の想定。§3 で緩めます）
+- **公開データに載っている列を、全部使う**
+- 準識別子は `score_containment()` で突き合わせる。
+  一般化されていても、抑止されていても、生の値のままでも、
+  「この公開値に入りうる元レコードは誰か」という同じ問いで扱えます
+- 行動特徴は `score_num()` で突き合わせる（ノイズが乗っても距離は意味を持つ）
+
+```{r attack}
+QI  <- c("AGE", "ZIP", "SEX")
+NUM <- c("ID", "VISIT_COUNT", "SPEND_MEAN", "FINGERPRINT")
+
+## 公開データ 1 つにつき、スコア層を 1 度だけ計算する
+score_layer <- function(anon) {
+  pairs <- join_raw_anon_data(raw, anon)
+  list(
+    qi  = score_containment(pairs, intersect(QI, names(anon)), hierarchy = hier),
+    num = lapply(intersect(NUM, names(anon)),
+                 function(v) score_num(pairs, v))
+  )
+}
+
+## 統合層 + 割当層 + 評価。尺度は zscore でそろえる
+attack <- function(layer, use_num = TRUE, seeds = 1:10) {
+  parts <- c(list(layer$qi), if (use_num) layer$num)
+  sc <- if (length(parts) == 1L) parts[[1L]]
+        else combine_scores(normalize_scores(parts, "zscore"))
+  reid_evaluate(sc, seeds = seeds)
+}
+
+## 段階ごとに 2 通り測る: 公開列を全部使った攻撃と、準識別子だけの攻撃。
+## 結果は使い回すので、ここで 1 度だけ計算して持ち回る。
+measure <- function(layer) list(all = attack(layer),
+                                qi  = attack(layer, use_num = FALSE))
+rates <- function(m) c(全列 = m$all$success_analytic,
+                       準識別子のみ = m$qi$success_analytic)
+```
+
+## 1.4 ベースライン — 何も加工せずに公開したら
+
+まず「明細だけ落として、あとはそのまま公開する」段階を測ります。
+これが以降すべての比較の基準です。
+
+```{r stage0}
+S0 <- raw[, c("ROW_NUMBER", "ID", "AGE", "ZIP", "SEX",
+              "VISIT_COUNT", "SPEND_MEAN", "FINGERPRINT")]
+L0 <- score_layer(S0)
+M0 <- measure(L0)
+M0$all
+```
+
+`ID` が載っているので当然 100% です。**この行は「測定が動いていること」の
+確認として置いています。** 加工の効果は、ここからどれだけ下がるかで測ります。
+
+準識別子だけを見た場合も、ほぼ同じ水準です。
+
+```{r stage0-qi}
+rates(M0)
+unicity_fraction(raw, QI)
+```
+
+`AGE` `ZIP` `SEX` の 3 列だけで、300 人中ほぼ全員が一意に決まっています。
+
+---
+
+# 2. 加工する
+
+ここから 5 種類の加工を**積み上げて**適用します。
+各段階は前の段階の出力を加工したもので、後戻りはしません。
+
+## 2.1 直接識別子を落とす
+
+最初にやることは決まっています。`ID` と `FINGERPRINT` を消します。
+
+```{r stage1}
+S1 <- S0
+S1$ID          <- NULL
+S1$FINGERPRINT <- NULL
+names(S1)
+
+L1 <- score_layer(S1)
+M1 <- measure(L1)
+rates(M1)
+```
+
+**変わりません。** 全列でも準識別子だけでも、加工前と同じ値のままです。
+
+直接識別子を消すことは必要ですが、**それだけでは何も減りません。**
+残った 5 列が、消した 2 列と同じだけ個人を指しているからです。
+「識別子を削除した」という記述は、**加工の完了ではなく着手を意味します。**
+
+## 2.2 一般化する
+
+年齢を 10 歳刻みに、郵便番号を 10 個ずつのグループに丸めます。
+1.2 で宣言した階層を `generalize_value()` に渡すだけです。
+
+```{r stage2}
+S2 <- S1
+S2$AGE <- generalize_value(S2$AGE, "AGE", hier, levels = 1)
+S2$ZIP <- generalize_value(S2$ZIP, "ZIP", hier, levels = 1)
+head(S2, 3)
+
+L2 <- score_layer(S2)
+M2 <- measure(L2)
+rates(M2)
+```
+
+**準識別子だけを見れば、一般化は効いています**
+（0.99 から大きく下がりました）。ところが**全列を使った成功率はほとんど動きません。**
+
+理由は 1 列で説明できます。
+
+```{r stage2-why}
+c("SPEND_MEAN の異なり数" = length(unique(S2$SPEND_MEAN)),
+  "SPEND_MEAN 単独のユニシティ" = unicity_fraction(S2, "SPEND_MEAN"),
+  "準識別子 3 列のユニシティ"   = unicity_fraction(S2, QI))
+```
+
+`SPEND_MEAN` は小数第 1 位まで載った実数で、**準識別子より細かい粒度を持っています。**
+準識別子をどれだけ粗くしても、この列が素通しである限りリスクは下がりません。
+
+> **加工方針を「準識別子」という語で立てると、この列は視界から外れます。**
+> 分類上の準識別子ではなく、**実際に個人を指している列**を測って見つけてください。
+> 列ごとの `unicity_fraction()` はそのための最短の道具です。
+
+## 2.3 抑止する
+
+k 匿名性の考え方で、`(AGE, ZIP, SEX)` の組が 5 人未満のセルを潰します。
+まず `ZIP` をワイルドカード `"*"` に置き換え、それでも 5 人に満たないセルは
+`AGE` も潰します。
+
+```{r stage3}
+cell_size <- function(d) {
+  key <- paste(d$AGE, d$ZIP, d$SEX, sep = "|")
+  as.integer(table(key)[key])
+}
+
+S3 <- S2
+S3$ZIP[cell_size(S3) < 5L] <- "*"
+S3$AGE[cell_size(S3) < 5L] <- "*"
+
+c("ZIP を抑止した件数" = sum(S3$ZIP == "*"),
+  "AGE を抑止した件数" = sum(S3$AGE == "*"),
+  "最小セルサイズ"     = min(cell_size(S3)))
+
+L3 <- score_layer(S3)
+M3 <- measure(L3)
+rates(M3)
+```
+
+`score_containment()` はワイルドカードを「どの値でもよい」と読むので、
+抑止したレコードは候補が広がり、準識別子だけの成功率はさらに下がります。
+**全列の成功率は、やはり動きません。**
+
+2 段かけても最小セルサイズが 5 に届いていない点にも注意してください。
+`AGE` を潰すとセルの区切り自体が変わるため、
+1 回の走査では k 匿名性は成立しません。**「k=5 を目指した加工」と
+「k=5 が成立した加工」は別物です。** 実測してください。
+
+## 2.4 ノイズを加える
+
+ここまで手つかずだった行動特徴に手を入れます。
+訪問回数に ±2 回、支払平均に標準偏差 5 の正規ノイズを加えます。
+
+```{r stage4}
+S4 <- S3
+set.seed(4321)
+S4$VISIT_COUNT <- S4$VISIT_COUNT + sample(-2:2, N, replace = TRUE)
+S4$SPEND_MEAN  <- round(S4$SPEND_MEAN + stats::rnorm(N, sd = 5), 1)
+
+L4 <- score_layer(S4)
+M4 <- measure(L4)
+rates(M4)
+```
+
+**ここではじめて全列の成功率が動きます。**
+準識別子側は 2.3 から 1 ミリも変わっていません（`AGE` `ZIP` `SEX` に触っていないので当然です）。
+**5 段階のうちリスクを下げたのは、この 1 手だけです。**
+
+とはいえ半分は特定されたままです。ノイズの大きさに対して、
+`SPEND_MEAN` の個人差の方が大きいからです。
+
+## 2.5 サンプリングする
+
+「全員を出さなければ安全」という発想で、半数だけを公開します。
+
+```{r stage5}
+set.seed(8765)
+S5 <- S4[sort(sample.int(N, N / 2L)), ]
+
+L5 <- score_layer(S5)
+M5 <- measure(L5)
+rates(M5)
+```
+
+**ほとんど下がりません。** 2.4 の 0.57 に対して 0.52 です。
+
+> **成功率の母数が変わっていることに注意してください。**
+> ここでの成功率は「**公開されたレコードのうち**何割が元の個人に戻ったか」です。
+> 母集団 300 人のうち何人が特定されたかで数えれば、公開を半分にした分だけ
+> 人数は減ります。しかし**公開されてしまった 1 人から見たリスクは、
+> ほとんど変わっていません。** サンプリングは「誰かを守る」加工ではなく
+> 「対象を減らす」加工です。
+
+しかもここには落とし穴があります。**公開データだけを見たユニシティは、
+サンプリングで逆に上がります。**
+
+```{r stage5-unicity}
+c("S4 の中でのユニシティ" = unicity_fraction(S4, QI),
+  "S5 の中でのユニシティ" = unicity_fraction(S5, QI))
+```
+
+同じ組を持つ相手が抜けた分、公開表の中では一意になる人が増えます。
+**攻撃者が突き合わせる相手は公開表ではなく元の母集団**なので、
+この数値は安全性の指標になりません。
+ユニシティは**元データ側**で測ってください。
+
+## 2.6 段階ごとの実測
+
+ここまでを 1 枚にまとめます。
+
+```{r stage-table}
+## 2 節で計算済みの測定結果を並べ直すだけ。ここで測り直してはいない。
+stages <- list("0 無加工"         = M0, "1 直接識別子を削除" = M1,
+               "2 一般化"         = M2, "3 抑止"             = M3,
+               "4 ノイズ"         = M4, "5 サンプリング"     = M5)
+
+## 列名は ASCII にしてある。データフレームの列名は make.names() を通るので、
+## 非 ASCII 名はロケール次第で書き換わることがある。
+##   stage   段階
+##   n_anon  公開件数
+##   all     全列を使った成功率
+##   qi_only 準識別子だけを使った成功率
+##   random  ランダム割当のベースライン
+##   maxrisk レコード別リスクの最大値
+summary_table <- do.call(rbind, lapply(names(stages), function(nm) {
+  ev <- stages[[nm]]$all
+  data.frame(
+    stage   = nm,
+    n_anon  = length(unique(ev$per_record$ANON_ROW_NUMBER)),
+    all     = round(ev$success_analytic, 4),
+    qi_only = round(stages[[nm]]$qi$success_analytic, 4),
+    random  = round(ev$baseline$rate[ev$baseline$method == "random"], 4),
+    maxrisk = round(max(ev$per_record$RISK), 4),
+    stringsAsFactors = FALSE
+  )
+}))
+print(summary_table, row.names = FALSE)
+```
+
+```{r stage-deltas}
+## 前の段階からどれだけ下がったか
+d <- summary_table$all
+print(data.frame(stage = summary_table$stage[-1],
+                 delta = round(d[-1] - d[-length(d)], 4),
+                 stringsAsFactors = FALSE),
+      row.names = FALSE)
+```
+
+**読み取れること。**
+
+1. **直接識別子の削除は、単独では効果 0 でした。** 想定どおりでしたが、
+   「ほとんど効かない」ではなく「まったく効かない」という結果です。
+2. **一般化と抑止も、全列で見れば効果はほぼ 0 でした。**
+   準識別子だけを見れば大きく効いているので、
+   **測る範囲を準識別子に限ると、この加工は成功したように見えます。**
+3. **効いたのはノイズだけです。** ただしそれは「ノイズが良い加工だから」ではなく、
+   **このデータで個人を指していた列に、はじめて手が入ったから**です。
+4. **サンプリングはほぼ効きませんでした。** しかもこの差は、母数が
+   300 件から 150 件に減った上で測った値です（§2.5）。
+5. **最大リスクは全段階を通して 1.0000 のままです。**
+   平均が半分になっても、確実に特定される人は最後まで残ります。
+
+> **加工の種類ではなく、加工が届いた列で効果が決まります。**
+> 「一般化は効く / ノイズは効く」という一般論は、この表からは出てきません。
+
+---
+
+# 3. 攻撃者の知識を変えて測り直す
+
+ここまでは「元データを丸ごと持っている攻撃者」を仮定していました。
+これは上界としては正しいのですが、それだけでは判断に使えません
+（想定の立て方は vignette「再識別リスクの測り方」§2 を参照してください）。
+
+最終的な公開データ `S5` に対して、攻撃者が見られる列を 3 水準に分けます。
+
+| 水準 | 見える列 | 対応する現実 |
+|---|---|---|
+| W（弱） | `ZIP` グループのみ | 公開統計・名簿からの推測 |
+| M（中） | 準識別子 3 列 | 別サービスの会員データを持つ事業者 |
+| S（強） | 準識別子 + 行動特徴 | 内部犯行・データ流出後 |
+
+```{r knowledge}
+pairs5 <- join_raw_anon_data(raw, S5)
+
+rate_for <- function(cols_qi, cols_num = character(0)) {
+  parts <- list(score_containment(pairs5, cols_qi, hierarchy = hier))
+  parts <- c(parts, lapply(cols_num, function(v) score_num(pairs5, v)))
+  sc <- if (length(parts) == 1L) parts[[1L]]
+        else combine_scores(normalize_scores(parts, "zscore"))
+  reid_evaluate(sc, seeds = 1:10)$success_analytic
+}
+
+c(W = rate_for("ZIP"),
+  M = rate_for(QI),
+  S = rate_for(QI, c("VISIT_COUNT", "SPEND_MEAN")),
+  ランダム = M5$all$baseline$rate[M5$all$baseline$method == "random"])
+```
+
+**同じ公開データが、想定を変えるだけで 40 倍違います。**
+数値だけを報告書に書くと、この幅のどこを指しているのか読み手には分かりません。
+
+W ですらランダム割当を上回っている点にも注意してください。
+`ZIP` グループしか見えない攻撃者でも、当てずっぽうよりは当たります。
+
+## `reid_knowledge_curve()` はここでは使えません
+
+W / M / S の比較には `reid_knowledge_curve()` という専用の関数がありますが、
+**一般化された列を含む公開データには使えません。**
+中で `score_multi()` → `score_char()` を呼ぶため、
+一般化の検出（Issue #40 の停止）に引っかかります。
+
+```{r knowledge-curve-fails}
+tryCatch(
+  reid_knowledge_curve(pairs5,
+                       quasi_identifiers = c(ZIP = "char", AGE = "char",
+                                             SEX = "char"),
+                       weak_subset = "ZIP", seeds = 1:2),
+  error = function(e) cat(strwrap(conditionMessage(e), 76), sep = "\n")
+)
+```
+
+**これは正しい停止です。** 抑止した `"*"` や一般化した `"[30,40)"` に
+文字列距離をかけると、低い数値が黙って出ます。
+ただし現状、**一般化や抑止を含む公開データに対しては
+上のように水準を自分で書き下す必要があります。**
+想定は `attacker_knowledge()` オブジェクトとして残せるので、
+測定と分けて記録しておいてください。
+
+---
+
+# 4. 結果を読む
+
+最終的な公開データ `S5` に対する評価の全文です。
+
+```{r read-full}
+ev5 <- M5$all
+ev5
+```
+
+## 4.1 ばらつき — 1 回の実行値を結論にしない
+
+`simulated mean` の `sd` と `range` が、同点をどう崩すかで動く幅です。
+`success rate ... exact` は同点を確率として数えた解析値で、
+シミュレーションとは独立に計算されています。
+**両者が一致していることが、実装が壊れていないことの検査になります。**
+
+割当層だけのばらつきを見たいときは `reid_stability()` を使います。
+
+```{r stability}
+attack_fn <- function(dat, target, seed) {
+  match_greedy(score_containment(dat, target, hierarchy = hier), seed = seed)
+}
+reid_stability(attack_fn, pairs5, QI, seeds = 1:20)
+```
+
+## 4.2 誰が危ないか
+
+平均は最悪ケースを隠します。**危ないのが誰かを名指しできると、
+加工方針を「もう 1 段強くする」ではなく「この人たちを守る」に変えられます。**
+
+まずレコード別リスクの分布を見ます。
+
+```{r per-record}
+per <- ev5$per_record
+summary(per$RISK)
+table("RISK = 1（確実に特定）" = per$RISK == 1)
+```
+
+次に、リスクが何と結びついているかを調べます。
+このデータで個人を指していたのは `SPEND_MEAN` でした。
+**元データの中で「支払平均が近い人が何人いるか」**でレコードを分けてみます。
+
+```{r risk-by-density}
+## 公開レコードごとに、元データで支払平均が ±5 以内の人が何人いるか
+neighbours <- vapply(S5$SPEND_MEAN,
+                     function(x) sum(abs(raw$SPEND_MEAN - x) <= 5),
+                     integer(1))
+risk5 <- per$RISK[match(S5$ROW_NUMBER, per$ANON_ROW_NUMBER)]
+
+by_dens <- split(risk5, cut(neighbours, breaks = c(0, 20, 40, 60, Inf),
+                            labels = c("<=20", "21-40", "41-60", ">=61")))
+print(data.frame(
+  neighbours = names(by_dens),
+  n          = vapply(by_dens, length, integer(1)),
+  mean_risk  = round(vapply(by_dens, mean, numeric(1)), 3),
+  stringsAsFactors = FALSE
+), row.names = FALSE)
+```
+
+（`neighbours` は「元データで支払平均が ±5 以内にいる人数」、
+`mean_risk` はその層の平均リスクです。）
+
+**似た人が少ない人ほど危険です。** 同じデータ・同じ加工でも、
+リスクはレコードによって大きく違います。
+
+抑止をかけたレコードが実際に守られたかも確認できます。
+
+```{r risk-by-suppression}
+by_sup <- split(risk5, ifelse(S5$ZIP == "*", "ZIP suppressed", "ZIP kept"))
+print(data.frame(
+  group     = names(by_sup),
+  n         = vapply(by_sup, length, integer(1)),
+  mean_risk = round(vapply(by_sup, mean, numeric(1)), 3),
+  stringsAsFactors = FALSE
+), row.names = FALSE)
+```
+
+## 4.3 top-k と精度–再現率
+
+`top-k hit rate` は候補を k 件まで絞れた割合です。
+**5 人に絞れた時点で、その 5 人に共通する属性は既に漏れています。**
+
+精度–再現率の表は、攻撃者が**自信のある一部だけを主張した**場合を示します。
+全体成功率が下がっても、上位だけを狙えば高い精度が残ることがあります。
+`CONFIDENCE` の閾値はデータセット間で使い回せないので、
+必ず実測分布の分位点から取ってください。
+
+```{r confidence}
+stats::quantile(reid_confidence(
+  combine_scores(normalize_scores(c(list(L5$qi), L5$num), "zscore"))
+)$CONFIDENCE, c(0.5, 0.9, 1))
+```
+
+---
+
+# 5. この作業でやりがちな間違い
+
+詳しくは vignette「再識別リスクの測り方」にありますが、
+**この文書の流れの中で特に踏みやすい 2 つ**だけ再掲します。
+
+## 5.1 測る範囲を、加工した列に合わせてしまう
+
+2 節で見たとおり、準識別子だけを測れば一般化と抑止は成功して見えました。
+**加工した列で測ると、加工は必ず効いているように見えます。**
+測る範囲は「公開する列の全体」で固定してください。
+
+## 5.2 重なりが不明なときに `match_optimal()` を使う
+
+2.5 のサンプリング後は、公開データと元データの件数が一致しません。
+このとき 1 対 1 制約を置く `match_optimal()` は、
+元データに居ないレコードにも誰かを割り当ててしまい、
+**成功率を過小に報告します**（vignette「再識別リスクの測り方」§3.5、
+ダミー行によるパディングでも回復しません）。
+上の測定はすべて `match_greedy()` 経路です。
+
+---
+
+# まとめ — 加工の効果を報告するときに書くこと
+
+| 項目 | なぜ必要か |
+|---|---|
+| 加工前のベースライン | 下がったことを言うには基準が要る（§1.4） |
+| 各段階の測定値と、その差 | どの手が効いたかは積み上げないと分からない（§2.6） |
+| 測定に使った列の範囲 | 加工した列だけで測ると必ず効いて見える（§5.1） |
+| 攻撃者知識の想定 | 同じデータが想定次第で違う数値になる（§3） |
+| 最大リスクとレコード別分布 | 平均は最悪ケースを隠す（§4.2） |
+| ユニシティを測った側（RAW か公開表か） | 公開表側で測ると逆向きに動く（§2.5） |
+
+## 参考
+
+- vignette「再識別リスクの測り方 — 数値が意味を持つ条件」 — 測り方の誤りが
+  どのように低い数値として現れるか
+- `docs/lessons-learned.md` — 想定と実測が食い違った事例の記録
+- `?generalize_value`, `?score_containment`, `?containment_counts` —
+  一般化した値を扱う関数の仕様

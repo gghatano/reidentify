@@ -35,7 +35,14 @@ navbar:
       href: reference/index.html
     articles:
       text: 解説
-      href: articles/measuring-reidentification-risk.html
+      menu:
+      - text: 再識別リスクの測り方 — 数値が意味を持つ条件
+        href: articles/measuring-reidentification-risk.html
+      - text: 加工して、攻撃して、結果を読む
+        href: articles/anonymize-attack-evaluate.html
+      - text: -------
+      - text: 一覧
+        href: articles/index.html
     news:
       text: 変更履歴
       href: news/index.html
