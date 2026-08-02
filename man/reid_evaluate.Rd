@@ -58,6 +58,10 @@ an object of class "reid_evaluation": a list with
     \item{blocked}{TRUE when the candidate set is not the full cross join,
       by either test: fewer rows than `n_anon * n_raw`, **or**
       `n_true_missing > 0`}
+    \item{n_zero_candidate}{how many ANON records had an empty candidate set
+      under containment (`candidate_count == 0`), or `NA` when the score
+      table carries no such attribute. Independent of `blocked`: the table
+      keeps its full shape, so neither test above can see it (Issue #101)}
     \item{confidence}{which confidence measure the sweep thresholded on}
     \item{success_analytic}{exact expected single-guess success rate}
     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -139,6 +143,26 @@ not the shape test fired (Issue #56).
 When `n_true_missing == n_anon` **nothing at all was measured**: no ANON
 record could have been reidentified, so every rate is 0 by construction. That
 prints identically to a genuinely safe release, so this warns.
+}
+
+\section{Empty candidate sets}{
+
+
+Both tests above look at the *shape* of the candidate table, and Issue #101
+is a failure that leaves the shape perfectly intact. [score_containment()]
+keeps every pair -- an excluded candidate scores 1 rather than being dropped
+-- so an ANON record whose published region contains no RAW record at all
+still has `n_raw` candidates, still has its true pair among them, and passes
+both tests: `blocked` FALSE, `n_true_missing` 0, `truth_coverage` 1. It
+simply cannot be reidentified. Every candidate ties, [match_greedy()] draws
+uniformly, and the record contributes exactly the random baseline; when it
+happens to every record the whole report reads `lift 1.00x`, which is what a
+unit written on one side only produces.
+
+`n_zero_candidate` is read from the `candidate_count` attribute
+[score_containment()] attaches, and is `NA` for a score table that does not
+carry one. [score_containment()] itself warns; this is the same fact carried
+through to the printed report.
 }
 
 \examples{

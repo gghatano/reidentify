@@ -540,12 +540,17 @@ test_that("rules force a per-column reading", {
                      stringsAsFactors = FALSE)
   d <- join_raw_anon_data(raw, anon)
 
-  # auto reads "135****" as a category, which matches nobody
-  expect_equal(containment_counts(d, "ZIP")$N_CONTAINED, c(0, 0))
+  # "exact" reads "135****" as a category, which matches nobody
+  expect_equal(containment_counts(d, "ZIP",
+                                  rules = c(ZIP = "exact"))$N_CONTAINED, c(0, 0))
   # prefix reads it as the mask it is
   cc <- containment_counts(d, "ZIP", rules = c(ZIP = "prefix"))
   expect_equal(cc$N_CONTAINED, c(1, 1))
   expect_true(all(cc$TRUTH_CONTAINED))
+  # and since Issue #109 "auto" gets there on its own: a trailing "*" can only
+  # ever have meant a prefix, and reading it as a category silently excluded
+  # every RAW record. See tests/testthat/test-empty-candidate-set.R.
+  expect_equal(containment_counts(d, "ZIP")$N_CONTAINED, c(1, 1))
 })
 
 test_that("score_containment validates its arguments", {
@@ -597,7 +602,10 @@ test_that("when nothing survives, the attack degenerates to guessing rather than
   expect_true(all(is.na(cc$INFORMATION)))
   expect_false(any(cc$TRUTH_CONTAINED))
 
-  s <- score_containment(d, "AREA")
+  ## Since Issue #101 this is exactly the situation score_containment() warns
+  ## about: nothing survives, so the rate it feeds is the random baseline and
+  ## not a measurement.
+  expect_warning(s <- score_containment(d, "AREA"), "EMPTY candidate set")
   expect_true(all(s$SCORE == 1))
 
   m <- match_greedy(s, confidence = "tie")

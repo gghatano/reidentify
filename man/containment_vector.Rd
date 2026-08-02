@@ -18,7 +18,9 @@ containment_vector(raw_vals, anon_vals, attribute, hierarchy, rule, units)
 \item{units}{unit strings}
 }
 \value{
-logical vector, one per row
+logical vector, one per row, carrying a `dead_nodes` attribute: the
+  published values that excluded *every* RAW value, each tagged with how it
+  was read
 }
 \description{
 Computed over the *distinct* values on each side and then broadcast back

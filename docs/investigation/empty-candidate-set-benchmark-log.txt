@@ -1,0 +1,154 @@
+R: R version 4.6.1 (2026-06-24 ucrt) 
+date: 2026-08-02 23:18:31 
+stringi: 1.8.7 
+
+== #101 (a): a unit written on the RAW side only ==
+   ANON publishes 5-year bands as "30歳以上35歳未満"; RAW carries the age.
+  RAW = 37       (before)    success=0.120000  lift= 24.00x  empty candidate sets:   0/200
+  RAW = 37       (after)     success=0.120000  lift= 24.00x  empty candidate sets:   0/200
+  RAW = 37 + sai (before)    success=0.005000  lift=  1.00x  empty candidate sets: 200/200
+  RAW = 37 + sai (after)     success=0.120000  lift= 24.00x  empty candidate sets:   0/200
+
+   what the other guards said about the broken case, before the fix:
+     blocked=FALSE  n_true_missing=0  truth_coverage=1  n_zero_candidate=200
+   -- all three shape guards report a healthy join. Only the count that
+      score_containment() had been attaching since #20 saw it.
+
+== #101 (b): the suppression marker a release writes (30 of 200 rows) ==
+  *         (before)         success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  *         (after)          success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  -         (before)         success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+  -         (after)          success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  ?         (before)         success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+  ?         (after)          success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  N/A       (before)         success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+  N/A       (after)          success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  unknown   (before)         success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+  unknown   (after)          success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  不明    (before)         success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+  不明    (after)          success=0.102115  lift= 20.42x  empty candidate sets:   0/200
+  999       (before)         success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+  999       (after)          success=0.101365  lift= 20.27x  empty candidate sets:  30/200
+   "999" is deliberately still empty: a numeric sentinel cannot be told
+   apart from a measurement, so it is warned about, not silently widened.
+
+== #101 (c): what the user is now told about a case that is still empty ==
+  warning: score_containment(): 30 of 200 ANON record(s) have an EMPTY candidate set -- no RAW record falls inside every published region, so they can never be reidentified and every rate computed from them is 0 by construction. This is the absence of a measurement, not evidence that the release is safe (docs/lessons-learned.md section 2), and the usual guards cannot see it: the candidate table keeps its full shape and still contains the true pair, so `blocked`, `n_true_missing` and `truth_coverage` all report a healthy join. In column "AGE", 1 published value(s) matched no RAW record at all: "999" (read as an interval). Check that RAW and ANON write the same column the same way (a unit or a suffix on one side only), that a categorical generalisation has a `hierarchy`, and that a suppression marker the release uses is one this package reads as a wildcard. containment_counts() shows the same counts per record, with TRUTH_CONTAINED.
+NULL
+  reid_evaluate() print(), verbatim:
+    | reid evaluation: 200 ANON x 200 RAW record(s), 40000 candidate pair(s)
+    |   containment    : 30/200 ANON record(s) have an EMPTY candidate set (k = 0)
+    |     -> no RAW record falls inside their published region, so every candidate ties
+    |        and the attack degenerates to guessing. Those records contribute the random
+    |        baseline to the rate below, not a measurement.
+    |   success rate   : 0.1014 exact | simulated mean 0.0970 sd 0.0164 range [0.0750, 0.1250] over 10 seeds
+    |   baseline       : random 0.0050 | mode 0.0050   (lift vs random: 20.27x)
+    |   top-k hit rate : k=1 0.1014
+    |   max per-record risk: 0.3333
+    |   precision-recall (threshold on attacker-visible CONFIDENCE, margin):
+    |     conf >= 0.0000 : attack 200/200 (100.0%)  precision 0.1014  recall 0.1014 
+
+== #109 (1): a hierarchy whose attribute name does not match the column ==
+  attribute=ZIP (before)     success=0.353333  lift=106.00x  empty candidate sets:   0/300
+  attribute=zip (before)     success=0.003333  lift=  1.00x  empty candidate sets: 300/300
+  attribute=POSTCODE (before) success=0.003333  lift=  1.00x  empty candidate sets: 300/300
+  hierarchy=NULL (before)    success=0.003333  lift=  1.00x  empty candidate sets: 300/300
+   -- "zip", "POSTCODE" and NULL agree to the last digit: the hierarchy
+      was ignored and nothing said so.
+
+  attribute=ZIP (after)      success=0.353333  lift=106.00x  empty candidate sets:   0/300
+  attribute=zip (after)      ERROR: score_containment(): the hierarchy declares attribute(s) "zip", none of which is a target column...
+  attribute=POSTCODE (after) ERROR: score_containment(): the hierarchy declares attribute(s) "POSTCODE", none of which is a target c...
+
+== #109 (2): a masked column under the default rules ==
+  rules=NULL     (before)    success=0.003333  lift=  1.00x  empty candidate sets: 300/300
+  rules=prefix   (before)    success=0.353333  lift=106.00x  empty candidate sets:   0/300
+  rules=NULL     (after)     success=0.353333  lift=106.00x  empty candidate sets:   0/300
+  rules=prefix   (after)     success=0.353333  lift=106.00x  empty candidate sets:   0/300
+   generalization_evidence() had been choosing rule = "prefix" for these
+   values all along; score_containment() was the only side that did not.
+
+
+=====================================================================
+false-positive calibration (the Issue #40 / #92 protocol)
+=====================================================================
+
+== is_generalization_wildcard(): read as "suppressed, matches anything" ==
+   a false positive here matches every RAW record and LOWERS reported risk
+  [A-Za-z0-9]        len 2 (n = 200000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9]        len 3 (n =  50000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9]        len 4 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9]        len 6 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9+~.,*-]  len 2 (n = 200000):  before 0.0165%  after 0.0995%  delta +0.0830 pp
+  [A-Za-z0-9+~.,*-]  len 3 (n =  50000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9+~.,*-]  len 4 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9+~.,*-]  len 6 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 2 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 3 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 4 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 6 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+
+== node_matches(): share of RAW values that now read as a number ==
+   as.numeric() before; as.numeric() then a point-interval parse after
+  [A-Za-z0-9]        len 2 (n = 200000):  before 2.5535%  after 2.5535%  delta +0.0000 pp  | rejected variant, all units: 3.3345% (+0.7810 pp)
+  [A-Za-z0-9]        len 3 (n =  50000):  before 0.4820%  after 0.5040%  delta +0.0220 pp  | rejected variant, all units: 0.7860% (+0.3040 pp)
+  [A-Za-z0-9]        len 4 (n =  20000):  before 0.0900%  after 0.0900%  delta +0.0000 pp  | rejected variant, all units: 0.1600% (+0.0700 pp)
+  [A-Za-z0-9]        len 6 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp  | rejected variant, all units: 0.0000% (+0.0000 pp)
+  [A-Za-z0-9+~.,*-]  len 2 (n = 200000):  before 3.0315%  after 3.0315%  delta +0.0000 pp  | rejected variant, all units: 3.7085% (+0.6770 pp)
+  [A-Za-z0-9+~.,*-]  len 3 (n =  50000):  before 0.5580%  after 0.5800%  delta +0.0220 pp  | rejected variant, all units: 0.8280% (+0.2700 pp)
+  [A-Za-z0-9+~.,*-]  len 4 (n =  20000):  before 0.0950%  after 0.0950%  delta +0.0000 pp  | rejected variant, all units: 0.1550% (+0.0600 pp)
+  [A-Za-z0-9+~.,*-]  len 6 (n =  20000):  before 0.0100%  after 0.0100%  delta +0.0000 pp  | rejected variant, all units: 0.0150% (+0.0050 pp)
+  japanese + digits   len 2 (n =  10000):  before 0.3000%  after 0.4700%  delta +0.1700 pp  | rejected variant, all units: 0.4700% (+0.1700 pp)
+  japanese + digits   len 3 (n =  10000):  before 0.0400%  after 0.0500%  delta +0.0100 pp  | rejected variant, all units: 0.0500% (+0.0100 pp)
+  japanese + digits   len 4 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp  | rejected variant, all units: 0.0000% (+0.0000 pp)
+  japanese + digits   len 6 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp  | rejected variant, all units: 0.0000% (+0.0000 pp)
+
+== is_generalization_mask(): share that rule = "auto" now reads as a prefix ==
+   unchanged function; measured because "auto" newly acts on it
+  [A-Za-z0-9]        len 2 (n = 200000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9]        len 3 (n =  50000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9]        len 4 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9]        len 6 (n =  20000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  [A-Za-z0-9+~.,*-]  len 2 (n = 200000):  before 0.0000%  after 1.4460%  delta +1.4460 pp
+  [A-Za-z0-9+~.,*-]  len 3 (n =  50000):  before 0.0000%  after 1.5120%  delta +1.5120 pp
+  [A-Za-z0-9+~.,*-]  len 4 (n =  20000):  before 0.0000%  after 1.4350%  delta +1.4350 pp
+  [A-Za-z0-9+~.,*-]  len 6 (n =  20000):  before 0.0000%  after 1.4750%  delta +1.4750 pp
+  japanese + digits   len 2 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 3 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 4 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+  japanese + digits   len 6 (n =  10000):  before 0.0000%  after 0.0000%  delta +0.0000 pp
+
+== per-column share, the quantity the #40 guard thresholds on ==
+   (2000 draws of 40 two-character strings, as create_dummy_master_data()
+    produces; the guard needs a share of at least 0.2)
+  is_generalized_value      : max 0.0250  mean 0.000225  columns over threshold 0
+  is_generalization_wildcard: max 0.0000  mean 0.000000
+  newly numeric on RAW side : max 0.0000  mean 0.000000
+
+== the values deliberately left out of the wildcard list ==
+  NA     wildcard = FALSE
+  na     wildcard = FALSE
+  Na     wildcard = FALSE
+  999    wildcard = FALSE
+  -1     wildcard = FALSE
+  0      wildcard = FALSE
+  none   wildcard = FALSE
+  None   wildcard = FALSE
+  M      wildcard = FALSE
+  F      wildcard = FALSE
+  "NA" in any casing is 4 of the 3844 two-character strings over
+  [A-Za-z0-9] = 0.104%, four times the whole #40 budget for the detector.
+
+== the fixture columns the rest of the suite uses ==
+  qi  ID            region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  AGE           region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  ZIP           region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  SEX           region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  VISIT_COUNT   region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  SPEND_MEAN    region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  SPEND_DIST    region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  qi  FINGERPRINT   region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  mst ID            region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  mst NUM           region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  mst BIN           region 0.0000  wildcard 0.0000  newly numeric 0.0000
+  mst CHAR          region 0.0000  wildcard 0.0000  newly numeric 0.0000

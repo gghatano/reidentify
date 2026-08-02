@@ -19,9 +19,17 @@ node_matches(values, node, rule = "auto", units = generalization_units())
 logical vector, one per element of `values`
 }
 \description{
-A node is either an interval (tested numerically) or a literal category
-(tested by string equality). `rule` forces one reading; `"auto"` tries the
-interval reading first and falls back to equality, which is what makes a
-mixed file of "30代" and "東京都" work with no configuration.
+A node is either an interval (tested numerically), a suppression mask such as
+`"135****"` (tested by prefix) or a literal category (tested by string
+equality). `rule` forces one reading; `"auto"` tries the mask reading, then
+the interval reading, and falls back to equality, which is what makes a mixed
+file of "30代", "135****" and "東京都" work with no configuration.
+}
+\details{
+`"auto"` reads a mask as a prefix since Issue #109. It used to fall through
+to string equality, so a masked column matched nobody and reported a rate
+106x below the one `rules = c(ZIP = "prefix")` reported on the same data --
+while [generalization_evidence()] had been choosing the prefix rule for
+exactly these values all along.
 }
 \keyword{internal}
