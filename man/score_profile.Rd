@@ -12,6 +12,7 @@ score_profile(
   bins = NULL,
   shape_only = TRUE,
   metric = c("l1", "l2"),
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_profile"
 )
 }
@@ -41,6 +42,9 @@ profile, which would match every other empty record perfectly; pass
 \item{metric}{`"l1"` (default; total variation when `shape_only = TRUE`) or
 `"l2"` (squared Euclidean)}
 
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.}
+
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user
 actually called}
@@ -69,6 +73,18 @@ compared as labels, so an hour-of-day or day-of-week profile is scored
 correctly rather than being run through numeric quantiles that assume
 hour 23 and hour 0 are as far apart as possible.
 }
+\section{Generalised columns are refused}{
+
+
+The bins are labels, and a published region is a label like any other, so a
+generalised column bins cleanly into a histogram with one occupied bin per
+record and produces a complete, plausible score table -- silently. Measured
+on a fully generalised age column it reported a fifth of the success rate
+[score_containment()] reports on the same data (Issue #100). Both this and
+[score_idf()] were missed by the Issue #40 fix because that fix was attached
+to a list of functions rather than to the act of reading a target column.
+}
+
 \examples{
 raw <- data.frame(
   ROW_NUMBER = 1:4,
@@ -76,4 +92,7 @@ raw <- data.frame(
 )
 match_greedy(score_profile(join_raw_anon_data(raw, raw), "DOW"))
 
+}
+\seealso{
+[score_containment()] for generalised columns.
 }

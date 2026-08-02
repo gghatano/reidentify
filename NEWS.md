@@ -1,3 +1,60 @@
+# reidentify (開発版)
+
+## 一般化列のガードを全スコアに広げた（#100）
+
+Issue #40 のガードは `score_char()` / `score_dist()` / `score_num_rank()` の
+**3 関数に手で付けられていました**。宣言できるスコア型は 8 つあり、
+`attacker_knowledge()` は 8 つすべてを受け付けます。実測（AGE を
+`[30,40)` に一般化、N=200）:
+
+| | 変更前 | 変更後 |
+|---|---|---|
+| `score_num` / `char` / `dist` / `rank` / `count` / `span` | 停止 | 停止 |
+| `score_idf` / `score_profile` | **完走** | 停止 |
+| `score_jaccard` / `score_minhash` / `score_scoreboard` / `score_mahalanobis` | **完走** | 停止 |
+
+`score_containment(AGE, SEX)` が 0.0500 を報告する同じデータで、
+黙って完走する経路は 0.0050 —— ランダム割当のベースラインちょうど —— を
+返していました。**10 倍の過小報告で、エラーも警告もありません。**
+
+ガードは関数ではなく**列の解決**（`reid_score_columns()`）に付け直しました。
+逃げ道は各スコアの `generalized = "warn"` / `"ignore"` のみです。
+
+## `"containment"` を宣言できるようにした（#100）
+
+`reid_score_types()` に `"containment"` を追加しました。これまで
+`attacker_knowledge(c(AGE = "containment"))` はエラーで、**一般化データを扱う
+W/M/S 利用者には「止まる 6 型」か「黙って過小報告する 2 型」しか
+選択肢がありませんでした。**
+
+```r
+attacker_knowledge("M", quasi_identifiers = c(AGE = "containment",
+                                              AREA = "containment"))
+```
+
+`score_multi()` は `"idf"` と同様、`"containment"` 列を**まとめて**
+`score_containment()` に渡します（領域は足すのではなく**積を取る**ため）。
+`score_multi()` / `score_by_knowledge()` / `reid_knowledge_curve()` に
+`hierarchy` / `rules` を追加し、カテゴリ一般化も宣言経路から扱えます。
+
+## 再発防止
+
+`reid_generalized_guard_policy()` に、エクスポートされた全 `score_*()` 関数の
+一般化列に対する方針（`"refuse"` / `"containment"` / `"delegates"`）を
+宣言しました。`test-generalized-column-guard.R` が
+これを **NAMESPACE の実際のエクスポートと突き合わせ**、さらに全 `"refuse"`
+エントリを一般化フィクスチャに対して実行します。**スコア関数やスコア型を
+追加してガードを忘れると、テストが落ちます。**
+
+## 非互換
+
+`score_idf()` / `score_profile()` / `score_jaccard()` / `score_minhash()` /
+`score_scoreboard()` / `score_mahalanobis()` / `score_idf_match()` は、
+一般化列に対して**エラーになります**。従来の数値が必要なら
+`generalized = "ignore"` を明示してください。
+
+---
+
 # reidentify 3.0.0 (2026-08-01)
 
 **従来 API（`reid_by_*()` / `reid_result()`）を削除しました。**

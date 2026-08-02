@@ -23,8 +23,14 @@
 #'
 #' @param level one of "W" (weak), "M" (medium) or "S" (strong)
 #' @param quasi_identifiers named character vector mapping column name to the
-#'   kind of score to use for it: `"num"`, `"char"`, `"dist"` or `"rank"`.
-#'   E.g. `c(AGE = "num", ZIP = "char")`.
+#'   kind of score to use for it. Any of the types [reid_score_types()] lists
+#'   -- `"num"`, `"char"`, `"dist"`, `"rank"`, `"idf"`, `"count"`,
+#'   `"profile"`, `"span"`, `"containment"` -- e.g.
+#'   `c(AGE = "num", ZIP = "char")`. Use `"containment"` for a column the
+#'   release publishes as *regions* (`"[30,40)"`, `"135****"`, 東京都): every
+#'   other type compares the raw value with the printed region and measures
+#'   the region's shape rather than the risk, which is why they refuse such a
+#'   column outright (Issue #100).
 #' @param behavior named character vector, same form, of coarse behavioural
 #'   features (visit counts, spend summaries, ...). Visible from level M.
 #' @param identifiers named character vector, same form, of columns that
@@ -144,11 +150,23 @@ print.attacker_knowledge <- function(x, ...) {
 #' [score_fn_for_type()], so a type added in one place cannot be silently
 #' missing from the others.
 #'
+#' `"containment"` was added by Issue #100. Before it, the eight value
+#' comparison types were the *only* declarable ones, so a caller whose release
+#' publishes generalised regions had nothing correct to declare: six types
+#' stopped (rightly), two ran to completion and under-reported the risk
+#' roughly fivefold, and [score_containment()] -- the one score that reads a
+#' region as a region -- was unreachable from [attacker_knowledge()] and
+#' [score_by_knowledge()] at all. The W / M / S workflow is the package's
+#' recommended path, so "the correct tool exists but not on the recommended
+#' path" pushed users onto hand-built `combine_scores()` calls, where no guard
+#' applies either.
+#'
 #' @return character vector of valid score type names
 #'
 #' @keywords internal
 reid_score_types <- function() {
-  c("num", "char", "dist", "rank", "idf", "count", "profile", "span")
+  c("num", "char", "dist", "rank", "idf", "count", "profile", "span",
+    "containment")
 }
 
 #' the score types whose function takes a `split` separator
@@ -178,6 +196,7 @@ score_fn_for_type <- function(type) {
     count = score_count,
     profile = score_profile,
     span = score_span,
+    containment = score_containment,
     stop("unknown score type \"", type, "\".", call. = FALSE)
   )
 }
@@ -215,6 +234,8 @@ score_fn_for_type <- function(type) {
 #' @param cov_from,ridge passed to [score_mahalanobis()] when
 #'   `method = "mahalanobis"`
 #' @param source,weight passed to [score_idf_match()] for `"idf"` columns
+#' @param hierarchy,rules passed to [score_containment()] for `"containment"`
+#'   columns
 #' @param screen,alpha passed to [score_multi()]; they decide what happens to a
 #'   visible column that, measured alone, carries no signal. This matters more
 #'   here than anywhere else: the W / M / S levels are meant to be read as an
@@ -239,6 +260,7 @@ score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER
                                ridge = 1e-6,
                                source = c("anon", "raw", "pooled"),
                                weight = c("idf", "inv_log", "inv", "none"),
+                               hierarchy = NULL, rules = NULL,
                                screen = c("warn", "drop", "none"),
                                alpha = 0.05) {
   if (!inherits(knowledge, "attacker_knowledge")) {
@@ -258,6 +280,8 @@ score_by_knowledge <- function(dat_raw_anon, knowledge, row_number = "ROW_NUMBER
     ridge = ridge,
     source = match.arg(source),
     weight = match.arg(weight),
+    hierarchy = hierarchy,
+    rules = rules,
     screen = match.arg(screen),
     alpha = alpha,
     .fn_name = "score_by_knowledge"

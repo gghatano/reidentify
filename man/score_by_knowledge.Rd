@@ -16,6 +16,8 @@ score_by_knowledge(
   ridge = 1e-06,
   source = c("anon", "raw", "pooled"),
   weight = c("idf", "inv_log", "inv", "none"),
+  hierarchy = NULL,
+  rules = NULL,
   screen = c("warn", "drop", "none"),
   alpha = 0.05
 )
@@ -44,6 +46,9 @@ expression.}
 `method = "mahalanobis"`}
 
 \item{source, weight}{passed to [score_idf_match()] for `"idf"` columns}
+
+\item{hierarchy, rules}{passed to [score_containment()] for `"containment"`
+columns}
 
 \item{screen, alpha}{passed to [score_multi()]; they decide what happens to a
 visible column that, measured alone, carries no signal. This matters more

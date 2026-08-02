@@ -10,6 +10,7 @@ score_span(
   row_number = "ROW_NUMBER",
   split = ":",
   method = c("log_ratio", "absolute", "relative"),
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_span"
 )
 }
@@ -25,6 +26,9 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 (default ":")}
 
 \item{method}{passed to the same comparison [score_count()] uses}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user
@@ -49,4 +53,7 @@ one-month span matters far more than between two and three years.
 raw <- data.frame(ROW_NUMBER = 1:3, T = c("1:2:3", "1:40", "5:6:7:80"))
 match_greedy(score_span(join_raw_anon_data(raw, raw), "T"))
 
+}
+\seealso{
+[score_containment()] for generalised columns.
 }
