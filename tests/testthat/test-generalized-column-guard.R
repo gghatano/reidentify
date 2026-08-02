@@ -553,6 +553,49 @@ test_that("a hierarchy reaches score_containment() through the declaration path"
   expect_true(all(without_h$SCORE == 1))
 })
 
+test_that("`rules` reaches score_containment() through the declaration path", {
+  ## A masked code such as "135****" needs rules = c(ZIP = "prefix"): under the
+  ## default "auto" rule it does not parse as an interval, so it falls back to
+  ## exact string equality and "1350012" is excluded from its own published
+  ## region. Every candidate is then excluded, k = 0, and the release reads as
+  ## perfectly safe -- the same under-report shape as the guard itself, one
+  ## layer down. If `rules` did not reach here, declaring "containment" would
+  ## produce exactly that.
+  set.seed(4)
+  n <- 120
+  raw <- data.frame(
+    ROW_NUMBER = seq_len(n),
+    ZIP = sprintf("%07d", sample(1350000:1350040, n, replace = TRUE)),
+    AGE = sample(20:69, n, replace = TRUE),
+    stringsAsFactors = FALSE
+  )
+  anon <- data.frame(
+    ROW_NUMBER = raw$ROW_NUMBER,
+    ZIP = paste0(substr(raw$ZIP, 1, 3), "****"),
+    AGE = sprintf("[%d,%d)", floor(raw$AGE / 10) * 10, floor(raw$AGE / 10) * 10 + 10),
+    stringsAsFactors = FALSE
+  )
+  d <- join_raw_anon_data(raw, anon)
+  rules <- c(ZIP = "prefix")
+  qi <- c(ZIP = "containment", AGE = "containment")
+
+  ## the set-up check is what says the rule was needed
+  expect_false(any(containment_counts(d, "ZIP")$TRUTH_CONTAINED))
+  expect_true(all(containment_counts(d, c("ZIP", "AGE"),
+                                     rules = rules)$TRUTH_CONTAINED))
+
+  baseline <- 1 / n
+  without <- reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
+                                  seeds = 1:3, screen = "none")
+  with_rules <- reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
+                                     seeds = 1:3, screen = "none", rules = rules)
+
+  ## without the rule the declaration path reports the random baseline ...
+  expect_equal(without$success_analytic[without$level == "M"], baseline)
+  ## ... and with it, several times that (measured: 0.0400 against 0.0083)
+  expect_gt(with_rules$success_analytic[with_rules$level == "M"], 3 * baseline)
+})
+
 ## ---------------------------------------------------------------------------
 ## the two silent under-reports, pinned
 ## ---------------------------------------------------------------------------
