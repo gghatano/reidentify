@@ -456,3 +456,90 @@ test_that("match_optimal() rejects malformed input instead of guessing", {
   )
   expect_error(match_optimal(dup), "duplicated")
 })
+
+## ---------------------------------------------------------------------------
+## match_optimal: the tie tolerance reaches the assignment (Issue #108)
+##
+## #61 gave match_optimal() a `tolerance` argument but applied it only to the
+## reported CONFIDENCE, on the argument that "perturbing the solver's input to
+## make a report unit-invariant could change which assignment is optimal".
+## Measured, that argument runs the wrong way: leaving the raw costs in place
+## is what lets 7e-15 of representation noise pick the assignment, and it picks
+## it *deterministically* -- so a degenerate instance whose true per-record risk
+## is 0.5 is reported as 0 or as 1 depending on which side the last bit fell.
+## Both directions are wrong and one of them is the quiet one.
+## ---------------------------------------------------------------------------
+
+## `n` independent 2x2 blocks. Inside a block, matching straight across and
+## matching crosswise cost exactly the same in real arithmetic, so the true
+## success rate is 0.5. `eps` is the representation noise, put either on the
+## correct assignment or on the wrong one.
+degenerate_blocks <- function(n = 60, eps = 0, where = c("none", "diag", "off")) {
+  where <- match.arg(where)
+  anon <- raw <- score <- numeric(0)
+  for (m in seq_len(n)) {
+    i <- 2L * m - 1L
+    j <- 2L * m
+    d <- rep(1, 4)                               # (i,i) (i,j) (j,i) (j,j)
+    if (where == "diag") d[c(1, 4)] <- 1 + eps
+    if (where == "off") d[c(2, 3)] <- 1 + eps
+    anon <- c(anon, i, i, j, j)
+    raw <- c(raw, i, j, i, j)
+    score <- c(score, d)
+  }
+  new_reid_scores(raw, anon, score, score_type = "distance")
+}
+
+optimal_rate <- function(s, seeds = 1:20, ...) {
+  mean(vapply(seeds, function(sd) mean(match_optimal(s, seed = sd, ...)$RESULT),
+              numeric(1)))
+}
+
+test_that("a degenerate optimum is broken by the seed, not by the last bit", {
+  eps <- 7.1e-15
+  ## the exact instance: the seed decides, so the rate lands near 0.5
+  expect_gt(optimal_rate(degenerate_blocks(60)), 0.3)
+  expect_lt(optimal_rate(degenerate_blocks(60)), 0.7)
+
+  ## and so must the two noisy ones, which are the same instance in real
+  ## arithmetic
+  for (w in c("diag", "off")) {
+    rate <- optimal_rate(degenerate_blocks(60, eps = eps, where = w))
+    expect_gt(rate, 0.3)
+    expect_lt(rate, 0.7)
+  }
+})
+
+test_that("match_optimal tolerance = 0 restores the pre-#108 exact assignment", {
+  eps <- 7.1e-15
+  ## Pinned, not fixed: this is what the bare cost matrix does, and it is the
+  ## reason the default is not 0. `diag` prices the true pair a hair above the
+  ## decoy, so every record is lost; `off` does the reverse.
+  expect_equal(optimal_rate(degenerate_blocks(60, eps = eps, where = "diag"),
+                            tolerance = 0), 0)
+  expect_equal(optimal_rate(degenerate_blocks(60, eps = eps, where = "off"),
+                            tolerance = 0), 1)
+})
+
+test_that("match_optimal and match_greedy agree on what tied means", {
+  eps <- 7.1e-15
+  greedy <- mean(vapply(1:20, function(sd) {
+    mean(match_greedy(degenerate_blocks(60, eps = eps, where = "diag"),
+                      seed = sd)$RESULT)
+  }, numeric(1)))
+  optimal <- optimal_rate(degenerate_blocks(60, eps = eps, where = "diag"))
+  expect_lt(abs(greedy - optimal), 0.2)
+})
+
+test_that("the tie tolerance does not disturb an assignment with real margins", {
+  ## The risk the pre-#108 comment named: snapping the solver's input could
+  ## move a genuine optimum. It does not, because the perturbation is bounded
+  ## by the tolerance and a real margin is not.
+  for (seed in 1:8) {
+    f <- make_noisy_pair(30, noise = 3, seed = seed)
+    s <- two_attribute_scores(f$raw, f$anon)
+    a <- match_optimal(s, seed = 1)
+    b <- match_optimal(s, seed = 1, tolerance = 0)
+    expect_equal(a$RAW_ROW_NUMBER, b$RAW_ROW_NUMBER)
+  }
+})

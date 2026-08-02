@@ -28,8 +28,9 @@ minimised scale}
 
 \item{solve_fn}{a solver function from [reid_lsap_solvers()]}
 
-\item{tolerance}{relative tie tolerance for the CONFIDENCE count only, see
-[match_optimal()]}
+\item{tolerance}{relative tie tolerance, applied to the costs before they
+reach the solver and therefore to the assignment as well as to the
+reported CONFIDENCE, see [match_optimal()]}
 }
 \value{
 a data frame of ANON_ROW_NUMBER, RAW_ROW_NUMBER, CONFIDENCE, RESULT

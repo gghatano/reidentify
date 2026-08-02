@@ -679,3 +679,135 @@ test_that("a full join prints no blocking line at all", {
   expect_false(grepl("BLOCKED", out))
   expect_false(e$blocked)
 })
+
+## ---------------------------------------------------------------------------
+## top_k_candidates: tie tolerance (Issue #108)
+##
+## top_k_candidates() was the last tie-deciding function without a `tolerance`
+## argument after #61, and its own documentation promises "ties are kept, not
+## cut ... cutting on row order would drop true pairs for no reason". The
+## comparison was a bare `<=`, so a tie that exists in the data but not in the
+## double turned into a strict ordering and the promise was broken exactly the
+## way #61 described: the same reals written in 1/10 units keep a different
+## number of candidates and report a different recall.
+## ---------------------------------------------------------------------------
+
+## The #61 numbers themselves. Both ANON records sit at 42.3, the two RAW
+## records at 41.2 and 43.4, so in real arithmetic every ANON record has two
+## candidates tied at 1.1 -- but 42.3 - 41.2 is 1.0999999999999943 and
+## 43.4 - 42.3 is 1.1000000000000014, 7.1e-15 apart.
+tenths_tie_fixture <- function(scale = 1) {
+  list(
+    raw = data.frame(ROW_NUMBER = 1:2, V = c(41.2, 43.4) * scale),
+    anon = data.frame(ROW_NUMBER = 1:2, V = c(42.3, 42.3) * scale)
+  )
+}
+tenths_tie_scores <- function(scale = 1) {
+  f <- tenths_tie_fixture(scale)
+  score_num(join_raw_anon_data(f$raw, f$anon), "V")
+}
+
+test_that("top_k_candidates keeps candidates tied only up to rounding noise", {
+  s <- tenths_tie_scores()
+  ## the tie is real, the doubles disagree
+  v <- sort(s$SCORE[s$ANON_ROW_NUMBER == 1])
+  expect_false(v[1] == v[2])
+  expect_lt(diff(v), 1e-14)
+
+  pruned <- top_k_candidates(s, k = 1)
+  expect_equal(nrow(pruned), 4L)
+  expect_equal(attr(pruned, "blocking")$recall, 1)
+  expect_silent(top_k_candidates(s, k = 1))
+})
+
+test_that("top_k_candidates gives the same recall in different units", {
+  ref <- NULL
+  for (scale in c(1, 10, 1000)) {
+    pruned <- top_k_candidates(tenths_tie_scores(scale), k = 1)
+    got <- c(nrow(pruned), attr(pruned, "blocking")$recall)
+    if (is.null(ref)) ref <- got
+    expect_equal(got, ref)
+  }
+  expect_equal(ref, c(4, 1))
+})
+
+test_that("top_k_candidates tolerance = 0 restores the exact comparison", {
+  s <- tenths_tie_scores()
+  pruned <- suppressWarnings(top_k_candidates(s, k = 1, tolerance = 0))
+  expect_equal(nrow(pruned), 2L)
+  expect_equal(attr(pruned, "blocking")$recall, 0.5)
+
+  expect_error(top_k_candidates(s, k = 1, tolerance = -1), "non-negative")
+  expect_error(top_k_candidates(s, k = 1, tolerance = c(1, 2)), "single finite")
+})
+
+test_that("top_k_candidates ties = random draws uniformly over a noisy tie", {
+  ## With ties = "random" the cap is hard at k, so the question is not how many
+  ## rows survive but *which*: a tie decided by 7e-15 of noise is decided
+  ## deterministically, and the true pair either always survives or never does.
+  s <- tenths_tie_scores()
+  kept <- vapply(1:40, function(sd) {
+    p <- suppressWarnings(top_k_candidates(s, k = 1, ties = "random", seed = sd))
+    mean(p$RAW_ROW_NUMBER == p$ANON_ROW_NUMBER)
+  }, numeric(1))
+  expect_gt(mean(kept), 0.25)
+  expect_lt(mean(kept), 0.75)
+})
+
+## ---------------------------------------------------------------------------
+## top_k_candidates: duplicated candidate pairs (Issue #108 / #60)
+##
+## top_k_candidates() was the one candidate-set entry point that did not check
+## for duplicated (ANON, RAW) pairs. Worse than merely permitting them: with
+## k = 1 and ties = "random" it emits one row per ANON record, so the
+## duplicates are gone from its output and every downstream guard
+## (match_greedy, match_optimal, reid_confidence, reid_evaluate) is satisfied
+## -- after the duplicates have already skewed the draw that chose the survivor.
+## ---------------------------------------------------------------------------
+
+duplicated_pair_scores <- function(times = 2) {
+  raw <- data.frame(ROW_NUMBER = 1:4, V = c(1, 1, 5, 5))
+  s <- score_num(join_raw_anon_data(raw, raw), "V")
+  wrong <- as.data.frame(s)[s$RAW_ROW_NUMBER != s$ANON_ROW_NUMBER, , drop = FALSE]
+  d <- do.call(rbind, c(list(as.data.frame(s)), rep(list(wrong), times)))
+  new_reid_scores(d$RAW_ROW_NUMBER, d$ANON_ROW_NUMBER, d$SCORE,
+                  score_type = attr(s, "score_type"))
+}
+
+test_that("top_k_candidates refuses a duplicated candidate pair", {
+  d <- duplicated_pair_scores()
+  expect_error(top_k_candidates(d, k = 1), "SET")
+  expect_error(top_k_candidates(d, k = 1, ties = "random", seed = 1),
+               "appear exactly once")
+})
+
+test_that("top_k_candidates does not launder duplicates past the downstream guards", {
+  ## The regression this pins: k = 1 with ties = "random" used to return a
+  ## table with one row per ANON record, which match_greedy() and
+  ## reid_evaluate() then accepted without complaint even though the draw that
+  ## produced it had been rigged by the duplicates.
+  d <- duplicated_pair_scores()
+  expect_error(match_greedy(d), "SET")
+  expect_error(suppressWarnings(reid_evaluate(d, seeds = 1:3)), "SET")
+  expect_error(suppressWarnings(top_k_candidates(d, k = 1, ties = "random", seed = 1)),
+               "SET")
+})
+
+test_that("the blocking record names the tolerance only when it was changed", {
+  ## The record exists to say what was discarded, so a lever the caller moved
+  ## belongs in it and one they did not is noise -- the same rule
+  ## block_candidates() applies to `transform`.
+  raw <- data.frame(ROW_NUMBER = 1:4, V = c(1, 1, 5, 5))
+  s <- score_num(join_raw_anon_data(raw, raw), "V")
+
+  default_info <- attr(top_k_candidates(s, k = 2), "blocking")
+  expect_false("tolerance" %in% names(default_info))
+  expect_false(grepl("tolerance",
+                     paste(utils::capture.output(print(default_info)),
+                           collapse = "\n")))
+
+  changed_info <- attr(top_k_candidates(s, k = 2, tolerance = 0), "blocking")
+  expect_equal(changed_info$tolerance, 0)
+  expect_match(paste(utils::capture.output(print(changed_info)), collapse = "\n"),
+               "tolerance = 0")
+})
