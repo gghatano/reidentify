@@ -52,18 +52,23 @@
 
 ## インストール
 
-R 4.x と、依存パッケージ（`dplyr`, `magrittr`, `stringi`, `tibble`, `philentropy`）が
-必要です。**`devtools` は不要**です。
+R 4.1 以上と、依存パッケージ（`dplyr`, `magrittr`, `stringi`, `tibble`, `philentropy`,
+`clue`）が必要です。**`devtools` は不要**です。
 
-`match_optimal()`（大域最適割当）を使う場合は `clue` も必要です。
-無くても、他の機能はそのまま動きます。
+**`clue` は必須です。** 大域最適割当（`match_optimal()`）にしか使いませんが、
+パッケージのロード時に読み込まれるため、無いと `library(reidentify)` 自体が
+`there is no package called 'clue'` で失敗します。
+
+下記のインストール手順は `repos = NULL` を使うため**依存を自動では解決しません**。
+上記 6 つを先に入れてください。
+
 `score_minhash()` / `lsh_candidates()` のハッシュは自前実装なので、追加の依存はありません。
 
 ### 方法 1: GitHub から直接（base R のみ、1 行）
 
 ```r
-install.packages(c("dplyr", "magrittr", "stringi", "tibble", "philentropy"))
-install.packages("clue")  # match_optimal()（大域最適割当）を使う場合
+## 依存はすべて必須。repos = NULL は依存を自動解決しないので先に入れる
+install.packages(c("dplyr", "magrittr", "stringi", "tibble", "philentropy", "clue"))
 
 install.packages(
   "https://github.com/gghatano/reidentify/archive/refs/heads/master.tar.gz",
@@ -796,6 +801,10 @@ head(score_mahalanobis(pairs, c("AGE", "VISIT_COUNT")), 3)
 同じ RAW が複数の ANON に割り当たります。`match_optimal()` は
 「1 人は 1 人にしか対応しない」という制約を入れて総コストを最小化します
 （ハンガリアン法 / `clue`）。
+
+`clue` は `Imports` なので、[インストール](#インストール)の手順どおりに入れていれば
+そのまま使えます。追加で入れる必要はありません（逆に、`clue` が無いと
+`match_optimal()` だけでなく `library(reidentify)` 自体が失敗します）。
 
 ```r
 ## rank 正規化は同点を増やすので、1 対 1 制約の効き方が見えます
