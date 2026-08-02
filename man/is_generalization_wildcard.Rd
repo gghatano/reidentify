@@ -13,6 +13,16 @@ is_generalization_wildcard(x)
 logical vector
 }
 \description{
-does this value mean "suppressed / any value"?
+`NA`, the empty string, a run of `"*"`, and the suppression markers a real
+release writes instead: `"-"`, `"?"`, `"N/A"`, `"unknown"`, `"不明"` and the
+rest of `GEN_WILDCARD_WORDS`. The fullwidth and typographic dashes count as
+dashes.
+}
+\details{
+Numeric sentinels (`"999"`, `"-1"`) are **not** wildcards: they cannot be
+told apart from a real measurement, and treating one as "matches everybody"
+would lower the reported risk of correct data. See the note above and
+[score_containment()], which warns when a published value excludes every RAW
+record.
 }
 \keyword{internal}

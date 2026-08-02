@@ -179,7 +179,72 @@ generalization_units <- function() {
   )
 }
 
+## Suppression markers other than "*" (Issue #101).
+##
+## A release that cannot publish a value writes *something* in the cell, and
+## only a minority of files write "*". The rest write a dash, "N/A", "unknown"
+## or 不明 -- and every one of those fell through parse_generalized_interval(),
+## landed on the exact-match fallback, matched no RAW record at all, and left
+## the ANON record with an empty candidate set. An empty candidate set cannot
+## be reidentified, so the record silently lowered the reported rate: the same
+## failure direction as docs/lessons-learned.md section 2, reached by a
+## notation difference alone.
+##
+## WHICH MARKERS ARE SAFE TO ADD. A wildcard matches *every* RAW value, so a
+## false positive here enlarges candidate sets and lowers the reported risk --
+## the dangerous direction. The list is therefore restricted to strings that
+## cannot plausibly be a real value:
+##
+##   * forms built only from punctuation ("-", "--", "?", "."), which the
+##     alphanumeric alphabet Issue #40 calibrated on cannot produce at all;
+##   * "N/A" and "N.A.", which need a "/" or a "." for the same reason;
+##   * the Japanese suppression words, which need non-ASCII characters;
+##   * the long English words, reachable in principle but at a rate below
+##     1e-6 per draw.
+##
+## Deliberately NOT included, and both exclusions are measured in
+## docs/investigation/empty-candidate-set-benchmark.R:
+##
+##   * bare "NA" / "na". Two characters over [A-Za-z0-9] hits one of its four
+##     casings once in 961 draws -- 0.104%, four times the whole false-positive
+##     budget Issue #40 set for the detector.
+##   * numeric sentinels such as "999" or "-1". Nothing distinguishes them from
+##     a real measurement, and reading a genuine 999 as "matches everybody"
+##     would lower the reported risk of correct data. They are caught instead
+##     by the empty-candidate-set warning in score_containment(), which names
+##     the value that excluded everybody.
+GEN_WILDCARD_WORDS <- c(
+  "n/a", "n.a.", "null", "unknown", "unspecified", "undisclosed",
+  "missing", "withheld", "suppressed", "redacted", "no data", "not available",
+  intToUtf8(c(0x4E0D, 0x660E)),          # 不明   "unknown"
+  intToUtf8(c(0x672A, 0x56DE, 0x7B54)),  # 未回答 "not answered"
+  intToUtf8(c(0x7121, 0x56DE, 0x7B54)),  # 無回答 "no answer"
+  intToUtf8(c(0x975E, 0x516C, 0x958B)),  # 非公開 "not published"
+  intToUtf8(c(0x79D8, 0x533F))           # 秘匿   "suppressed"
+)
+
+## A value made only of these is a marker and not a value: ASCII hyphen, full
+## stop and question mark, and the fullwidth and typographic forms of each,
+## which a Japanese release writes as often as the ASCII ones. Written from code
+## points for the reason given at the head of this file -- U+FF0D and U+2212
+## are indistinguishable from "-" on screen.
+GEN_RE_WILDCARD_PUNCT <- paste0(
+  "^[-.?", intToUtf8(c(0xFF0D, 0x2212, 0x2010, 0x2013, 0x2014,
+                       0xFF0E, 0xFF1F, 0x3000)), "]+$"
+)
+
 #' does this value mean "suppressed / any value"?
+#'
+#' `NA`, the empty string, a run of `"*"`, and the suppression markers a real
+#' release writes instead: `"-"`, `"?"`, `"N/A"`, `"unknown"`, `"不明"` and the
+#' rest of `GEN_WILDCARD_WORDS`. The fullwidth and typographic dashes count as
+#' dashes.
+#'
+#' Numeric sentinels (`"999"`, `"-1"`) are **not** wildcards: they cannot be
+#' told apart from a real measurement, and treating one as "matches everybody"
+#' would lower the reported risk of correct data. See the note above and
+#' [score_containment()], which warns when a published value excludes every RAW
+#' record.
 #'
 #' @param x character vector
 #'
@@ -187,7 +252,11 @@ generalization_units <- function() {
 #'
 #' @keywords internal
 is_generalization_wildcard <- function(x) {
-  is.na(x) | !nzchar(trimws(x)) | grepl("^\\*+$", trimws(x))
+  s <- trimws(as.character(x))
+  na <- is.na(s)
+  s[na] <- ""
+  na | !nzchar(s) | grepl("^\\*+$", s) | grepl(GEN_RE_WILDCARD_PUNCT, s) |
+    tolower(s) %in% GEN_WILDCARD_WORDS
 }
 
 ## ---------------------------------------------------------------------------
@@ -634,12 +703,118 @@ parse_generalized_interval <- function(x, units = generalization_units()) {
   NULL
 }
 
+## ---------------------------------------------------------------------------
+## reading the RAW side (Issue #101)
+##
+## Issue #92 taught the parser to read "65歳以上" on the ANON side. The RAW side
+## was left on as.numeric(), which reads "37" and returns NA for "37歳" -- and
+## an original file that carries its unit is not unusual, it is the same file
+## the anonymiser read. The consequence is not an error:
+##
+##   RAW = 37     success = 0.1200   lift = 24.00x   empty candidate sets:   0/200
+##   RAW = 37歳   success = 0.0050   lift =  1.00x   empty candidate sets: 200/200
+##
+## Nothing is contained, every candidate ties at 1, match_greedy() draws
+## uniformly, and the reported rate lands exactly on the random baseline --
+## while blocked stays FALSE, n_true_missing stays 0 and truth_coverage stays 1,
+## because the true pair *is* in the candidate table, merely excluded. The
+## release reads as perfectly safe because of a suffix.
+##
+## ONLY A POINT IS ACCEPTED. A RAW value is a value, so the parse is used only
+## when it yields a degenerate closed interval: "37歳" is 37 and "5万円" is
+## 50000, but "30-39" on the RAW side is not turned into a region. Widening a
+## RAW value into a region would enlarge candidate sets, and enlarging them is
+## the direction that flatters the data.
+##
+## A ONE-LETTER ASCII UNIT IS NOT A UNIT HERE. The unit list holds "m", "g" and
+## "y", and digit + one of those is 30 of the 3844 two-character strings over
+## [A-Za-z0-9]: reading them all would turn 0.78% of a random alphanumeric code
+## column into numbers, against the 0.0245% budget Issue #40 set for the
+## detector. Holding the one-letter *letters* back costs "70 m" and "37 y" and
+## takes the measured rate to +0.0000 pp, keeping "30kg", "180cm", "30yrs" and
+## every non-ASCII form. "%" is a single character but not a letter and no
+## alphanumeric string can produce it, so "10%" is still read. The rates for
+## both variants are in docs/investigation/empty-candidate-set-benchmark-log.txt.
+##
+## This is the same trade Issue #92 made for the ASCII "30s" decade, which is
+## deliberately read on the unstripped string so that "0ms" is not a decade: the
+## parser is shared, and the one ambiguous ASCII surface is narrowed rather than
+## the whole reading being given up.
+## ---------------------------------------------------------------------------
+
+#' the unit list as the RAW side uses it
+#'
+#' [generalization_units()] minus the single ASCII letters. See the note above
+#' for the measured reason.
+#'
+#' @param units unit strings
+#'
+#' @return `units` without its one-character ASCII letters
+#'
+#' @keywords internal
+gen_raw_units <- function(units) {
+  units[!grepl("^[A-Za-z]$", units)]
+}
+
+#' read RAW values as numbers, units and all
+#'
+#' [as.numeric()] first, because that is the whole answer for an ordinary
+#' numeric column and must stay byte-identical. Only the values it cannot read
+#' are handed to [parse_generalized_interval()], with [gen_raw_units()] rather
+#' than the full unit list, and only a point interval is taken from it.
+#'
+#' The result is cached on the input vector: [node_matches()] is called once per
+#' ANON node and once per hierarchy descendant with the *same* RAW vector, so
+#' without the cache a hierarchy with 50 nodes parses every RAW value 50 times.
+#'
+#' @param vals character vector of RAW values
+#' @param units unit strings, see [generalization_units()]
+#'
+#' @return numeric vector the same length as `vals`
+#'
+#' @keywords internal
+gen_raw_numeric <- local({
+  last_key <- NULL
+  last_value <- NULL
+  function(vals, units) {
+    key <- list(vals, units)
+    if (!is.null(last_key) && identical(key, last_key)) {
+      return(last_value)
+    }
+    out <- suppressWarnings(as.numeric(vals))
+    todo <- is.na(out) & !is.na(vals)
+    if (any(todo)) {
+      ru <- gen_raw_units(units)
+      u <- unique(vals[todo])
+      pt <- vapply(u, function(v) {
+        iv <- parse_generalized_interval(v, ru)
+        if (is.null(iv) || !isTRUE(iv$lower == iv$upper) ||
+            !isTRUE(iv$lower_closed) || !isTRUE(iv$upper_closed)) {
+          return(NA_real_)
+        }
+        iv$lower
+      }, numeric(1), USE.NAMES = FALSE)
+      out[todo] <- pt[match(vals[todo], u)]
+    }
+    last_key <<- key
+    last_value <<- out
+    out
+  }
+})
+
 #' test whether values fall inside one generalisation node
 #'
-#' A node is either an interval (tested numerically) or a literal category
-#' (tested by string equality). `rule` forces one reading; `"auto"` tries the
-#' interval reading first and falls back to equality, which is what makes a
-#' mixed file of "30代" and "東京都" work with no configuration.
+#' A node is either an interval (tested numerically), a suppression mask such as
+#' `"135****"` (tested by prefix) or a literal category (tested by string
+#' equality). `rule` forces one reading; `"auto"` tries the mask reading, then
+#' the interval reading, and falls back to equality, which is what makes a mixed
+#' file of "30代", "135****" and "東京都" work with no configuration.
+#'
+#' `"auto"` reads a mask as a prefix since Issue #109. It used to fall through
+#' to string equality, so a masked column matched nobody and reported a rate
+#' 106x below the one `rules = c(ZIP = "prefix")` reported on the same data --
+#' while [generalization_evidence()] had been choosing the prefix rule for
+#' exactly these values all along.
 #'
 #' @param values character vector of RAW values
 #' @param node the ANON-side node
@@ -663,6 +838,15 @@ node_matches <- function(values, node, rule = "auto", units = generalization_uni
     return(!is.na(vals) & startsWith(vals, prefix))
   }
 
+  ## A mask is structurally a prefix and nothing else: "135****" can only ever
+  ## have meant "a code beginning 135". Reading it as a category was a silent
+  ## exclusion of every RAW record (Issue #109). rule = "interval" is left
+  ## alone -- a caller who asked for intervals gets the interval error below.
+  if (identical(rule, "auto") && is_generalization_mask(node)) {
+    prefix <- sub("\\*+$", "", node)
+    return(!is.na(vals) & startsWith(vals, prefix))
+  }
+
   iv <- parse_generalized_interval(node, units)
   if (is.null(iv)) {
     if (identical(rule, "interval")) {
@@ -674,7 +858,7 @@ node_matches <- function(values, node, rule = "auto", units = generalization_uni
     return(!is.na(vals) & vals == node)
   }
 
-  numv <- suppressWarnings(as.numeric(vals))
+  numv <- gen_raw_numeric(vals, units)
   inside <- !is.na(numv) &
     (if (iv$lower_closed) numv >= iv$lower else numv > iv$lower) &
     (if (iv$upper_closed) numv <= iv$upper else numv < iv$upper)
@@ -1479,7 +1663,9 @@ resolve_containment_rules <- function(targets, rules, fn_name) {
 #' @param rule containment rule
 #' @param units unit strings
 #'
-#' @return logical vector, one per row
+#' @return logical vector, one per row, carrying a `dead_nodes` attribute: the
+#'   published values that excluded *every* RAW value, each tagged with how it
+#'   was read
 #'
 #' @keywords internal
 containment_vector <- function(raw_vals, anon_vals, attribute, hierarchy,
@@ -1506,7 +1692,28 @@ containment_vector <- function(raw_vals, anon_vals, attribute, hierarchy,
     m[, j] <- hit
   }
 
-  m[cbind(match(raw_vals, uv), match(anon_vals, ug))]
+  ## Issue #101: which published values matched nothing at all, and -- the part
+  ## that says what to do about it -- whether they were even readable as a
+  ## region. A value that fell through parse_generalized_interval() was compared
+  ## as a literal string, so "-" or "N/A" or "37歳" excluded everybody for a
+  ## reason that has nothing to do with the data. This is a *diagnosis*, not a
+  ## trigger: it is only ever shown next to an empty candidate set, so a node
+  ## that legitimately covers nobody costs nothing.
+  out <- m[cbind(match(raw_vals, uv), match(anon_vals, ug))]
+  dead <- ug[length(uv) > 0 & colSums(m) == 0]
+  attr(out, "dead_nodes") <- vapply(dead, function(g) {
+    if (is.na(g)) {
+      return("NA")
+    }
+    if (!is.null(parse_generalized_interval(g, units))) {
+      "read as an interval"
+    } else if (is_generalization_mask(g)) {
+      "read as a mask"
+    } else {
+      "not readable as a region -- compared as a literal string"
+    }
+  }, character(1), USE.NAMES = TRUE)
+  out
 }
 
 #' compute joint containment over several targets
@@ -1534,13 +1741,14 @@ joint_containment <- function(dat_raw_anon, targets, row_number, hierarchy,
          "from generalization_hierarchy() / read_generalization_hierarchy().",
          call. = FALSE)
   }
+  check_hierarchy_attributes(hierarchy, targets, fn_name)
   rule_of <- resolve_containment_rules(targets, rules, fn_name)
 
   cols <- lapply(targets, function(t) {
     reid_prefixed_columns(dat_raw_anon, t, row_number, fn_name)
   })
 
-  per_target <- vapply(seq_along(targets), function(i) {
+  vecs <- lapply(seq_along(targets), function(i) {
     containment_vector(
       as.character(dat_raw_anon[[cols[[i]]$raw_target]]),
       as.character(dat_raw_anon[[cols[[i]]$anon_target]]),
@@ -1549,15 +1757,70 @@ joint_containment <- function(dat_raw_anon, targets, row_number, hierarchy,
       rule = rule_of[[targets[i]]],
       units = units
     )
-  }, logical(nrow(dat_raw_anon)))
-  per_target <- matrix(per_target, nrow = nrow(dat_raw_anon),
+  })
+  dead_nodes <- setNames(lapply(vecs, function(v) attr(v, "dead_nodes")), targets)
+  per_target <- matrix(unlist(lapply(vecs, as.vector), use.names = FALSE),
+                       nrow = nrow(dat_raw_anon),
                        dimnames = list(NULL, targets))
 
   list(
     contained = as.logical(rowSums(per_target) == length(targets)),
     raw_row_number = dat_raw_anon[[cols[[1]]$raw_row_number]],
     anon_row_number = dat_raw_anon[[cols[[1]]$anon_row_number]],
-    per_target = per_target
+    per_target = per_target,
+    dead_nodes = dead_nodes
+  )
+}
+
+#' refuse a hierarchy that cannot apply to any of the targets
+#'
+#' A hierarchy is selected by attribute name, and [descendants_of()] returns
+#' `character(0)` for a name it does not hold. Nothing downstream can tell that
+#' apart from "this node has no children", so a hierarchy passed under the wrong
+#' name used to be *ignored in silence*: the output of `hierarchy = h` and
+#' `hierarchy = NULL` did not differ in one bit, and on a postcode fixture that
+#' was a 106x under-report (Issue #109).
+#'
+#' [generalize_value()] already stops on exactly this mismatch. The two sides of
+#' the same feature disagreeing is what made the failure invisible: the
+#' generator refuses the typo, the matcher accepts it and reports safety.
+#'
+#' A hierarchy that covers *some* of the targets is fine and common -- an AREA
+#' tree next to an AGE column whose bands speak for themselves. Only a hierarchy
+#' that can never apply to anything is an error.
+#'
+#' @param hierarchy a "reid_hierarchy" object, or NULL
+#' @param targets the target column names
+#' @param fn_name used in the message
+#'
+#' @return `invisible(NULL)`
+#'
+#' @keywords internal
+check_hierarchy_attributes <- function(hierarchy, targets, fn_name) {
+  if (is.null(hierarchy)) {
+    return(invisible(NULL))
+  }
+  have <- unique(hierarchy$edges$attribute)
+  if (any(targets %in% have)) {
+    return(invisible(NULL))
+  }
+  near <- have[tolower(have) %in% tolower(targets)]
+  stop(
+    fn_name, "(): the hierarchy declares attribute(s) ",
+    paste0("\"", have, "\"", collapse = ", "), ", none of which is a target ",
+    "column (", paste0("\"", targets, "\"", collapse = ", "), "). It could ",
+    "not widen a single published value, so passing it and passing ",
+    "hierarchy = NULL would report exactly the same risk -- which is why this ",
+    "stops rather than continuing quietly. ",
+    if (length(near) > 0) {
+      paste0("Attribute name(s) differing only in case: ",
+             paste0("\"", near, "\"", collapse = ", "), ". ")
+    } else {
+      ""
+    },
+    "The `attribute` column of the hierarchy must hold the target column name ",
+    "as it appears in `targets`.",
+    call. = FALSE
   )
 }
 
@@ -1583,7 +1846,16 @@ joint_containment <- function(dat_raw_anon, targets, row_number, hierarchy,
 #'
 #' A value of `"*"`, `"**"`, `""` or `NA` on the ANON side means "suppressed"
 #' and matches every RAW value, so a fully suppressed column contributes
-#' nothing rather than excluding everybody.
+#' nothing rather than excluding everybody. So do the suppression markers a
+#' release writes instead of `"*"` -- `"-"`, `"?"`, `"N/A"`, `"unknown"`,
+#' `"不明"`; see [is_generalization_wildcard()].
+#'
+#' Warns when any ANON record ends up with an **empty** candidate set. That is
+#' the failure Issue #101 is about: nothing is contained, every candidate ties
+#' at 1, and the record contributes the random baseline to the reported rate --
+#' while [reid_evaluate()]'s `blocked` / `n_true_missing` / `truth_coverage` all
+#' still report a healthy join, because the candidate table keeps its full
+#' shape. The warning names the published values that excluded everybody.
 #'
 #' @inheritParams score_num
 #' @param targets character vector of column names (before RAW_/ANON_
@@ -1601,6 +1873,7 @@ joint_containment <- function(dat_raw_anon, targets, row_number, hierarchy,
 #'
 #' @return a "reid_scores" table (a distance in \[0, 1\]: smaller is a better
 #'   match), carrying a `candidate_count` attribute -- the `k` per ANON record.
+#'   [reid_evaluate()] reads it and prints how many records have `k == 0`.
 #'
 #' @seealso [containment_counts()] for the per-record narrowing, and
 #'   [generalize_value()] for building generalised columns.
@@ -1627,6 +1900,8 @@ score_containment <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   ## finite k, so exclusion is never beaten by a merely-large candidate set.
   score <- ifelse(jc$contained, 1 - 1 / k[as.character(jc$anon_row_number)], 1)
 
+  warn_empty_candidate_sets(k, jc$dead_nodes, .fn_name)
+
   out <- new_reid_scores(
     raw_row_number = jc$raw_row_number,
     anon_row_number = jc$anon_row_number,
@@ -1634,6 +1909,75 @@ score_containment <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   )
   attr(out, "candidate_count") <- k
   out
+}
+
+#' warn when containment left an ANON record with no candidate at all
+#'
+#' The one-line check Issue #101 is about. `k == 0` means every RAW record was
+#' excluded, so that ANON record ties at score 1 across the board, `match_greedy()`
+#' draws uniformly among all of them, and the record contributes the *random
+#' baseline* to the reported rate. When it happens to every record the whole
+#' report lands on `lift = 1.00x`.
+#'
+#' Nothing else notices. The candidate table still has its full `n_anon x n_raw`
+#' rows and still contains the true pair, so `blocked` is FALSE,
+#' `n_true_missing` is 0 and `truth_coverage` is 1 -- all three of
+#' [reid_evaluate()]'s existing guards look at the *shape* of the candidate set,
+#' and this failure leaves the shape intact and empties the set semantically.
+#' The count was already computed exactly, and already attached to the score
+#' table as `candidate_count`; it was simply never read.
+#'
+#' The message names the published values that excluded everybody and says how
+#' each was read, because "0 candidates" and "0 candidates because \"-\" was
+#' compared as a literal string" call for different fixes.
+#'
+#' @param k the per-ANON candidate counts from [containment_k()]
+#' @param dead_nodes the per-target diagnosis from [joint_containment()]
+#' @param fn_name the user-facing function name
+#'
+#' @return `invisible(TRUE)` when it warned, `invisible(FALSE)` otherwise
+#'
+#' @keywords internal
+warn_empty_candidate_sets <- function(k, dead_nodes, fn_name) {
+  n_zero <- sum(k == 0)
+  if (n_zero == 0) {
+    return(invisible(FALSE))
+  }
+
+  detail <- ""
+  shown <- 0L
+  for (target in names(dead_nodes)) {
+    d <- dead_nodes[[target]]
+    if (length(d) == 0 || shown >= 3L) {
+      next
+    }
+    take <- utils::head(seq_along(d), 3L - shown)
+    shown <- shown + length(take)
+    detail <- paste0(
+      detail, " In column \"", target, "\", ", length(d),
+      " published value(s) matched no RAW record at all: ",
+      paste(sprintf("\"%s\" (%s)", names(d)[take], unname(d)[take]),
+            collapse = ", "), "."
+    )
+  }
+
+  warning(
+    fn_name, "(): ", n_zero, " of ", length(k), " ANON record(s) have an EMPTY ",
+    "candidate set -- no RAW record falls inside every published region, so ",
+    "they can never be reidentified and every rate computed from them is 0 by ",
+    "construction. This is the absence of a measurement, not evidence that the ",
+    "release is safe (docs/lessons-learned.md section 2), and the usual guards ",
+    "cannot see it: the candidate table keeps its full shape and still contains ",
+    "the true pair, so `blocked`, `n_true_missing` and `truth_coverage` all ",
+    "report a healthy join.", detail,
+    " Check that RAW and ANON write the same column the same way (a unit or a ",
+    "suffix on one side only), that a categorical generalisation has a ",
+    "`hierarchy`, and that a suppression marker the release uses is one this ",
+    "package reads as a wildcard. containment_counts() shows the same counts ",
+    "per record, with TRUTH_CONTAINED.",
+    call. = FALSE
+  )
+  invisible(TRUE)
 }
 
 #' number of distinct RAW records surviving containment, per ANON record

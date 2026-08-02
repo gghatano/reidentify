@@ -34,7 +34,14 @@ string equality, in both cases widened by the hierarchy), `"interval"`,
 `"exact"` or `"prefix"` (for masked codes such as `"135****"`)}
 
 \item{units}{unit strings that may follow a number, see
-[generalization_units()]}
+  [generalization_units()]
+
+Warns when any ANON record ends up with an **empty** candidate set. That is
+the failure Issue #101 is about: nothing is contained, every candidate ties
+at 1, and the record contributes the random baseline to the reported rate --
+while [reid_evaluate()]'s `blocked` / `n_true_missing` / `truth_coverage` all
+still report a healthy join, because the candidate table keeps its full shape.
+The warning names the published values that excluded everybody.}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user
@@ -43,6 +50,7 @@ actually called}
 \value{
 a "reid_scores" table (a distance in \[0, 1\]: smaller is a better
   match), carrying a `candidate_count` attribute -- the `k` per ANON record.
+  [reid_evaluate()] reads it and prints how many records have `k == 0`.
 }
 \description{
 The score for anonymised data that publishes *regions* instead of values:

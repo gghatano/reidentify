@@ -548,19 +548,30 @@ test_that("a hierarchy reaches score_containment() through the declaration path"
                score_containment(d, "AREA", hierarchy = hier)$SCORE)
 
   ## without the hierarchy nothing is contained at all, which is exactly why
-  ## the argument has to be reachable from here
-  without_h <- score_containment(d, "AREA")
+  ## the argument has to be reachable from here -- and since Issue #101 that
+  ## is also announced rather than left to be noticed
+  expect_warning(without_h <- score_containment(d, "AREA"),
+                 "EMPTY candidate set")
   expect_true(all(without_h$SCORE == 1))
 })
 
 test_that("`rules` reaches score_containment() through the declaration path", {
-  ## A masked code such as "135****" needs rules = c(ZIP = "prefix"): under the
-  ## default "auto" rule it does not parse as an interval, so it falls back to
-  ## exact string equality and "1350012" is excluded from its own published
-  ## region. Every candidate is then excluded, k = 0, and the release reads as
-  ## perfectly safe -- the same under-report shape as the guard itself, one
-  ## layer down. If `rules` did not reach here, declaring "containment" would
-  ## produce exactly that.
+  ## ISSUE #109 CHANGED WHICH RULE THIS HAS TO FORCE, not what it is testing.
+  ##
+  ## As written for #100 this used rules = c(ZIP = "prefix") on a masked code
+  ## such as "135****": under "auto" the mask did not parse as an interval, fell
+  ## back to exact string equality, and excluded "1350012" from its own
+  ## published region -- k = 0 and the release read as perfectly safe. #109
+  ## fixed that: "auto" now reads a trailing "*" as the prefix it always was, so
+  ## "prefix" and "auto" agree on this fixture and forcing it no longer changes
+  ## anything. See tests/testthat/test-empty-candidate-set.R.
+  ##
+  ## The thing being pinned here is that `rules` *arrives* at
+  ## score_containment() through reid_knowledge_curve(), and that is now shown
+  ## the other way round: rules = c(ZIP = "exact") forces the reading "auto"
+  ## used to fall into by accident, and collapses the measured rate back onto
+  ## the random baseline. A `rules` that went nowhere would leave the two runs
+  ## identical, which is exactly what this test exists to catch.
   set.seed(4)
   n <- 120
   raw <- data.frame(
@@ -576,24 +587,32 @@ test_that("`rules` reaches score_containment() through the declaration path", {
     stringsAsFactors = FALSE
   )
   d <- join_raw_anon_data(raw, anon)
-  rules <- c(ZIP = "prefix")
+  rules <- c(ZIP = "exact")
   qi <- c(ZIP = "containment", AGE = "containment")
 
-  ## the set-up check is what says the rule was needed
-  expect_false(any(containment_counts(d, "ZIP")$TRUTH_CONTAINED))
-  expect_true(all(containment_counts(d, c("ZIP", "AGE"),
-                                     rules = rules)$TRUTH_CONTAINED))
+  ## the set-up check is what says the rule reaches the score: "auto" contains
+  ## every record's truth, "exact" contains none of it
+  expect_true(all(containment_counts(d, "ZIP")$TRUTH_CONTAINED))
+  expect_equal(containment_counts(d, "ZIP")$N_CONTAINED,
+               containment_counts(d, "ZIP",
+                                  rules = c(ZIP = "prefix"))$N_CONTAINED)
+  expect_false(any(suppressWarnings(
+    containment_counts(d, c("ZIP", "AGE"), rules = rules)
+  )$TRUTH_CONTAINED))
 
   baseline <- 1 / n
   without <- reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
                                   seeds = 1:3, screen = "none")
-  with_rules <- reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
-                                     seeds = 1:3, screen = "none", rules = rules)
+  with_rules <- suppressWarnings(
+    reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
+                         seeds = 1:3, screen = "none", rules = rules)
+  )
 
-  ## without the rule the declaration path reports the random baseline ...
-  expect_equal(without$success_analytic[without$level == "M"], baseline)
-  ## ... and with it, several times that (measured: 0.0400 against 0.0083)
-  expect_gt(with_rules$success_analytic[with_rules$level == "M"], 3 * baseline)
+  ## the forced rule empties every candidate set, so the declaration path
+  ## reports the random baseline ...
+  expect_equal(with_rules$success_analytic[with_rules$level == "M"], baseline)
+  ## ... and the default reading gets several times that
+  expect_gt(without$success_analytic[without$level == "M"], 3 * baseline)
 })
 
 ## ---------------------------------------------------------------------------

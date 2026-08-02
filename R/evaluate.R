@@ -236,6 +236,24 @@ top_k_probability <- function(n_better, tie_size, k) {
 #' record could have been reidentified, so every rate is 0 by construction. That
 #' prints identically to a genuinely safe release, so this warns.
 #'
+#' @section Empty candidate sets:
+#'
+#' Both tests above look at the *shape* of the candidate table, and Issue #101
+#' is a failure that leaves the shape perfectly intact. [score_containment()]
+#' keeps every pair -- an excluded candidate scores 1 rather than being dropped
+#' -- so an ANON record whose published region contains no RAW record at all
+#' still has `n_raw` candidates, still has its true pair among them, and passes
+#' both tests: `blocked` FALSE, `n_true_missing` 0, `truth_coverage` 1. It
+#' simply cannot be reidentified. Every candidate ties, [match_greedy()] draws
+#' uniformly, and the record contributes exactly the random baseline; when it
+#' happens to every record the whole report reads `lift 1.00x`, which is what a
+#' unit written on one side only produces.
+#'
+#' `n_zero_candidate` is read from the `candidate_count` attribute
+#' [score_containment()] attaches, and is `NA` for a score table that does not
+#' carry one. [score_containment()] itself warns; this is the same fact carried
+#' through to the printed report.
+#'
 #' @return an object of class "reid_evaluation": a list with
 #'   \describe{
 #'     \item{n_anon, n_raw, n_pairs}{size of the problem}
@@ -250,6 +268,10 @@ top_k_probability <- function(n_better, tie_size, k) {
 #'     \item{blocked}{TRUE when the candidate set is not the full cross join,
 #'       by either test: fewer rows than `n_anon * n_raw`, **or**
 #'       `n_true_missing > 0`}
+#'     \item{n_zero_candidate}{how many ANON records had an empty candidate set
+#'       under containment (`candidate_count == 0`), or `NA` when the score
+#'       table carries no such attribute. Independent of `blocked`: the table
+#'       keeps its full shape, so neither test above can see it (Issue #101)}
 #'     \item{confidence}{which confidence measure the sweep thresholded on}
 #'     \item{success_analytic}{exact expected single-guess success rate}
 #'     \item{success_mean, success_sd, success_min, success_max, n_seeds}{the
@@ -417,6 +439,28 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
   n_true_missing <- sum(is.na(per_anon$TRUE_RANK))
   truth_coverage <- if (n_anon > 0) 1 - n_true_missing / n_anon else NA_real_
 
+  ## ---- was any ANON record left with nothing to choose between? -----------
+  ## Both tests above are tests on the *shape* of the candidate table, and
+  ## Issue #101 is a failure that leaves the shape untouched. score_containment()
+  ## keeps every pair -- an excluded candidate scores 1 rather than being
+  ## dropped -- so an ANON record whose published region contains no RAW record
+  ## at all still has n_raw candidates, still has its true pair among them, and
+  ## still passes both tests. It simply cannot be reidentified: every candidate
+  ## ties, match_greedy() draws uniformly, and the record contributes exactly
+  ## the random baseline. score_containment() has been recording the count as
+  ## the `candidate_count` attribute since Issue #20 and nothing ever read it.
+  n_zero_candidate <- NA_integer_
+  cand_k <- attr(scores, "candidate_count")
+  if (!is.null(cand_k) && !is.null(names(cand_k))) {
+    ## Indexed by ANON record, so it is lined up rather than assumed to be in
+    ## the same order; a name that is not there leaves the field NA rather than
+    ## producing a count from a partial match.
+    mine <- cand_k[as.character(per_anon$ANON_ROW_NUMBER)]
+    if (!anyNA(mine)) {
+      n_zero_candidate <- sum(mine == 0)
+    }
+  }
+
   ## "Nothing was found" and "nothing could have been found" print identically
   ## -- 0.0000 everywhere -- and only one of them is good news. Say which one
   ## it is before the reader reads the zeros (Issue #56). block_candidates()
@@ -447,6 +491,7 @@ reid_evaluate <- function(scores, seeds = 1:20, top_k = c(1, 5, 10),
       n_true_missing = n_true_missing,
       truth_coverage = truth_coverage,
       truth_measurable = n_anon > 0 && n_true_missing < n_anon,
+      n_zero_candidate = n_zero_candidate,
       blocked = nrow(scores) < n_pairs_full || n_true_missing > 0,
       confidence = confidence,
       success_analytic = success_analytic,
@@ -637,6 +682,32 @@ print.reid_evaluation <- function(x, ...) {
         "row-count\n       test cannot see this. Those records can never be ",
         "reidentified: the\n       success rate below is a LOWER bound.\n", sep = "")
   }
+  ## Issue #101: independent of both tests above, and printed whether or not
+  ## either fired. This one is not about the shape of the candidate table at
+  ## all -- the table is complete -- but about candidate sets that are
+  ## semantically empty, which is what a notation mismatch between RAW and ANON
+  ## produces. Zero candidates means "reidentified with probability 1/n_raw",
+  ## i.e. the random baseline, printed as if it were a measurement.
+  n_zero <- x$n_zero_candidate %||% NA_integer_
+  if (length(n_zero) == 1L && !is.na(n_zero) && n_zero > 0) {
+    cat(sprintf(
+      "  containment    : %d/%d ANON record(s) have an EMPTY candidate set (k = 0)\n",
+      n_zero, x$n_anon
+    ))
+    cat("    -> no RAW record falls inside their published region, so every ",
+        "candidate ties\n       and the attack degenerates to guessing. Those ",
+        "records contribute the random\n       baseline to the rate below, not ",
+        "a measurement.\n", sep = "")
+    if (n_zero >= x$n_anon) {
+      cat("    -> this is EVERY record: the rate below cannot differ from the ",
+          "random baseline.\n       Check that RAW and ANON write the column ",
+          "the same way (units, suffixes),\n       that a categorical ",
+          "generalisation has a hierarchy, and that the release's\n       ",
+          "suppression marker is read as a wildcard. See containment_counts().\n",
+          sep = "")
+    }
+  }
+
   if (n_missing > 0 && n_missing >= x$n_anon) {
     cat("  ! NOT MEASURABLE: no ANON record has its true RAW record among its ",
         "candidates.\n    Every rate below is 0 by construction. That is the ",
