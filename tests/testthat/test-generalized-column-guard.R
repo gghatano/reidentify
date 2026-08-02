@@ -334,3 +334,358 @@ test_that("the fourfold under-report is no longer reachable without asking for i
   ## and the misuse is not silently available
   expect_error(combine_scores(lapply(c("AGE", "SEX"), function(t) score_char(d, t))))
 })
+
+## ---------------------------------------------------------------------------
+## Issue #100: the guard belongs to the computation, not to a list of functions
+##
+## The Issue #40 fix put check_generalized_target() into three score functions
+## by hand. reid_score_types() lets a caller declare eight, attacker_knowledge()
+## accepts all eight, and the package exports more score functions than that.
+## Measured on a fully generalised AGE column (N = 200, decade intervals):
+##
+##   score_num / char / dist / rank / count / span   -> stopped
+##   score_idf                                       -> ran, success 0.0100
+##   score_profile                                   -> ran, success 0.0100
+##   score_jaccard / minhash / scoreboard            -> ran, success 0.0100
+##   score_idf_match(AGE, SEX)                       -> ran, success 0.0050
+##   score_containment(AGE, SEX)  [the true answer]  ->      success 0.0500
+##
+## Five to ten times too low, no error, no warning. Every one of the missing
+## functions was missing for the same reason: it was not on the list.
+##
+## The tests below are therefore written against the *package's own exports*
+## rather than against a list written out here, so that a score function added
+## later cannot be quietly left out of the guard the way these were.
+## ---------------------------------------------------------------------------
+
+gen_call <- function(fn_name, d, ...) {
+  fn <- get(fn_name, envir = asNamespace("reidentify"))
+  ## some score functions take one `target`, some a vector of `targets`; both
+  ## accept a single column name in the same position
+  do.call(fn, c(list(d, "AGE"), list(...)))
+}
+
+test_that("the guard policy table accounts for every exported score function", {
+  ## THE RECURRENCE GUARD. Add an exported score_*() function and this fails
+  ## until reid_generalized_guard_policy() says what it does with a generalised
+  ## column -- which is the question nobody was made to answer for score_idf(),
+  ## score_profile(), score_jaccard(), score_minhash() or score_scoreboard().
+  policy <- reid_generalized_guard_policy()
+  exported <- reid_exported_score_functions()
+
+  expect_setequal(names(policy), exported)
+  expect_true(all(policy %in% c("refuse", "containment", "delegates")))
+  ## exactly one score reads a region as a region
+  expect_equal(names(policy)[policy == "containment"], "score_containment")
+})
+
+test_that("every score function declared 'refuse' actually refuses a generalised column", {
+  d <- gen_fixture()
+  policy <- reid_generalized_guard_policy()
+  refusing <- names(policy)[policy == "refuse"]
+  ## the list is not empty by accident
+  expect_gt(length(refusing), 10)
+
+  for (fn_name in refusing) {
+    msg <- tryCatch({
+      gen_call(fn_name, d)
+      NA_character_
+    }, error = conditionMessage)
+
+    expect_false(is.na(msg),
+                 label = paste0(fn_name, "() returned a score for a fully ",
+                                "generalised column instead of refusing it"))
+    expect_match(msg, "score_containment", fixed = TRUE,
+                 label = paste0(fn_name, "() error message"))
+    expect_match(msg, fn_name, fixed = TRUE,
+                 label = paste0(fn_name, "() error message"))
+  }
+})
+
+test_that("'refuse' never means a silent warning: nothing merely warns", {
+  d <- gen_fixture()
+  policy <- reid_generalized_guard_policy()
+  for (fn_name in names(policy)[policy == "refuse"]) {
+    warned <- FALSE
+    tryCatch(
+      withCallingHandlers(gen_call(fn_name, d),
+                          warning = function(w) {
+                            warned <<- TRUE
+                            invokeRestart("muffleWarning")
+                          }),
+      error = function(e) NULL
+    )
+    expect_false(warned,
+                 label = paste0(fn_name, "() downgraded the guard to a warning"))
+  }
+})
+
+test_that("generalized = 'ignore' is the only way past the guard, for every score", {
+  ## The escape hatch has to stay reachable -- a tool people cannot switch off
+  ## gets worked around -- but it must be the *only* way through. Some of these
+  ## still stop afterwards for an unrelated reason (a region is not a number);
+  ## what must not survive is the generalisation refusal itself.
+  d <- gen_fixture()
+  policy <- reid_generalized_guard_policy()
+  for (fn_name in names(policy)[policy == "refuse"]) {
+    msg <- tryCatch({
+      suppressWarnings(gen_call(fn_name, d, generalized = "ignore"))
+      NA_character_
+    }, error = conditionMessage)
+    if (!is.na(msg)) {
+      expect_false(grepl("is generalised on the ANON side", msg, fixed = TRUE),
+                   label = paste0(fn_name, "(generalized = \"ignore\")"))
+    }
+  }
+})
+
+test_that("every declarable score type has a policy, and only 'containment' survives", {
+  ## The second recurrence guard, on reid_score_types() rather than on the
+  ## exports: adding a type without pointing it at a guarded function fails
+  ## here. Declaring a generalised column as anything but "containment" must
+  ## stop, because that is the difference Issue #100 measured.
+  d <- gen_fixture()
+  policy <- reid_generalized_guard_policy()
+  ns <- asNamespace("reidentify")
+
+  for (ty in reid_score_types()) {
+    fn <- score_fn_for_type(ty)
+    nm <- names(policy)[vapply(names(policy),
+                               function(n) identical(get(n, envir = ns), fn),
+                               logical(1))]
+    expect_length(nm, 1L)
+
+    k <- attacker_knowledge("S", stats::setNames(c(ty, "char"), c("AGE", "SEX")))
+    if (identical(ty, "containment")) {
+      expect_s3_class(suppressWarnings(score_by_knowledge(d, k)), "reid_scores")
+    } else {
+      expect_error(suppressWarnings(score_by_knowledge(d, k)),
+                   regexp = "score_containment",
+                   label = paste0("score_by_knowledge with AGE declared \"", ty, "\""))
+    }
+  }
+})
+
+## ---------------------------------------------------------------------------
+## containment is reachable from the recommended path
+## ---------------------------------------------------------------------------
+
+test_that("attacker_knowledge() accepts \"containment\"", {
+  ## Before #100 this was an error: the correct score for generalised data was
+  ## not among the declarable types at all, so a W/M/S user had only the six
+  ## types that stop and the two that under-report.
+  k <- attacker_knowledge("M", quasi_identifiers = c(AGE = "containment",
+                                                     SEX = "char"))
+  expect_equal(unname(k$visible[["AGE"]]), "containment")
+  expect_true("containment" %in% reid_score_types())
+})
+
+test_that("declared containment columns are intersected, not summed", {
+  ## score_containment() intersects its targets: a record must fall inside the
+  ## published region of *every* attribute. Scoring the columns separately and
+  ## adding the normalised results would give each exclusion a partial vote, so
+  ## score_multi() has to hand them over as one block.
+  d <- gen_fixture(people = 60, seed = 3)
+  block <- score_multi(d, c(AGE = "containment", SEX = "containment"),
+                       screen = "none")
+  direct <- score_containment(d, c("AGE", "SEX"))
+  ## combine_scores() normalises the single block to [0, 1]; the ordering --
+  ## which is all an assignment reads -- must be the same
+  expect_equal(rank(block$SCORE, ties.method = "min"),
+               rank(direct$SCORE, ties.method = "min"))
+})
+
+test_that("the W/M/S curve on generalised data now runs and reports the real risk", {
+  ## The number the issue is about, taken along the recommended path rather
+  ## than by hand.
+  d <- gen_fixture(people = 200, seed = 7)
+
+  curve <- reid_knowledge_curve(
+    d,
+    quasi_identifiers = c(AGE = "containment", SEX = "containment"),
+    weak_subset = "AGE",
+    seeds = 1:3,
+    screen = "none"
+  )
+  expect_equal(nrow(curve), 3L)
+  expect_true(all(is.finite(curve$success_analytic)))
+
+  ## and it beats what the two silently-completing types used to report
+  truth <- mean(match_greedy(score_containment(d, c("AGE", "SEX")),
+                             seed = 1L)$RESULT)
+  quiet_idf <- mean(match_greedy(
+    score_idf_match(d, c("AGE", "SEX"), generalized = "ignore"),
+    seed = 1L
+  )$RESULT)
+  expect_gt(truth, quiet_idf)
+})
+
+test_that("a hierarchy reaches score_containment() through the declaration path", {
+  ## The categorical case -- 千代田区 published as 東京都 -- is the one no
+  ## structural test can recognise, so the guard cannot catch it and the
+  ## hierarchy is the only thing that makes it scorable. If `hierarchy` did not
+  ## reach score_containment() through score_multi(), declaring "containment"
+  ## would work for intervals and silently exclude every record for categories.
+  hier <- generalization_hierarchy(data.frame(
+    attribute = "AREA",
+    value = c("chiyoda", "shinjuku", "yokohama", "kobe"),
+    parent = c("tokyo", "tokyo", "kanagawa", "hyogo"),
+    stringsAsFactors = FALSE
+  ))
+  raw <- data.frame(ROW_NUMBER = 1:4,
+                    AREA = c("chiyoda", "shinjuku", "yokohama", "kobe"),
+                    stringsAsFactors = FALSE)
+  anon <- data.frame(ROW_NUMBER = 1:4,
+                     AREA = c("tokyo", "tokyo", "kanagawa", "hyogo"),
+                     stringsAsFactors = FALSE)
+  d <- join_raw_anon_data(raw, anon)
+
+  with_h <- score_multi(d, c(AREA = "containment"), hierarchy = hier,
+                        screen = "none")
+  ## every record's own region contains it
+  expect_true(all(containment_counts(d, "AREA", hierarchy = hier)$TRUTH_CONTAINED))
+  expect_equal(with_h$SCORE,
+               score_containment(d, "AREA", hierarchy = hier)$SCORE)
+
+  ## without the hierarchy nothing is contained at all, which is exactly why
+  ## the argument has to be reachable from here
+  without_h <- score_containment(d, "AREA")
+  expect_true(all(without_h$SCORE == 1))
+})
+
+test_that("`rules` reaches score_containment() through the declaration path", {
+  ## A masked code such as "135****" needs rules = c(ZIP = "prefix"): under the
+  ## default "auto" rule it does not parse as an interval, so it falls back to
+  ## exact string equality and "1350012" is excluded from its own published
+  ## region. Every candidate is then excluded, k = 0, and the release reads as
+  ## perfectly safe -- the same under-report shape as the guard itself, one
+  ## layer down. If `rules` did not reach here, declaring "containment" would
+  ## produce exactly that.
+  set.seed(4)
+  n <- 120
+  raw <- data.frame(
+    ROW_NUMBER = seq_len(n),
+    ZIP = sprintf("%07d", sample(1350000:1350040, n, replace = TRUE)),
+    AGE = sample(20:69, n, replace = TRUE),
+    stringsAsFactors = FALSE
+  )
+  anon <- data.frame(
+    ROW_NUMBER = raw$ROW_NUMBER,
+    ZIP = paste0(substr(raw$ZIP, 1, 3), "****"),
+    AGE = sprintf("[%d,%d)", floor(raw$AGE / 10) * 10, floor(raw$AGE / 10) * 10 + 10),
+    stringsAsFactors = FALSE
+  )
+  d <- join_raw_anon_data(raw, anon)
+  rules <- c(ZIP = "prefix")
+  qi <- c(ZIP = "containment", AGE = "containment")
+
+  ## the set-up check is what says the rule was needed
+  expect_false(any(containment_counts(d, "ZIP")$TRUTH_CONTAINED))
+  expect_true(all(containment_counts(d, c("ZIP", "AGE"),
+                                     rules = rules)$TRUTH_CONTAINED))
+
+  baseline <- 1 / n
+  without <- reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
+                                  seeds = 1:3, screen = "none")
+  with_rules <- reid_knowledge_curve(d, quasi_identifiers = qi, weak_subset = "ZIP",
+                                     seeds = 1:3, screen = "none", rules = rules)
+
+  ## without the rule the declaration path reports the random baseline ...
+  expect_equal(without$success_analytic[without$level == "M"], baseline)
+  ## ... and with it, several times that (measured: 0.0400 against 0.0083)
+  expect_gt(with_rules$success_analytic[with_rules$level == "M"], 3 * baseline)
+})
+
+## ---------------------------------------------------------------------------
+## the two silent under-reports, pinned
+## ---------------------------------------------------------------------------
+
+test_that("score_idf() and score_profile() under-report, and only on request", {
+  ## THE COMPARISON HAS TO BE MADE ON MORE THAN ONE COLUMN, and that was not
+  ## the expectation going in. On the *single* generalised AGE column here,
+  ## containment scores 0.0050 -- exactly the 1/200 random baseline -- because
+  ## a decade bin leaves about forty candidates and 1/k is chance. The silent
+  ## scores measure 0.0050-0.0100 on the same column, i.e. also chance, and
+  ## comparing the two says nothing.
+  ##
+  ## The gap is in the *intersection*: two attributes cut the candidate set
+  ## twice and containment reaches 0.0500, while the silent scores stay at the
+  ## baseline because a raw value never equals the region printed over it, so
+  ## adding a second such column adds no constraint at all. Tenfold, silently.
+  d <- gen_fixture(people = 200, seed = 7)
+  cols <- c("AGE", "SEX")
+
+  truth <- mean(match_greedy(score_containment(d, cols), seed = 1L)$RESULT)
+  baseline <- 1 / length(unique(d$ANON_ROW_NUMBER))
+  expect_gt(truth, 5 * baseline)
+
+  ## single-column containment really is at chance here -- pinned so that the
+  ## comparison above is not quietly weakened later
+  expect_equal(mean(match_greedy(score_containment(d, "AGE"), seed = 1L)$RESULT),
+               baseline)
+
+  for (fn in list(score_idf, score_profile)) {
+    expect_error(fn(d, "AGE"), regexp = "score_containment")
+    quiet <- mean(match_greedy(
+      combine_scores(lapply(cols, function(t) fn(d, t, generalized = "ignore"))),
+      seed = 1L
+    )$RESULT)
+    expect_lt(quiet, truth / 5)
+  }
+})
+
+test_that("the set-similarity and scoreboard scores refuse a generalised column too", {
+  ## Not declarable types, so not reachable from attacker_knowledge() -- but
+  ## exported, documented and just as silent before #100.
+  d <- gen_fixture()
+  expect_error(score_jaccard(d, "AGE"), regexp = "score_containment")
+  expect_error(score_minhash(d, "AGE"), regexp = "score_containment")
+  expect_error(score_scoreboard(d, "AGE"), regexp = "score_containment")
+  expect_error(score_mahalanobis(d, "AGE"), regexp = "score_containment")
+})
+
+test_that("the guard message names the declaration form of the remedy", {
+  ## check_generalized_target() names score_containment(), which is the whole
+  ## answer for hand-written score calls and none of it for the W/M/S workflow,
+  ## where columns are declared rather than called. #103 is about that gap in
+  ## the vignette; this is the same gap in the error message.
+  d <- gen_fixture()
+  expect_error(score_idf(d, "AGE"), regexp = "containment", fixed = FALSE)
+  msg <- tryCatch(score_idf(d, "AGE"), error = conditionMessage)
+  expect_match(msg, "attacker_knowledge() or score_multi()", fixed = TRUE)
+  expect_match(msg, "AGE = \"containment\"", fixed = TRUE)
+})
+
+## ---------------------------------------------------------------------------
+## no false positives, across every guarded score
+## ---------------------------------------------------------------------------
+
+test_that("no guarded score fires on ordinary (non-generalised) data", {
+  ## The other half of the trade: a guard that misfires on normal data is one
+  ## people switch off. Every "refuse" function is run on a fixture with no
+  ## generalisation anywhere, and none of them may mention it.
+  set.seed(11)
+  n <- 40
+  raw <- data.frame(
+    ROW_NUMBER = seq_len(n),
+    AGE = sample(20:69, n, replace = TRUE),
+    stringsAsFactors = FALSE
+  )
+  anon <- raw
+  anon$AGE <- raw$AGE + sample(c(-1, 0, 1), n, replace = TRUE)
+  d <- join_raw_anon_data(raw, anon)
+
+  policy <- reid_generalized_guard_policy()
+  refusing <- names(policy)[policy == "refuse"]
+  flagged <- vapply(refusing, function(fn_name) {
+    msg <- tryCatch({
+      suppressWarnings(gen_call(fn_name, d))
+      NA_character_
+    }, error = conditionMessage)
+    !is.na(msg) && grepl("is generalised on the ANON side", msg, fixed = TRUE)
+  }, logical(1))
+
+  expect_equal(names(which(flagged)), character(0))
+  ## and the run was not vacuous
+  expect_gt(length(refusing), 10)
+})

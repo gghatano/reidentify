@@ -142,9 +142,26 @@ idf_weight <- function(count, n, method = c("idf", "inv_log", "inv", "none")) {
 #' @inheritParams value_frequencies
 #' @param weight rarity weighting scheme; see [idf_weight()]. `"none"` gives
 #'   plain unweighted exact matching.
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+#'
+#' @section Generalised columns are refused:
+#'
+#' Exact matching on a generalised column agrees with **nothing**: the raw
+#' value `37` is never the string `"[30,40)"`, so every candidate pair scores
+#' the same rarity weight and the column carries no signal at all. It is the
+#' quietest form of the Issue #40 failure -- no coercion, no error, a
+#' perfectly well-formed score table, and a reported success rate a fifth of
+#' the one [score_containment()] measures on the same release (Issue #100, and
+#' `docs/lessons-learned.md` section 2). The frequency table underneath is
+#' wrong in the same direction: it counts how often each *region* was
+#' published, not how rare the underlying value is, so a region covering a
+#' tenth of the population is scored as if it identified somebody.
 #'
 #' @return a "reid_scores" table whose SCORE is 0 on agreement and the value's
 #'   rarity weight on disagreement (a distance: smaller is a better match)
+#'
+#' @seealso [score_containment()] for generalised columns.
 #'
 #' @examples
 #' d <- create_dummy_qi_data(people = 30, seed = 1)
@@ -155,11 +172,13 @@ idf_weight <- function(count, n, method = c("idf", "inv_log", "inv", "none")) {
 score_idf <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                       source = c("anon", "raw", "pooled"),
                       weight = c("idf", "inv_log", "inv", "none"),
+                      generalized = c("stop", "warn", "ignore"),
                       .fn_name = "score_idf") {
   source <- match.arg(source)
   weight <- match.arg(weight)
 
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
   freq <- value_frequencies(dat_raw_anon, target, row_number = row_number,
                             source = source, .fn_name = .fn_name)
 
@@ -205,6 +224,9 @@ score_idf <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @return a "reid_scores" table (a distance: smaller is a better match)
 #'
+#' @seealso [score_containment()] for generalised columns. The guard
+#'   [score_idf()] carries is applied to every column named in `targets`.
+#'
 #' @examples
 #' d <- create_dummy_qi_data(people = 30, seed = 1)
 #' j <- join_raw_anon_data(d, d)
@@ -214,9 +236,11 @@ score_idf <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 score_idf_match <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
                             source = c("anon", "raw", "pooled"),
                             weight = c("idf", "inv_log", "inv", "none"),
+                            generalized = c("stop", "warn", "ignore"),
                             .fn_name = "score_idf_match") {
   source <- match.arg(source)
   weight <- match.arg(weight)
+  generalized <- match.arg(generalized)
 
   if (!is.character(targets) || length(targets) == 0) {
     stop(.fn_name, "(): `targets` must be a character vector naming at least ",
@@ -230,7 +254,7 @@ score_idf_match <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
 
   parts <- lapply(targets, function(t) {
     score_idf(dat_raw_anon, t, row_number = row_number, source = source,
-              weight = weight, .fn_name = .fn_name)
+              weight = weight, generalized = generalized, .fn_name = .fn_name)
   })
 
   ## No normalisation: combine_scores() sums the raw columns, which is the

@@ -8,6 +8,7 @@ score_num(
   dat_raw_anon,
   target,
   row_number = "ROW_NUMBER",
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_num"
 )
 }
@@ -18,6 +19,13 @@ score_num(
 
 \item{row_number}{name of the row-number column *before* the RAW_/ANON_
 prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+Accepted for symmetry with the other scores, but it changes nothing here:
+a published region is a string, and there is no arithmetic to do on a
+character column, so the type check refuses it first and no escape hatch
+can produce a number.}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user

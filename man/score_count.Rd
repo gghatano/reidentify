@@ -9,6 +9,7 @@ score_count(
   target = "ROWCOUNT",
   row_number = "ROW_NUMBER",
   method = c("log_ratio", "absolute", "relative"),
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_count"
 )
 }
@@ -22,6 +23,11 @@ prefixing done by [join_raw_anon_data()] (default: "ROW_NUMBER")}
 
 \item{method}{`"log_ratio"` (default), `"absolute"` or `"relative"`
 (`|a - b| / max(a, b, 1)`, bounded in \[0, 1\])}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+count published as a band (`"[10,20)"`) is not a number, so this only
+decides which of the two errors is raised.}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user

@@ -202,7 +202,9 @@ rates(M2)
 ```
 
 **準識別子だけを見れば、一般化は効いています**
-（0.99 から大きく下がりました）。ところが**全列を使った成功率はほとんど動きません。**
+（`r sprintf("%.2f", M1$qi$success_analytic)` から
+`r sprintf("%.2f", M2$qi$success_analytic)` に下がりました）。
+ところが**全列を使った成功率はほとんど動きません。**
 
 理由は 1 列で説明できます。
 
@@ -248,6 +250,11 @@ rates(M3)
 抑止したレコードは候補が広がり、準識別子だけの成功率はさらに下がります。
 **全列の成功率は、やはり動きません。**
 
+ただし**「抑止は効かなかった」と結論しないでください。**
+`SPEND_MEAN` が素通しである限り全列の成功率は下がりようがない、
+というだけです。同じ加工でも順序を最後に回せばはっきり効いて見えますし（§2.7）、
+抑止されたレコードだけを見れば平均リスクは大きく下がっています（§4.2）。
+
 2 段かけても最小セルサイズが 5 に届いていない点にも注意してください。
 `AGE` を潰すとセルの区切り自体が変わるため、
 1 回の走査では k 匿名性は成立しません。**「k=5 を目指した加工」と
@@ -271,7 +278,11 @@ rates(M4)
 
 **ここではじめて全列の成功率が動きます。**
 準識別子側は 2.3 から 1 ミリも変わっていません（`AGE` `ZIP` `SEX` に触っていないので当然です）。
-**5 段階のうちリスクを下げたのは、この 1 手だけです。**
+
+ただし**「効いたのはノイズだけだった」と読まないでください。**
+ここで見えている差は「ノイズ単独の効果」ではなく、
+「一般化と抑止を先に済ませた状態に、さらにノイズを足したときの差」です。
+**この差が誰に付くかは、加工を並べた順序で変わります。** §2.7 で実測します。
 
 とはいえ半分は特定されたままです。ノイズの大きさに対して、
 `SPEND_MEAN` の個人差の方が大きいからです。
@@ -289,7 +300,8 @@ M5 <- measure(L5)
 rates(M5)
 ```
 
-**ほとんど下がりません。** 2.4 の 0.57 に対して 0.52 です。
+**ほとんど下がりません。** 2.4 の `r sprintf("%.2f", M4$all$success_analytic)`
+に対して `r sprintf("%.2f", M5$all$success_analytic)` です。
 
 > **成功率の母数が変わっていることに注意してください。**
 > ここでの成功率は「**公開されたレコードのうち**何割が元の個人に戻ったか」です。
@@ -345,7 +357,8 @@ print(summary_table, row.names = FALSE)
 ```
 
 ```{r stage-deltas}
-## 前の段階からどれだけ下がったか
+## 前の段階からどれだけ下がったか（累積デルタ）。
+## **この並び順で積み上げたときの**値であることに注意（§2.7）。
 d <- summary_table$all
 print(data.frame(stage = summary_table$stage[-1],
                  delta = round(d[-1] - d[-length(d)], 4),
@@ -357,18 +370,143 @@ print(data.frame(stage = summary_table$stage[-1],
 
 1. **直接識別子の削除は、単独では効果 0 でした。** 想定どおりでしたが、
    「ほとんど効かない」ではなく「まったく効かない」という結果です。
-2. **一般化と抑止も、全列で見れば効果はほぼ 0 でした。**
-   準識別子だけを見れば大きく効いているので、
-   **測る範囲を準識別子に限ると、この加工は成功したように見えます。**
-3. **効いたのはノイズだけです。** ただしそれは「ノイズが良い加工だから」ではなく、
-   **このデータで個人を指していた列に、はじめて手が入ったから**です。
-4. **サンプリングはほぼ効きませんでした。** しかもこの差は、母数が
-   300 件から 150 件に減った上で測った値です（§2.5）。
-5. **最大リスクは全段階を通して 1.0000 のままです。**
+2. **準識別子だけを測ると（`qi_only` 列）、一般化と抑止は大きく効いて見えます。**
+   全列で測った `all` 列の動きとは別物です。
+   **測る範囲を加工した列に合わせると、加工は必ず効いて見えます**（§5.1）。
+3. **サンプリングの効果は小さく、しかもこの差は母数が
+   300 件から 150 件に減った上で測った値です**（§2.5）。
+4. **最大リスクは全段階を通して 1.0000 のままです。**
    平均が半分になっても、確実に特定される人は最後まで残ります。
 
-> **加工の種類ではなく、加工が届いた列で効果が決まります。**
-> 「一般化は効く / ノイズは効く」という一般論は、この表からは出てきません。
+> **`delta` 列を「どの加工が効いたか」の答えとして読んではいけません。**
+> 累積デルタは「前の段階からの差」です。複数の加工が同じリスクを
+> 重複して削っているとき、削減分は**すべて後に来た手に付きます。**
+> つまりこの列は加工の性質ではなく、**並べた順序の関数**です。
+> 次の §2.7 で、同じ加工・同じ乱数種のまま順序だけを入れ替えて確かめます。
+
+## 2.7 どの加工が効いたのか — 順序を入れ替えて確かめる
+
+一般化・抑止・ノイズの 3 つを、**ノイズを先頭にした順**で `S1` に適用し直します。
+加工の中身も乱数種も §2 とまったく同じで、**順番だけ**が違います。
+
+```{r reorder}
+R1 <- S1                                   # まずノイズ
+set.seed(4321)
+R1$VISIT_COUNT <- R1$VISIT_COUNT + sample(-2:2, N, replace = TRUE)
+R1$SPEND_MEAN  <- round(R1$SPEND_MEAN + stats::rnorm(N, sd = 5), 1)
+
+R2 <- R1                                   # 次に一般化
+R2$AGE <- generalize_value(R2$AGE, "AGE", hier, levels = 1)
+R2$ZIP <- generalize_value(R2$ZIP, "ZIP", hier, levels = 1)
+
+R3 <- R2                                   # 最後に抑止
+R3$ZIP[cell_size(R3) < 5L] <- "*"
+R3$AGE[cell_size(R3) < 5L] <- "*"
+
+## 出来上がった公開データは §2.4 の S4 と同一である
+all.equal(R3[, sort(names(R3))], S4[, sort(names(S4))])
+```
+
+**同じデータに行き着きます。** それでも累積デルタはこうなります。
+
+```{r reorder-deltas}
+rate_of <- function(anon) attack(score_layer(anon))$success_analytic
+
+orderA <- vapply(list(S1, S2, S3, S4), rate_of, numeric(1))  # 一般化→抑止→ノイズ
+orderB <- vapply(list(S1, R1, R2, R3), rate_of, numeric(1))  # ノイズ→一般化→抑止
+
+##   step     加工
+##   order_A  §2 の順（一般化 → 抑止 → ノイズ）で測った累積デルタ
+##   order_B  ノイズを先頭にした順で測った累積デルタ
+print(data.frame(
+  step    = c("generalize", "suppress", "noise"),
+  order_A = round(diff(orderA)[c(1, 2, 3)], 4),
+  order_B = round(diff(orderB)[c(2, 3, 1)], 4),
+  stringsAsFactors = FALSE), row.names = FALSE)
+```
+
+```{r reorder-fmt, include = FALSE}
+f4  <- function(x) sprintf("%.4f", x)
+dA  <- diff(orderA); dB <- diff(orderB)
+```
+
+**同じ加工・同じデータ・同じ乱数種で、「効いた加工」が完全に入れ替わりました。**
+§2 の順ではノイズを当てる時点で `SPEND_MEAN` が素通しのままなので、
+一般化と抑止には削る余地がほとんど残っていません（`r f4(dA[1])` / `r f4(dA[2])`）。
+ノイズを先に当てると今度は生の `AGE` `ZIP` `SEX` が素通しなので、
+ノイズ側の差が `r f4(dB[1])` になり、
+削減分は後から来た一般化と抑止に付きます（`r f4(dB[2])` / `r f4(dB[3])`）。
+
+**後から来た手が、重複していた削減分をまとめて受け取ります。**
+累積デルタは順序の関数であって、加工の性質ではありません。
+
+### 順序に依存しない測り方 — leave-one-out
+
+「この加工は効いたか」に答えるには、**最終的な公開データから、その加工だけを
+なかったことにして測り直します。** 他の加工はそのまま残します。
+公開したデータを基準にした測定なので、**適用した順序には依存しません。**
+
+```{r leave-one-out}
+## それぞれ「その加工を当てる前の値」に戻す。他の列はいっさい触らない。
+undo_gen <- S4                             # 一般化を外す（抑止した "*" は残す）
+undo_gen$AGE <- ifelse(S4$AGE == "*", "*", S1$AGE)
+undo_gen$ZIP <- ifelse(S4$ZIP == "*", "*", S1$ZIP)
+
+undo_sup <- S4                             # 抑止を外す（一般化した値に戻す）
+undo_sup$AGE <- S2$AGE
+undo_sup$ZIP <- S2$ZIP
+
+undo_noise <- S4                           # ノイズを外す
+undo_noise$VISIT_COUNT <- S1$VISIT_COUNT
+undo_noise$SPEND_MEAN  <- S1$SPEND_MEAN
+
+## 公開したのは半数なので、S5 と同じ行だけを取り出して測る
+pub <- match(S5$ROW_NUMBER, S4$ROW_NUMBER)
+
+loo <- data.frame(
+  removed = c("(公開データそのまま)", "一般化", "抑止", "ノイズ", "サンプリング"),
+  rate    = round(c(rate_of(S5),  rate_of(undo_gen[pub, ]), rate_of(undo_sup[pub, ]),
+                    rate_of(undo_noise[pub, ]), rate_of(S4)), 4),
+  stringsAsFactors = FALSE)
+loo$delta <- round(loo$rate[1] - loo$rate, 4)
+print(loo, row.names = FALSE)
+```
+
+`delta` は「その加工がなければ成功率はここまで戻っていた」という値です。
+**累積デルタで 0 付近だった一般化と抑止が、外すと `r f4(loo$rate[1])` から
+`r f4(loo$rate[2])` / `r f4(loo$rate[3])` に戻ります。** 両方外すと元どおりです。
+
+```{r leave-two-out}
+undo_both <- S4
+undo_both$AGE <- S1$AGE
+undo_both$ZIP <- S1$ZIP
+both_off <- rate_of(undo_both[pub, ])
+c("一般化と抑止を両方外す" = round(both_off, 4))
+```
+
+**「一般化と抑止は効かなかったので外してよい」と読むと、実測で成功率が
+`r f4(loo$rate[1])` から `r f4(both_off)` に戻ります。**
+§2.6 の表からその結論は出てきません。
+
+`delta` の合計が、実際の下げ幅を大きく超えている点にも注意してください。
+
+```{r loo-sum}
+c("delta の合計"   = sum(loo$delta),
+  "実際の下げ幅"   = round(rate_of(S5) - rate_of(S1), 4))
+```
+
+**複数の加工が同じリスクを重複して削っています。** 重複しているからこそ、
+累積デルタでは削減分が後の手に全部付き、leave-one-out では関係する手すべてに付きます。
+片方だけを見ると判断を誤ります。
+
+> **累積デルタは「積み上げの経過」を、leave-one-out は「その手の寄与」を測ります。**
+> 「どの加工が効いたか」「この加工は外してよいか」を報告書に書くなら、
+> **leave-one-out の側**です。
+>
+> **「どの加工が効くか」は加工の種類では決まりません。**
+> このデータで個人を指していた列に届いたかどうかで決まり、
+> 複数の加工が同じ列に届いていれば、効果は重複します。
+> 重複分をどう配分するかは**測り方の選択**であって、データの性質ではありません。
 
 ---
 
@@ -397,39 +535,75 @@ rate_for <- function(cols_qi, cols_num = character(0)) {
   reid_evaluate(sc, seeds = 1:10)$success_analytic
 }
 
-c(W = rate_for("ZIP"),
-  M = rate_for(QI),
-  S = rate_for(QI, c("VISIT_COUNT", "SPEND_MEAN")),
-  ランダム = M5$all$baseline$rate[M5$all$baseline$method == "random"])
+wms <- c(W = rate_for("ZIP"),
+         M = rate_for(QI),
+         S = rate_for(QI, c("VISIT_COUNT", "SPEND_MEAN")))
+c(wms, ランダム = M5$all$baseline$rate[M5$all$baseline$method == "random"])
 ```
 
-**同じ公開データが、想定を変えるだけで 40 倍違います。**
+**同じ公開データが、想定を変えるだけで `r round(wms[["S"]] / wms[["W"]])` 倍違います。**
 数値だけを報告書に書くと、この幅のどこを指しているのか読み手には分かりません。
 
 W ですらランダム割当を上回っている点にも注意してください。
 `ZIP` グループしか見えない攻撃者でも、当てずっぽうよりは当たります。
 
-## `reid_knowledge_curve()` はここでは使えません
+## `reid_knowledge_curve()` に一般化した列を渡すとき
 
-W / M / S の比較には `reid_knowledge_curve()` という専用の関数がありますが、
-**一般化された列を含む公開データには使えません。**
-中で `score_multi()` → `score_char()` を呼ぶため、
-一般化の検出（Issue #40 の停止）に引っかかります。
+W / M / S の比較には `reid_knowledge_curve()` という専用の関数があります。
+ただし `quasi_identifiers` に宣言する**型の選び方で、
+止まるか、黙って過小報告するかが変わります。**
+この公開データ `S5` に対して、宣言できる型を全部試します。
 
-```{r knowledge-curve-fails}
-tryCatch(
-  reid_knowledge_curve(pairs5,
-                       quasi_identifiers = c(ZIP = "char", AGE = "char",
-                                             SEX = "char"),
-                       weak_subset = "ZIP", seeds = 1:2),
-  error = function(e) cat(strwrap(conditionMessage(e), 76), sep = "\n")
-)
+```{r knowledge-curve-types}
+## 型ごとに、止まるか完走するかを実際に確かめる。
+## 完走した型については M 水準（準識別子 3 列）の成功率を並べる。
+try_type <- function(ty) {
+  tryCatch({
+    kc <- suppressWarnings(reid_knowledge_curve(
+      pairs5,
+      quasi_identifiers = stats::setNames(rep(ty, 3), c("ZIP", "AGE", "SEX")),
+      weak_subset = "ZIP", seeds = 1:2))
+    sprintf("完走 (M = %.4f)", kc$success_analytic[kc$level == "M"])
+  }, error = function(e) "停止")
+}
+value_types <- c("num", "char", "dist", "rank", "idf", "count", "profile", "span")
+curve_check <- data.frame(type = value_types,
+                          result = vapply(value_types, try_type, character(1)),
+                          stringsAsFactors = FALSE)
+print(curve_check, row.names = FALSE)
 ```
 
-**これは正しい停止です。** 抑止した `"*"` や一般化した `"[30,40)"` に
-文字列距離をかけると、低い数値が黙って出ます。
-ただし現状、**一般化や抑止を含む公開データに対しては
-上のように水準を自分で書き下す必要があります。**
+**止まった型は正しい停止です。** 抑止した `"*"` や一般化した `"[30,40)"` に
+文字列距離や数値変換をかけると、意味のない低い数値が黙って出ます。
+
+**問題は止まらなかった型です。**
+
+```{r knowledge-curve-gap}
+completed <- curve_check$type[curve_check$result != "停止"]
+reported  <- as.numeric(sub(".*= ", "", sub("\\)", "", curve_check$result[
+  curve_check$type %in% completed])))
+
+c("完走した型"                = paste(completed, collapse = ", "),
+  "完走した型が報告する M"    = paste(sprintf("%.4f", reported), collapse = ", "),
+  "自分で書き下した M の真値" = sprintf("%.4f", wms[["M"]]),
+  "過小報告の倍率"            = paste(sprintf("%.1f", wms[["M"]] / reported),
+                                      collapse = ", "))
+```
+
+```{r knowledge-curve-fmt, include = FALSE}
+gap_txt <- if (!length(completed)) "完走した型はありません" else
+  sprintf("%s が真値の %s 分の 1 を返しています",
+          paste(completed, collapse = " / "),
+          paste(sprintf("%.1f", wms[["M"]] / reported), collapse = " / "))
+```
+
+完走した型の `M` の値を、§3 冒頭で自分で書き下した M 水準の真値と比べてください。
+**このビルドでは `r gap_txt`。**
+しかも完走のときに出る警告は「この軸には信号がない」だけで、
+これは**「攻撃者は何も知らない ＝ 安全」と読めてしまいます**（Issue #100）。
+
+**一般化や抑止を含む公開データに対しては、現状 §3 冒頭のように
+水準を自分で書き下し、`score_containment()` で突き合わせてください。**
 想定は `attacker_knowledge()` オブジェクトとして残せるので、
 測定と分けて記録しておいてください。
 
@@ -512,6 +686,27 @@ print(data.frame(
 ), row.names = FALSE)
 ```
 
+**抑止したレコードの平均リスクは、抑止しなかったレコードより明らかに低いままです。**
+§2.6 の累積デルタでは抑止の効果は `r f4(dA[2])` でしたが、
+**守られたレコードの側から見れば効果ははっきり出ています。**
+§2.7 と同じ話で、全体の平均は、他の加工が先に削ったリスクに隠れます。
+**「効果 0」と読めるのは測り方であって、抑止されたこの `r sum(S5$ZIP == "*")` 件に
+起きたことではありません。**
+
+平均の差が「もともと似た人が多いレコードに偏って抑止がかかったから」では
+ないことも確かめておきます。上の密度の層ごとに分けて見ます。
+
+```{r risk-by-suppression-density}
+## 行 = ZIP を抑止したか、列 = 元データでの近傍人数の層
+print(round(tapply(risk5,
+                   list(ifelse(S5$ZIP == "*", "suppressed", "kept"),
+                        cut(neighbours, breaks = c(0, 20, 40, 60, Inf),
+                            labels = c("<=20", "21-40", "41-60", ">=61"))),
+                   mean), 3))
+```
+
+**どの層でも抑止した側が低いままです。** 密度の違いでは説明できません。
+
 ## 4.3 top-k と精度–再現率
 
 `top-k hit rate` は候補を k 件まで絞れた割合です。
@@ -541,14 +736,41 @@ stats::quantile(reid_confidence(
 **加工した列で測ると、加工は必ず効いているように見えます。**
 測る範囲は「公開する列の全体」で固定してください。
 
-## 5.2 重なりが不明なときに `match_optimal()` を使う
+## 5.2 `match_optimal()` の可否を、件数で判定してしまう
 
-2.5 のサンプリング後は、公開データと元データの件数が一致しません。
-このとき 1 対 1 制約を置く `match_optimal()` は、
-元データに居ないレコードにも誰かを割り当ててしまい、
-**成功率を過小に報告します**（vignette「再識別リスクの測り方」§3.5、
-ダミー行によるパディングでも回復しません）。
-上の測定はすべて `match_greedy()` 経路です。
+`match_optimal()` が過小報告に転ぶ条件は、
+**公開データに元データに居ないレコードが混ざっていること**です。
+**件数が一致するかどうかではありません。**
+引用元（vignette「再識別リスクの測り方」§3.5）のフィクスチャは
+RAW 150 件・公開 150 件と**件数が一致した状態**で逆転しています。
+
+2.5 のサンプリングは元データの部分集合を取り出しただけなので、
+件数は一致しませんが、この条件には当てはまりません。
+
+```{r optimal-check}
+## 判定に使うのは件数ではなく「元データに居ないレコードが混ざっているか」
+c(元データ件数 = nrow(raw),
+  公開件数     = nrow(S5),
+  元データに居ない公開レコード = sum(!S5$ROW_NUMBER %in% raw$ROW_NUMBER))
+
+sc5 <- combine_scores(normalize_scores(c(list(L5$qi), L5$num), "zscore"))
+mm  <- c(greedy  = mean(vapply(1:20, function(s)
+                    mean(match_greedy(sc5,  seed = s)$RESULT), numeric(1))),
+         optimal = mean(vapply(1:20, function(s)
+                    mean(match_optimal(sc5, seed = s)$RESULT), numeric(1))))
+round(mm, 4)
+```
+
+**件数は `r nrow(S5)` 対 `r nrow(raw)` で一致していませんが、
+`match_optimal()` の方が高く出ます**（`r sprintf("%.4f", mm[["optimal"]])`
+対 `r sprintf("%.4f", mm[["greedy"]])`）。
+公開レコードの相手は必ず元データに居るので、1 対 1 制約が正しく働きます。
+
+**件数の一致・不一致で判定すると、本当に危険な場面を見逃します。**
+危ないのは「公開データに、元データには居ない人が混ざっている」場合で、
+そこでは件数はいくらでも一致しえます。
+重なりが分からないときは、`match_greedy()` を参照値として併記してください
+（この文書の測定はすべて `match_greedy()` 経路です）。
 
 ---
 
@@ -557,7 +779,8 @@ stats::quantile(reid_confidence(
 | 項目 | なぜ必要か |
 |---|---|
 | 加工前のベースライン | 下がったことを言うには基準が要る（§1.4） |
-| 各段階の測定値と、その差 | どの手が効いたかは積み上げないと分からない（§2.6） |
+| 各段階の測定値（累積デルタ） | 積み上げの経過。**ただし順序の関数**（§2.6 / §2.7） |
+| 加工ごとの leave-one-out | 「どの手が効いたか」「外してよいか」に順序非依存で答える（§2.7） |
 | 測定に使った列の範囲 | 加工した列だけで測ると必ず効いて見える（§5.1） |
 | 攻撃者知識の想定 | 同じデータが想定次第で違う数値になる（§3） |
 | 最大リスクとレコード別分布 | 平均は最悪ケースを隠す（§4.2） |

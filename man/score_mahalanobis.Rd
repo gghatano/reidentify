@@ -11,6 +11,7 @@ score_mahalanobis(
   cov_from = c("raw", "anon", "pooled"),
   ridge = 1e-06,
   squared = FALSE,
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_mahalanobis"
 )
 }
@@ -42,6 +43,11 @@ metric into the weighted sum it was supposed to improve on.}
 \item{squared}{return the squared distance instead of the distance
 (default FALSE). The two give identical rankings; the square root is the
 default because it shares the units of the underlying columns.}
+
+\item{generalized}{what to do when one of `targets` turns out to hold
+generalised values on the ANON side: `"stop"` (default), `"warn"` or
+`"ignore"`. A generalised column is also non-numeric, so this only
+decides which of the two errors is raised. See [score_containment()].}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user

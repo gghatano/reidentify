@@ -13,6 +13,7 @@ score_scoreboard(
   aux_side = c("raw", "anon"),
   source = c("anon", "raw", "pooled"),
   weight = c("inv_log", "idf", "inv", "none"),
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_scoreboard"
 )
 }
@@ -45,6 +46,12 @@ themselves).}
 \item{weight}{rarity weighting scheme, passed to [idf_weight()]. `"none"`
 gives unweighted overlap counting, the baseline the weighting has to
 beat.}
+
+\item{generalized}{what to do when one of `targets` turns out to hold
+generalised values on the ANON side: `"stop"` (default), `"warn"` or
+`"ignore"`. A raw value never equals the region that contains it, so
+every candidate pair scores 0 similarity and the attribute contributes
+nothing -- silently (Issue #100). See [score_containment()].}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user

@@ -125,6 +125,11 @@ scoreboard_similarity <- function(a, b, tol, partial) {
 #' @param weight rarity weighting scheme, passed to [idf_weight()]. `"none"`
 #'   gives unweighted overlap counting, the baseline the weighting has to
 #'   beat.
+#' @param generalized what to do when one of `targets` turns out to hold
+#'   generalised values on the ANON side: `"stop"` (default), `"warn"` or
+#'   `"ignore"`. A raw value never equals the region that contains it, so
+#'   every candidate pair scores 0 similarity and the attribute contributes
+#'   nothing -- silently (Issue #100). See [score_containment()].
 #'
 #' @return a "reid_scores" table with `score_type` `"similarity"`: larger
 #'   means a better match.
@@ -155,7 +160,9 @@ score_scoreboard <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
                              aux_side = c("raw", "anon"),
                              source = c("anon", "raw", "pooled"),
                              weight = c("inv_log", "idf", "inv", "none"),
+                             generalized = c("stop", "warn", "ignore"),
                              .fn_name = "score_scoreboard") {
+  generalized <- match.arg(generalized)
   partial <- match.arg(partial)
   aux_side <- match.arg(aux_side)
   source <- match.arg(source)
@@ -178,7 +185,8 @@ score_scoreboard <- function(dat_raw_anon, targets, row_number = "ROW_NUMBER",
   anon_row <- NULL
 
   for (t in targets) {
-    cols <- reid_prefixed_columns(dat_raw_anon, t, row_number, .fn_name)
+    cols <- reid_score_columns(dat_raw_anon, t, row_number, .fn_name,
+                               generalized)
     raw_value <- dat_raw_anon[[cols$raw_target]]
     anon_value <- dat_raw_anon[[cols$anon_target]]
 

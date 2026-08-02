@@ -104,6 +104,10 @@ compare_magnitudes <- function(raw, anon,
 #' @param target name of the count column (default `"ROWCOUNT"`)
 #' @param method `"log_ratio"` (default), `"absolute"` or `"relative"`
 #'   (`|a - b| / max(a, b, 1)`, bounded in \[0, 1\])
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`. A
+#'   count published as a band (`"[10,20)"`) is not a number, so this only
+#'   decides which of the two errors is raised.
 #'
 #' @return a "reid_scores" table (a distance: smaller is a better match)
 #'
@@ -119,9 +123,11 @@ compare_magnitudes <- function(raw, anon,
 score_count <- function(dat_raw_anon, target = "ROWCOUNT",
                         row_number = "ROW_NUMBER",
                         method = c("log_ratio", "absolute", "relative"),
+                        generalized = c("stop", "warn", "ignore"),
                         .fn_name = "score_count") {
   method <- match.arg(method)
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   as_count <- function(nm) {
     v <- dat_raw_anon[[nm]]
@@ -232,8 +238,22 @@ collapsed_histogram <- function(values, bins, split, shape_only, target, fn_name
 #'   `FALSE` to compare raw counts, where an empty record is a meaningful zero.
 #' @param metric `"l1"` (default; total variation when `shape_only = TRUE`) or
 #'   `"l2"` (squared Euclidean)
+#' @param generalized what to do when `target` turns out to hold generalised
+#'   values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.
+#'
+#' @section Generalised columns are refused:
+#'
+#' The bins are labels, and a published region is a label like any other, so a
+#' generalised column bins cleanly into a histogram with one occupied bin per
+#' record and produces a complete, plausible score table -- silently. Measured
+#' on a fully generalised age column it reported a fifth of the success rate
+#' [score_containment()] reports on the same data (Issue #100). Both this and
+#' [score_idf()] were missed by the Issue #40 fix because that fix was attached
+#' to a list of functions rather than to the act of reading a target column.
 #'
 #' @return a "reid_scores" table (a distance: smaller is a better match)
+#'
+#' @seealso [score_containment()] for generalised columns.
 #'
 #' @examples
 #' raw <- data.frame(
@@ -245,9 +265,12 @@ collapsed_histogram <- function(values, bins, split, shape_only, target, fn_name
 #' @export
 score_profile <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                           split = ":", bins = NULL, shape_only = TRUE,
-                          metric = c("l1", "l2"), .fn_name = "score_profile") {
+                          metric = c("l1", "l2"),
+                          generalized = c("stop", "warn", "ignore"),
+                          .fn_name = "score_profile") {
   metric <- match.arg(metric)
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   raw_key <- dat_raw_anon[[cols$raw_row_number]]
   anon_key <- dat_raw_anon[[cols$anon_row_number]]
@@ -315,6 +338,8 @@ score_profile <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 #'
 #' @return a "reid_scores" table (a distance: smaller is a better match)
 #'
+#' @seealso [score_containment()] for generalised columns.
+#'
 #' @examples
 #' raw <- data.frame(ROW_NUMBER = 1:3, T = c("1:2:3", "1:40", "5:6:7:80"))
 #' match_greedy(score_span(join_raw_anon_data(raw, raw), "T"))
@@ -323,9 +348,11 @@ score_profile <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
 score_span <- function(dat_raw_anon, target, row_number = "ROW_NUMBER",
                        split = ":",
                        method = c("log_ratio", "absolute", "relative"),
+                       generalized = c("stop", "warn", "ignore"),
                        .fn_name = "score_span") {
   method <- match.arg(method)
-  cols <- reid_prefixed_columns(dat_raw_anon, target, row_number, .fn_name)
+  cols <- reid_score_columns(dat_raw_anon, target, row_number, .fn_name,
+                             generalized)
 
   raw_key <- dat_raw_anon[[cols$raw_row_number]]
   anon_key <- dat_raw_anon[[cols$anon_row_number]]

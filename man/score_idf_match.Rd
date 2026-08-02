@@ -10,6 +10,7 @@ score_idf_match(
   row_number = "ROW_NUMBER",
   source = c("anon", "raw", "pooled"),
   weight = c("idf", "inv_log", "inv", "none"),
+  generalized = c("stop", "warn", "ignore"),
   .fn_name = "score_idf_match"
 )
 }
@@ -30,6 +31,9 @@ cheap to justify.}
 
 \item{weight}{rarity weighting scheme; see [idf_weight()]. `"none"` gives
 plain unweighted exact matching.}
+
+\item{generalized}{what to do when `target` turns out to hold generalised
+values on the ANON side: `"stop"` (default), `"warn"` or `"ignore"`.}
 
 \item{.fn_name}{name used in error messages; a function that wraps this one
 passes its own name so the message points at the function the user
@@ -57,4 +61,8 @@ d <- create_dummy_qi_data(people = 30, seed = 1)
 j <- join_raw_anon_data(d, d)
 match_greedy(score_idf_match(j, c("ZIP", "SEX")))
 
+}
+\seealso{
+[score_containment()] for generalised columns. The guard
+  [score_idf()] carries is applied to every column named in `targets`.
 }
